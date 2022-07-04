@@ -13,11 +13,7 @@ type tFish struct {
 	Bar  string `json:"bar"`
 }
 
-func init() {
-	initLogging("gopod.log")
-}
-
-func main() {
+func test() {
 
 	// log.Debug("debug")
 	// log.Warn("ofo")

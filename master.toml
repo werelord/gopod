@@ -1,0 +1,115 @@
+
+# config
+
+[Config]
+Foo = true
+
+[[feed]]
+name = ""
+url = ""
+
+[[feed]]
+name = "cppcast"
+url =  "http://cppcast.libsyn.com/rss"
+
+[[feed]]
+name = "cppchat"
+url = "https://cppchat.fireside.fm/rss"
+
+[[feed]]
+name = "adsp"
+url = "https://feed.buzzsprout.com/1501960.rss"
+
+[[feed]]
+name = "two's complement"
+url = "https://www.twoscomplement.org/podcast/feed.xml"
+
+[[feed]]
+name = "worst seats in the house"
+shortname = "russo"
+url = "https://feed.transistor.fm/worst-seats"
+usedate = true
+
+[[feed]]
+name = "32 thoughts podcast"
+url = "https://feed.feedburner.com/SN/31ThoughtsThePodcast"
+
+[[feed]]
+name = "dfo rundown"
+url = "https://dforundown.libsyn.com/rss"
+
+[[feed]]
+name = "pross box"
+url = "https://feed.transistor.fm/pross-box"
+
+[[feed]]
+name = "chn insiders podcast"
+url = "https://www.collegehockeynews.com/ontheair/feed-chn.xml"
+
+[[feed]]
+name = "college hockey hour"
+url = "https://api.substack.com/feed/podcast/140981.rss"
+
+[[feed]]
+name = "twig"
+url = "https://twit.memberfulcontent.com/rss/9066?auth=aD96zVJFrqv1w8uDgLfP4VCq"
+# forcecdn = "https://cdn.twit.tv/audio/twig/twig####/twig####.mp3"
+
+[[feed]]
+name = "twit"
+url = "https://twit.memberfulcontent.com/rss/9064?auth=aD96zVJFrqv1w8uDgLfP4VCq"
+# forcecdn = "https://cdn.twit.tv/audio/twit/twit####/twit####.mp3"
+
+[[feed]]
+name = "culture of tech"
+url = "https://www.thecultureoftech.com/index.php/feed/podcast/"
+
+#[[feed]]
+#name = "battlestar galacticast"
+#shortname = "bsgc"
+#url = "https://rss.art19.com/battlestar-galacticast"
+
+[[feed]]
+name = "techdirt"
+url = "https://www.techdirt.com/podcast.xml"
+
+[[feed]]
+name = "exponent"
+url = "http://exponent.fm/feed/"
+
+[[feed]]
+name = "troubled waters"
+url = "https://feed.simplecast.com/WT6cShIt"
+
+[[feed]]
+name = "jordan jesse go"
+url = "https://feed.simplecast.com/NDAi3mtz"
+
+[[feed]]
+name = "judge john hodgman"
+url = "https://feed.simplecast.com/q8x9cVws"
+
+[[feed]]
+name = "greatest generation"
+url = "https://feed.simplecast.com/_mp2DeJd"
+
+#[[feed]]
+#name = "your undivided attention"
+#url = "https://feed.simplecast.com/rZ0cYk12"
+#[[feed]]
+
+#name = "glass cannon podcast"
+#url = "https://feed.blubrry.com/feed/the_glass_cannon.xml"
+
+#[[feed]]
+#name = "cannon fodder"
+#url = "https://feed.blubrry.com/feed/cannonfodder.xml"
+
+#[[feed]]
+#name = "androids and aliens"
+#url = "https://feed.megaphone.fm/androids-and-aliens"
+
+#[[feed]]
+#name = "ask big questions"
+#url = "https://feed.feedburner.com/BillGatesAndRashidaJonesAskBigQuestions"
+
