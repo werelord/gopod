@@ -6,9 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"time"
-
-	//etree "github.com/beevik/etree"
 
 	scribble "github.com/nanobox-io/golang-scribble"
 )
@@ -26,42 +23,13 @@ type Feed struct {
 	dbPath      string
 	initialized bool
 
-	feedData ChannelData
+	feedData XChannelData
 	itemlist map[string]ItemData
 }
 
-//--------------------------------------------------------------------------
-type ChannelData struct {
-	title string
-	pubdate time.Time
-	link string
-	image ChannelImage
-	author string
-	description string
-}
-
-//--------------------------------------------------------------------------
-type ChannelImage struct {
-	url string
-	title string
-	link string
-}
-
-//--------------------------------------------------------------------------
 type ItemData struct {
-	Title string
-	pubdate time.Time
-	guid string
-	link string
-	image string
-	description string
-	enclosure EnclosureData
-}
-
-type EnclosureData struct {
-	length uint
-	typeStr string
-	url string
+	hash string
+	filename string
 }
 
 //--------------------------------------------------------------------------
@@ -77,7 +45,7 @@ func (f *Feed) initFeed(config *Config) bool {
 	}
 
 	f.config = config
-	f.xmlfile = path.Join(config.workspace, f.Shortname + "." + config.timestampStr + ".xml")
+	f.xmlfile = path.Join(config.workspace, f.Shortname+"."+config.timestampStr+".xml")
 	f.mp3Path = path.Join(config.workspace, f.Shortname)
 	f.dbPath = path.Join(config.workspace, f.Shortname, "db")
 
@@ -86,7 +54,6 @@ func (f *Feed) initFeed(config *Config) bool {
 	f.initDb()
 
 	return f.initialized
-
 }
 
 //--------------------------------------------------------------------------
@@ -133,7 +100,16 @@ func (f Feed) update(config Config) {
 		saveToFile(body, f.xmlfile)
 	}
 
-	f.parseXml(body)
+	// todo: comparison operations?
+	var foo map[string]XItemData
+	f.feedData, foo, err = parseXml(body, f.config.MaxDupChecks, f.itemExists)
+
+	if err != nil {
+		log.Error(err)
+	}
+
+	log.Debugf("%+v", f)
+	log.Debugf("%+v", foo)
 
 }
 
@@ -182,6 +158,12 @@ func saveToFile(buf []byte, filename string) {
 		log.Debug("bytes written to file: " + fmt.Sprint(count))
 	}
 
+}
+
+//--------------------------------------------------------------------------
+func (f Feed) itemExists(hash string) (exists bool) {
+	_, exists = f.itemlist[hash]
+	return
 }
 
 //--------------------------------------------------------------------------

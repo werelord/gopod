@@ -12,9 +12,9 @@ import (
 //--------------------------------------------------------------------------
 type Config struct {
 	// nothing yet
-	Foo   bool `toml:"foo"`
-	Debug bool `toml:"debug"`
-	MaxDupChecks int `toml:"maxdupchecks"`
+	Foo          bool `toml:"foo"`
+	Debug        bool `toml:"debug"`
+	MaxDupChecks uint `toml:"maxdupchecks"`
 	// todo: change default
 	workspace    string
 	timestamp    time.Time
