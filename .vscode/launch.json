@@ -9,10 +9,12 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${fileDirname}",
+            "program": "${workspaceRoot}",
             "env": {},
             "console": "integratedTerminal",
-            "args": []
+            "args": [
+                //"--reload-config=master.toml"
+            ]
         }
     ]
 }

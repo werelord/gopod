@@ -49,6 +49,7 @@ func (hook *LogrusFileHook) Levels() []logrus.Level {
 var log *logrus.Logger
 
 func initLogging(filename string) {
+	// todo: rotate log files
 	// todo: somehow differentiate between debug/release programmatically
 	//log.SetLevel(logrus.WarnLevel)
 
@@ -61,7 +62,7 @@ func initLogging(filename string) {
 	log.Out = os.Stdout
 	log.SetReportCaller(true)
 
-	filehook, err := NewLogrusFileHook("./"+filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	filehook, err := NewLogrusFileHook(filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err == nil {
 		log.AddHook(filehook)
 	}
