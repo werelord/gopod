@@ -27,7 +27,7 @@ type Feed struct {
 	initialized bool
 
 	feedData ChannelData
-	itemlist map[uint64]ItemData
+	itemlist map[string]ItemData
 }
 
 //--------------------------------------------------------------------------
@@ -56,8 +56,6 @@ type ItemData struct {
 	image string
 	description string
 	enclosure EnclosureData
-
-
 }
 
 type EnclosureData struct {
@@ -203,5 +201,8 @@ func loadFile(filename string) (buf []byte) {
 	}
 
 	return
+}
 
+func (f *Feed) saveItem(hash string, data ItemData) {
+	// todo: this
 }

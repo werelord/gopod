@@ -2,30 +2,28 @@ package main
 
 // json-based database, for the hell of it
 
-import (
-	"fmt"
+//	"fmt"
 
-	"github.com/pelletier/go-toml"
-)
+//	"github.com/pelletier/go-toml"
 
-type Postgres struct {
-	User     string
-	Password string
-}
-	
-type Configtest struct {
-	Postgres Postgres
-}
+// type Postgres struct {
+// 	User     string
+// 	Password string
+// }
+
+// type Configtest struct {
+// 	Postgres Postgres
+// }
 
 func test() {
-	doc := []byte(`
-[Postgres]
-User = "pelletier"
-Password = "mypassword"`)
+	// 	doc := []byte(`
+	// [Postgres]
+	// User = "pelletier"
+	// Password = "mypassword"`)
 
-	config := Configtest{}
-	toml.Unmarshal(doc, &config)
-	fmt.Println("user=", config.Postgres.User)
+	// 	config := Configtest{}
+	// 	toml.Unmarshal(doc, &config)
+	// 	fmt.Println("user=", config.Postgres.User)
 
 	// log.Debug("debug")
 	// log.Warn("ofo")

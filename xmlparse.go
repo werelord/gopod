@@ -1,10 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 
-	"hash/maphash"
+	"crypto/sha1"
+	"encoding/base64"
+	"net/url"
 
 	"github.com/araddon/dateparse"
 	"github.com/beevik/etree"
@@ -12,6 +13,7 @@ import (
 
 // separating out this to keep feed.go not as verbose
 
+//--------------------------------------------------------------------------
 func (f *Feed) parseXml(xmldata []byte) bool {
 	// fuck the ignore list
 	//ignoreList := []string{"atom:link", "lastBuildDate"}
@@ -25,7 +27,9 @@ func (f *Feed) parseXml(xmldata []byte) bool {
 	root := doc.SelectElement("rss").SelectElement("channel")
 	log.Debug("root element: " + root.Tag)
 
-	itemList := []*etree.Element{}
+	//itemList := []*etree.Element{}
+
+	var dupItemCount = 0
 
 	for _, elem := range root.ChildElements() {
 
@@ -44,53 +48,103 @@ func (f *Feed) parseXml(xmldata []byte) bool {
 		case strings.EqualFold(elem.FullTag(), "link"):
 			f.feedData.link = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "image"):
-			f.feedData.image.url = elem.SelectElement("url").Text()
-			f.feedData.image.title = elem.SelectElement("title").Text()
-			f.feedData.image.link = elem.SelectElement("link").Text()
+			if urlnode := elem.SelectElement("url"); urlnode != nil {
+				f.feedData.image.url = elem.SelectElement("url").Text()
+			}
+			if titlenode := elem.SelectElement("title"); titlenode != nil {
+				f.feedData.image.title = titlenode.Text()
+			}
+			if linknode := elem.SelectElement("link"); linknode != nil {
+				f.feedData.image.link = linknode.Text()
+			}
+
 		case strings.EqualFold(elem.FullTag(), "itunes:author"):
 			f.feedData.author = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "description"):
 			f.feedData.description = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "item"):
 			// adding items to a slice, for future handling without iterating thru the childlist again
-			itemList = append(itemList, elem)
+
+			// todo: move hash checking here, append only new entries
+			if dupItemCount < f.config.MaxDupChecks {
+				if exists, hash := f.checkExists(elem); exists {
+					// exists, increment the dup counter
+					log.Debug("item exists, incrementing dup counter")
+					dupItemCount++
+				} else {
+					// todo: parse this shit
+					f.saveItem(hash, parseItemEntry(elem))
+				}
+			} else {
+				log.Debug("dup counter over limit, skipping...")
+			}
+
+			// itemList = append(itemList, elem)
 		default:
 			//log.Debug("unhandled tag: " + elem.FullTag())
-
 		}
 		//log.Debug("tag: " + elem.Tag)
 	}
 
 	// itemlist handling
-	for _, item := range itemList {
-		if f.parseItem(item) == false {
-			log.Debug("stopping parsing of items for " + f.Shortname)
-			break
-		}
-	}
+	// for _, item := range itemList {
+	// 	if f.parseItem(item) == false {
+	// 		log.Debug("stopping parsing of items for " + f.Shortname)
+	// 		break
+	// 	}
+	// }
 
-	log.Debug(fmt.Sprintf("%+v", f))
+	log.Debugf("%+v", f)
 
 	return true
 
 }
 
-func (f *Feed) parseItem(elem *etree.Element) (cont bool) {
-	// first, get the guid/url, check to see if it exists
+//--------------------------------------------------------------------------
+func (f *Feed) checkExists(elem *etree.Element) (exists bool, hash string) {
+	// first, get the guid/urlstr, check to see if it exists
 	var (
-		// todo: null checks
-		guid    = elem.FindElement("guid").Text()
-		url     = elem.FindElement("enclosure").SelectAttr("url").Value
-		urlhash maphash.Hash
+		guid string
+		urlstr  string
 	)
 
-	log.Debug("enclosure: %+v, url: %+v", guid, url)
-	urlhash.WriteString(url)
-
-	// todo: set limit on number of children to check
-	if _, ok := f.itemlist[urlhash.Sum64()]; ok {
-		cont = false
+	if guidnode := elem.FindElement("guid"); guidnode != nil {
+		guid = guidnode.Text()
+	}
+	if enclosurenode := elem.FindElement("enclosure"); enclosurenode != nil {
+		if urlnode := enclosurenode.SelectAttr("url"); urlnode != nil {
+			u, err := url.Parse(urlnode.Value)
+			if (err != nil) {
+				log.Error("error in parsing url: ", err)
+			}
+			u.RawQuery = ""
+			u.Fragment = ""
+			
+			urlstr = u.String()
+		}
 	}
 
-	return cont
+	if guid == "" && urlstr == "" {
+		log.Error("failed to hash item; guid and url not parsed!")
+		return false, ""
+	}
+
+	// at least url or guid exists, hash the combination
+	// todo: remove querystring values from url
+	sha := sha1.New()
+	sha.Write([]byte(guid + urlstr))
+	//hash := sha.Sum(nil)
+	//bin := hasher.Sum(nil)
+	hash = base64.URLEncoding.EncodeToString(sha.Sum(nil))
+
+	// check to see if hash exists
+	_, exists = f.itemlist[hash]
+	log.Debugf("guid: '%+v', url: '%+v', hash: '%+v', exists: '%+v'", guid, urlstr, hash, exists)
+	return exists, hash
+}
+
+//--------------------------------------------------------------------------
+func parseItemEntry(elem *etree.Element) (item ItemData) {
+
+	return
 }
