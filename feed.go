@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"time"
 
 	scribble "github.com/nanobox-io/golang-scribble"
 )
@@ -23,18 +24,20 @@ type Feed struct {
 	dbPath      string
 	initialized bool
 
-	feedData XChannelData
-	itemlist map[string]ItemData
+	FeedData XChannelData
+	Itemlist map[string]ItemData
 }
 
 type ItemData struct {
-	hash string
-	filename string
+	Hash       string
+	Filename   string
+	Url        string
+	Downloaded bool
 }
 
 //--------------------------------------------------------------------------
 var (
-//f           Feed
+	db *scribble.Driver
 )
 
 //--------------------------------------------------------------------------
@@ -49,6 +52,8 @@ func (f *Feed) initFeed(config *Config) bool {
 	f.mp3Path = path.Join(config.workspace, f.Shortname)
 	f.dbPath = path.Join(config.workspace, f.Shortname, "db")
 
+	f.Itemlist = make(map[string]ItemData)
+
 	//log.Debug(f)
 
 	f.initDb()
@@ -60,24 +65,24 @@ func (f *Feed) initFeed(config *Config) bool {
 func (f *Feed) initDb() {
 
 	if f.initialized == false {
-		_, err := scribble.New(f.dbPath, nil)
-		if err != nil {
-			log.Error("Error init db: ", err)
+		var e error
+		db, e = scribble.New(f.dbPath, nil)
+		if e != nil {
+			log.Error("Error init db: ", e)
 			return
 		}
 
-		// todo: someting with database
+		// todo: load database entry for feed
 
 		//log.Debug(db)
 		f.initialized = true
 
 		// todo: load existing setup
-
 	}
 }
 
 //--------------------------------------------------------------------------
-func (f Feed) update(config Config) {
+func (f *Feed) update(config Config) {
 
 	var (
 		body []byte
@@ -86,34 +91,47 @@ func (f Feed) update(config Config) {
 	// check to see if xml exists
 	if config.Debug {
 		if _, err = os.Stat(f.xmlfile); (config.Debug) && (err == nil) {
-			body = loadFile(f.xmlfile)
+			body = loadXmlFile(f.xmlfile)
 
 		} else {
 			// download file
 			body = f.downloadXml(f.xmlfile)
-			saveToFile(body, f.xmlfile)
+			saveXmlToFile(body, f.xmlfile)
 		}
 
 	} else {
 		// download file
 		body = f.downloadXml(f.xmlfile)
-		saveToFile(body, f.xmlfile)
+		saveXmlToFile(body, f.xmlfile)
 	}
 
 	// todo: comparison operations?
-	var foo map[string]XItemData
-	f.feedData, foo, err = parseXml(body, f.config.MaxDupChecks, f.itemExists)
+	var itemList map[string]XItemData
+	f.FeedData, itemList, err = parseXml(body, f)
 
 	if err != nil {
-		log.Error(err)
+		log.Error("failed to parse xml: ", err)
+		return
+	}
+
+	for k, _ := range itemList {
+		// all these should be new entries..
+		f.Itemlist[k] = ItemData{k, "todo:this", "todo:this", false}
+
+		// todo: save v
+		// todo: check download
+	}
+
+	if e := db.Write("./", "feed", f); e != nil {
+		log.Error("failed to write database file: ", e)
 	}
 
 	log.Debugf("%+v", f)
-	log.Debugf("%+v", foo)
-
+	//log.Debugf("%+v", foo)
 }
 
 //--------------------------------------------------------------------------
+// todo: move this
 func (f Feed) downloadXml(filename string) (body []byte) {
 	log.Debug("downloading ", f.Url)
 
@@ -139,17 +157,17 @@ func (f Feed) downloadXml(filename string) (body []byte) {
 
 //--------------------------------------------------------------------------
 // todo: move this
-func saveToFile(buf []byte, filename string) {
+func saveXmlToFile(buf []byte, filename string) {
 
 	log.Debug("Saving to file: " + filename)
 
-	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 666)
-	defer file.Close()
+	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 
 	if err != nil {
 		log.Error("error opening file for writing:", err)
 		return
 	}
+	defer file.Close()
 	count, err := file.Write(buf)
 	if err != nil {
 		log.Error("error writing bytes to file: ", err)
@@ -157,18 +175,30 @@ func saveToFile(buf []byte, filename string) {
 	} else {
 		log.Debug("bytes written to file: " + fmt.Sprint(count))
 	}
-
 }
 
 //--------------------------------------------------------------------------
-func (f Feed) itemExists(hash string) (exists bool) {
-	_, exists = f.itemlist[hash]
+// feedProcess implementation
+//--------------------------------------------------------------------------
+func (f Feed) exists(hash string) (exists bool) {
+	_, exists = f.Itemlist[hash]
 	return
 }
 
 //--------------------------------------------------------------------------
+func (f Feed) maxDuplicates() uint {
+	return f.config.MaxDupChecks
+}
+
+//--------------------------------------------------------------------------
+func (f Feed) checkTimestamp(t time.Time) bool {
+	// todo: this
+	return true
+}
+
+//--------------------------------------------------------------------------
 // todo: move this, make config use this
-func loadFile(filename string) (buf []byte) {
+func loadXmlFile(filename string) (buf []byte) {
 
 	log.Debug("loading data from file: " + filename)
 	file, err := os.Open(filename)
