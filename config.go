@@ -24,11 +24,11 @@ type Config struct {
 //--------------------------------------------------------------------------
 type tomldoc struct {
 	Config   Config `toml:"config"`
-	Feedlist []Feed `toml:"feed"`
+	Feedlist []FeedToml `toml:"feed"`
 }
 
 //--------------------------------------------------------------------------
-func loadToml(filename string) (Config, []Feed) {
+func loadToml(filename string) (Config, []FeedToml) {
 
 	var ()
 	tomldoc := tomldoc{}

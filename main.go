@@ -26,26 +26,29 @@ func main() {
 	//test()
 
 	var (
-		config   Config
-		feedlist []Feed
+		config       Config
+		feedTomlList []FeedToml
 	)
 
 	//todo: command-line vars
 	programName := os.Args[0]
 	log.Debug(programName)
 
-	config, feedlist = loadToml(cmdline.Filename)
+	config, feedTomlList = loadToml(cmdline.Filename)
 
 	log.Debug("config:", config)
 	//log.Debug(feedlist)
 
-	for _, feed := range feedlist[:1] {
+	for _, feedtoml := range feedTomlList[:1] {
 		//log.Debug(feed.Name)
 		//log.Debug(feed.Url)
 
-		feed.initFeed(&config)
+		var f Feed
+		f.FeedToml = feedtoml
+
+		f.initFeed(&config)
 
 		// todo: parallel via channels??
-		feed.update(config)
+		f.update(config)
 	}
 }

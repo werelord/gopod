@@ -13,6 +13,7 @@ import (
 
 	"github.com/araddon/dateparse"
 	"github.com/beevik/etree"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 // separating out this to keep feed.go not as verbose
@@ -56,11 +57,12 @@ type feedProcess interface {
 }
 
 //--------------------------------------------------------------------------
-func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems map[string]XItemData, err error) {
+func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *orderedmap.OrderedMap[string, XItemData], err error) {
 	// fuck the ignore list
 	//ignoreList := []string{"atom:link", "lastBuildDate"}
 
-	newItems = make(map[string]XItemData)
+	//newItems = make(map[string]XItemData)
+	newItems = orderedmap.New[string, XItemData]()
 
 	doc := etree.NewDocument()
 	if err = doc.ReadFromBytes(xmldata); err != nil {
@@ -116,24 +118,22 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems m
 					continue
 				}
 
-				exists := fp.exists(hash)
-				//log.Debugf("hash: '%+v', exists: '%+v'", hash, exists)
 
-				if exists {
+				if exists := fp.exists(hash); exists {
 					// exists, increment the dup counter
 					log.Debug("item exists, incrementing dup counter")
 					dupItemCount++
 				} else {
 					// todo: parse this shit
 					if item, e := parseItemEntry(elem); e == nil {
-						newItems[hash] = item
+						newItems.Set(hash, item)
 					} else {
 						log.Errorf("not adding item '", hash, "': ", e)
 					}
 				}
-			} else {
-				log.Debug("dup counter over limit, skipping...")
-			}
+			} //else {
+				//log.Debug("dup counter over limit, skipping...")
+			//}
 
 			// itemList = append(itemList, elem)
 		default:

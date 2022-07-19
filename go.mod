@@ -9,8 +9,11 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 )
 
+require github.com/bahlo/generic-list-go v0.2.0 // indirect
+
 require (
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25 // indirect
+	github.com/wk8/go-ordered-map/v2 v2.0.0
 	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
 )
