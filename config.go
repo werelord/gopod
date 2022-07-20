@@ -56,9 +56,11 @@ func loadToml(filename string, timestamp time.Time) (Config, []FeedToml) {
 	}
 
 	// todo: move this??
+	//------------------------------------- DEBUG -------------------------------------
 	if tomldoc.Config.Debug {
 		tomldoc.Config.timestampStr = "DEBUG"
 	}
+	//------------------------------------- DEBUG -------------------------------------
 
 	//log.Debug(tomldoc)
 

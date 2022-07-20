@@ -52,7 +52,7 @@ type XEnclosureData struct {
 
 type feedProcess interface {
 	maxDuplicates() uint
-	exists(hash string) bool
+	itemExists(hash string) bool
 	checkTimestamp(timestamp time.Time) bool
 }
 
@@ -114,7 +114,7 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 					continue
 				}
 
-				if exists := fp.exists(hash); exists {
+				if exists := fp.itemExists(hash); exists {
 					// exists, increment the dup counter
 					//log.Debug("item exists, incrementing dup counter")
 					dupItemCount++

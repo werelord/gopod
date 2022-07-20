@@ -36,29 +36,30 @@ type FeedToml struct {
 
 type feedInternal struct {
 	// local items
-	db          *scribble.Driver
-	config      *Config
-	xmlfile     string
-	mp3Path     string
-	dbPath      string
-	initialized bool
+	db            *scribble.Driver
+	config        *Config
+	xmlfile       string
+	mp3Path       string
+	dbPath        string
+	dbinitialized bool
 	// itemlist is not explicitly exported, but converted to array to be exported
-	itemlist *orderedmap.OrderedMap[string, ItemData]
+	itemlist *orderedmap.OrderedMap[string, *ItemData]
 }
 
 // exported fields for database serialization
 type FeedDBExport struct {
 	Feed *Feed
 	// using slice for json db output
-	ItemListExport []ItemData
+	ItemListExport []*ItemData
 }
 
 // exported fields for database in feed list
 type ItemData struct {
-	Hash       string
-	Filename   string
-	Url        string
-	Downloaded bool
+	Hash         string
+	Filename     string
+	Url          string
+	Downloaded   bool
+	pubTimeStamp time.Time
 }
 
 // exported fields for each item
@@ -67,8 +68,12 @@ type ItemExport struct {
 	ItemXmlData XItemData
 }
 
-//--------------------------------------------------------------------------
-var ()
+//------------------------------------- DEBUG -------------------------------------
+const (
+	DOWNLOADFILE = false
+	SAVEDATABASE = false
+)
+//------------------------------------- DEBUG -------------------------------------
 
 // func (f Feed) Format(fs fmt.State, c rune) {
 // 	fs.Write([]byte("Name:" + f.Shortname + " url: " + f.Url))
@@ -86,19 +91,17 @@ func (f *Feed) initFeed(config *Config) bool {
 	f.mp3Path = path.Join(config.workspace, f.Shortname)
 	f.dbPath = path.Join(config.workspace, f.Shortname, "db")
 
-	f.itemlist = orderedmap.New[string, ItemData]()
-
-	//log.Debug(f)
+	f.itemlist = orderedmap.New[string, *ItemData]()
 
 	f.initDB()
 
-	return f.initialized
+	return f.dbinitialized
 }
 
 //--------------------------------------------------------------------------
 func (f *Feed) initDB() {
 
-	if f.initialized == false {
+	if f.dbinitialized == false {
 		log.Infof("{%v} initializing feed db, path: %v", f.Shortname, f.dbPath)
 		var e error
 		f.db, e = scribble.New(f.dbPath, nil)
@@ -106,8 +109,6 @@ func (f *Feed) initDB() {
 			log.Error("Error init db: ", e)
 			return
 		}
-
-		// todo: load database entry for feed
 
 		feedImport := FeedDBExport{Feed: f}
 
@@ -122,8 +123,7 @@ func (f *Feed) initDB() {
 			}
 		}
 
-		//log.Debug(db)
-		f.initialized = true
+		f.dbinitialized = true
 
 	}
 }
@@ -132,6 +132,14 @@ func (f *Feed) initDB() {
 func (f Feed) saveDB() (err error) {
 
 	log.Info("Saving db for ", f.Shortname)
+
+	//------------------------------------- DEBUG -------------------------------------
+	if f.config.Debug && SAVEDATABASE == false {
+		log.Debug("skipping saving database due to flag")
+		return
+	}
+	//------------------------------------- DEBUG -------------------------------------
+
 	// make sure database is initialized
 	f.initDB()
 	var feedExport FeedDBExport
@@ -155,9 +163,10 @@ func (f *Feed) update() {
 	var (
 		body     []byte
 		err      error
-		newItems []ItemData
+		newItems []*ItemData
 	)
 	// check to see if xml exists
+	//------------------------------------- DEBUG -------------------------------------
 	if f.config.Debug {
 		if _, err = os.Stat(f.xmlfile); (f.config.Debug) && (err == nil) {
 			body = loadXmlFile(f.xmlfile)
@@ -167,7 +176,7 @@ func (f *Feed) update() {
 			body = f.downloadXml(f.xmlfile)
 			saveXmlToFile(body, f.xmlfile)
 		}
-
+		//------------------------------------- DEBUG -------------------------------------
 	} else {
 		// download file
 		body = f.downloadXml(f.xmlfile)
@@ -187,30 +196,28 @@ func (f *Feed) update() {
 	for pair := itemList.Newest(); pair != nil; pair = pair.Prev() {
 		// all these should be new entries..
 		var (
-			hash       = pair.Key
-			xmldata    = pair.Value
-			downloaded bool
-			filename   string
-			parsedUrl  string
-			err        error
+			hash      = pair.Key
+			xmldata   = pair.Value
+			filename  string
+			parsedUrl string
+			err       error
 		)
-
-		if f.config.Debug {
-			if f.Shortname == "cppcast" {
-				//downloaded = true
-			}
-		}
 
 		if filename, parsedUrl, err = parseUrl(xmldata.Enclosure.Url); err != nil {
 			log.Error("Failed parsing url, skipping entry: ", err)
 			continue
 		}
 
-		var itemdata = ItemData{hash, filename, parsedUrl, downloaded}
+		var itemdata = ItemData{
+			Hash:         hash,
+			Filename:     filename,
+			Url:          parsedUrl,
+			Downloaded:   false,
+			pubTimeStamp: xmldata.Pubdate}
 
 		log.Infof("adding new item: :%+v", itemdata)
 
-		f.itemlist.Set(hash, itemdata)
+		f.itemlist.Set(hash, &itemdata)
 		if e := f.itemlist.MoveToFront(hash); err != nil {
 			log.Error("failed to move to front: ", e)
 		}
@@ -218,15 +225,16 @@ func (f *Feed) update() {
 		// saving item xml
 		f.saveItemXml(itemdata, xmldata)
 
-		newItems = append(newItems, itemdata)
+		// download these in order newest to last, to hijack initial population of downloaded items
+		newItems = append([]*ItemData{&itemdata}, newItems...)
 
-		// todo: save new items
-		// todo: check download
 	}
 	// temporary; don't save database for testing purposes
-	if f.config.Debug == false {
+	//------------------------------------- DEBUG -------------------------------------
+	if f.config.Debug == true {
 		f.saveDB()
 	}
+	//------------------------------------- DEBUG -------------------------------------
 
 	// process new entries
 	f.processNew(newItems)
@@ -300,7 +308,7 @@ func saveXmlToFile(buf []byte, filename string) {
 //--------------------------------------------------------------------------
 // feedProcess implementation
 //--------------------------------------------------------------------------
-func (f Feed) exists(hash string) (exists bool) {
+func (f Feed) itemExists(hash string) (exists bool) {
 	_, exists = f.itemlist.Get(hash)
 	return
 }
@@ -339,6 +347,11 @@ func loadXmlFile(filename string) (buf []byte) {
 func (f *Feed) saveItemXml(item ItemData, xmldata XItemData) (err error) {
 	log.Infof("saving xmldata for %v{%v}", item.Filename, item.Hash)
 
+	if f.config.Debug && SAVEDATABASE == false {
+		log.Debug("skipping saving database due to flag")
+		return
+	}
+
 	// make sure db is init
 	f.initDB()
 
@@ -348,7 +361,7 @@ func (f *Feed) saveItemXml(item ItemData, xmldata XItemData) (err error) {
 	i.Hash = item.Hash
 	i.ItemXmlData = xmldata
 
-	if e := f.db.Write("./", jsonFile, i); e != nil {
+	if e := f.db.Write("items", jsonFile, i); e != nil {
 		log.Error("failed to write database file: ", e)
 		return e
 	}
@@ -357,21 +370,78 @@ func (f *Feed) saveItemXml(item ItemData, xmldata XItemData) (err error) {
 }
 
 //--------------------------------------------------------------------------
-func (f *Feed) processNew(newItems []ItemData) (err error) {
+func (f *Feed) processNew(newItems []*ItemData) {
 	// todo: this
 
-	for _, pod := range newItems {
-		log.Debugf("processing new item: {%v %v}", pod.Filename, pod.Hash)
+	//------------------------------------- DEBUG -------------------------------------
+	var skipRemaining = false
+	//------------------------------------- DEBUG -------------------------------------
 
-		tempfile, err := f.downloadPod(pod)
+	for _, item := range newItems {
+		log.Debugf("processing new item: {%v %v}", item.Filename, item.Hash)
+
+		podfile := path.Join(f.mp3Path, item.Filename)
+		downloadTimestamp := time.Now()
+		var fileExists bool
+
+		if _, err := os.Stat(podfile); err == nil {
+			fileExists = true
+		}
+
+		//------------------------------------- DEBUG -------------------------------------
+		if f.config.Debug && skipRemaining {
+			log.Debug("skip remaining set; previously downloaded items.. making sure downloaded == true")
+			item.Downloaded = true
+			continue
+		}
+		//------------------------------------- DEBUG -------------------------------------
+
+		if item.Downloaded == true {
+			log.Debug("skipping entry; file already downloaded")
+			continue
+		} else if fileExists == true {
+			log.Debug("downloaded == false, but file already exists.. updating itemdata")
+			item.Downloaded = true
+
+			//------------------------------------- DEBUG -------------------------------------
+			if f.config.Debug {
+				log.Debug("debug setup, setting skip remaining to true")
+				skipRemaining = true
+			}
+			//------------------------------------- DEBUG -------------------------------------
+
+			continue
+		}
+
+		// if f.config.Debug && DOWNLOADFILE == false {
+		// 	log.Debug("skipping downloading file due to flag")
+		// 	continue
+		// }
+
+		tempfile, err := f.downloadPod(*item)
 		if err != nil {
 			log.Error("Failed downloading pod:", err)
 			continue
 		}
-		log.Debug("finished downloading file: ", tempfile)
+		// move tempfile to finished file
+		if err := os.Rename(tempfile, podfile); err != nil {
+			log.Debug("error moving temp file: ", err)
+			continue
+		}
+
+		if err := os.Chtimes(podfile, downloadTimestamp, item.pubTimeStamp); err != nil {
+			log.Error("failed to change modified time: ", err)
+			// don't skip due to timestamp issue
+		}
+
+		log.Debug("finished downloading file: ", podfile)
+		item.Downloaded = true
 		// todo: change change modified time
 	}
-	return nil
+
+	log.Info("all new downloads completed, saving db")
+	f.saveDB()
+
 }
 
 //--------------------------------------------------------------------------
@@ -388,7 +458,7 @@ func (f *Feed) downloadPod(item ItemData) (filepath string, err error) {
 	}
 	defer resp.Body.Close()
 
-	file, err := os.CreateTemp(f.mp3Path, item.Filename+".*")
+	file, err := os.CreateTemp(f.mp3Path, item.Filename+"_temp*")
 	if err != nil {
 		log.Error("Failed creating temp file: ", err)
 		return
@@ -411,7 +481,7 @@ func (f *Feed) downloadPod(item ItemData) (filepath string, err error) {
 	if err != nil {
 		log.Error("error in writing file: ", err)
 	} else {
-		log.Debugf("file written, bytes: %.2fKB", float64(b)/(1<<10))
+		log.Debugf("file written {%v} bytes: %.2fKB", path.Base(file.Name()), float64(b)/(1<<10))
 	}
 
 	return path.Clean(file.Name()), nil

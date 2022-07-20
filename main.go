@@ -8,7 +8,7 @@ import (
 
 //--------------------------------------------------------------------------
 var (
-	cmdline CommandLine
+	cmdline      CommandLine
 	runTimestamp time.Time
 )
 
@@ -38,10 +38,7 @@ func main() {
 
 	for _, feedtoml := range feedTomlList[:1] {
 
-		var (
-			f Feed
-		) 
-		f.FeedToml = feedtoml
+		f := Feed{FeedToml: feedtoml}
 
 		f.initFeed(&config)
 
@@ -49,7 +46,6 @@ func main() {
 		f.update()
 
 		// todo: flush all items on debug (schema change handling)
-
 
 	}
 }
