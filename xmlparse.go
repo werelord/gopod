@@ -36,18 +36,18 @@ type XChannelImage struct {
 
 type XItemData struct {
 	Title       string
-	pubdate     time.Time
-	guid        string
-	link        string
-	imageurl    string
-	description string
-	enclosure   XEnclosureData
+	Pubdate     time.Time
+	Guid        string
+	Link        string
+	Imageurl    string
+	Description string `xml:",cdata"`
+	Enclosure   XEnclosureData
 }
 
 type XEnclosureData struct {
-	length  uint
-	typeStr string
-	url     string
+	Length  uint
+	TypeStr string
+	Url     string
 }
 
 type feedProcess interface {
@@ -58,10 +58,10 @@ type feedProcess interface {
 
 //--------------------------------------------------------------------------
 func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *orderedmap.OrderedMap[string, XItemData], err error) {
+
 	// fuck the ignore list
 	//ignoreList := []string{"atom:link", "lastBuildDate"}
 
-	//newItems = make(map[string]XItemData)
 	newItems = orderedmap.New[string, XItemData]()
 
 	doc := etree.NewDocument()
@@ -71,15 +71,13 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 	}
 
 	root := doc.SelectElement("rss").SelectElement("channel")
-	//log.Debug("root element: " + root.Tag)
 	var (
 		dupItemCount uint = 0
 		maxDupes          = fp.maxDuplicates()
 	)
 
 	for _, elem := range root.ChildElements() {
-
-		// for now, direct insert..
+		// for now, direct insert, because we're skipping items after a certain dup count
 		// todo: later use reflection
 		switch {
 		case strings.EqualFold(elem.FullTag(), "title"):
@@ -106,9 +104,7 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 		case strings.EqualFold(elem.FullTag(), "description"):
 			feedData.Description = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "item"):
-			// adding items to a slice, for future handling without iterating thru the childlist again
 
-			// todo: move hash checking here, append only new entries
 			if dupItemCount < maxDupes {
 
 				// check to see if hash exists
@@ -118,13 +114,11 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 					continue
 				}
 
-
 				if exists := fp.exists(hash); exists {
 					// exists, increment the dup counter
-					log.Debug("item exists, incrementing dup counter")
+					//log.Debug("item exists, incrementing dup counter")
 					dupItemCount++
 				} else {
-					// todo: parse this shit
 					if item, e := parseItemEntry(elem); e == nil {
 						newItems.Set(hash, item)
 					} else {
@@ -132,7 +126,7 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 					}
 				}
 			} //else {
-				//log.Debug("dup counter over limit, skipping...")
+			//log.Debug("dup counter over limit, skipping...")
 			//}
 
 			// itemList = append(itemList, elem)
@@ -188,7 +182,6 @@ func parseDateEntry(date string) time.Time {
 		log.Debug("Error parsing timestamp: ", date)
 	}
 	return t
-
 }
 
 //--------------------------------------------------------------------------
@@ -199,31 +192,31 @@ func parseItemEntry(elem *etree.Element) (item XItemData, err error) {
 		case strings.EqualFold(child.FullTag(), "title"):
 			item.Title = child.Text()
 		case strings.EqualFold(child.FullTag(), "pubdate"):
-			item.pubdate = parseDateEntry(child.Text())
+			item.Pubdate = parseDateEntry(child.Text())
 		case strings.EqualFold(child.FullTag(), "guid"):
-			item.guid = child.Text()
+			item.Guid = child.Text()
 		case strings.EqualFold(child.FullTag(), "link"):
-			item.link = child.Text()
+			item.Link = child.Text()
 		case strings.EqualFold(child.FullTag(), "itunes:image"):
 			if href := child.SelectAttr("href"); href != nil {
-				item.imageurl = href.Value
+				item.Imageurl = href.Value
 			}
 		case strings.EqualFold(child.FullTag(), "description"):
-			item.description = child.Text()
+			item.Description = child.Text()
 		case strings.EqualFold(child.FullTag(), "enclosure"):
 			if lenStr := child.SelectAttr("length"); lenStr != nil {
 				if l, e := strconv.Atoi(lenStr.Value); e == nil {
-					item.enclosure.length = uint(l) // shouldn't be any overflow, or negatives, hopefully
+					item.Enclosure.Length = uint(l) // shouldn't be any overflow, or negatives, hopefully
 				} else {
 					log.Error("error in parsing enclosure length:", e)
 				}
 			}
 			if typestr := child.SelectAttr("type"); typestr != nil {
-				item.enclosure.typeStr = typestr.Value
+				item.Enclosure.TypeStr = typestr.Value
 			}
 			// url is required
 			if url := child.SelectAttr("url"); url != nil {
-				item.enclosure.url = url.Value
+				item.Enclosure.Url = url.Value
 			} else {
 				err = errors.New("missing url")
 			}

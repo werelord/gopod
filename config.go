@@ -23,17 +23,17 @@ type Config struct {
 
 //--------------------------------------------------------------------------
 type tomldoc struct {
-	Config   Config `toml:"config"`
+	Config   Config     `toml:"config"`
 	Feedlist []FeedToml `toml:"feed"`
 }
 
 //--------------------------------------------------------------------------
-func loadToml(filename string) (Config, []FeedToml) {
+func loadToml(filename string, timestamp time.Time) (Config, []FeedToml) {
 
 	var ()
 	tomldoc := tomldoc{}
-	tomldoc.Config.timestamp = time.Now()
-	tomldoc.Config.timestampStr = tomldoc.Config.timestamp.Format("20060102_150405")
+	tomldoc.Config.timestamp = timestamp
+	tomldoc.Config.timestampStr = timestamp.Format("20060102_150405")
 	tomldoc.Config.workspace = path.Dir(filename)
 
 	file, err := os.Open(filename)

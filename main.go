@@ -2,19 +2,21 @@ package main
 
 //--------------------------------------------------------------------------
 import (
-	"os"
 	"path"
+	"time"
 )
 
 //--------------------------------------------------------------------------
 var (
 	cmdline CommandLine
+	runTimestamp time.Time
 )
 
 //--------------------------------------------------------------------------
 func init() {
 	// todo: rotate log files with timestamp
-	var defaultworking = "e:/gopod/"
+	var defaultworking = "e:\\gopod\\"
+	runTimestamp = time.Now()
 
 	initLogging(path.Join(defaultworking, "gopod.log"))
 
@@ -30,25 +32,24 @@ func main() {
 		feedTomlList []FeedToml
 	)
 
-	//todo: command-line vars
-	programName := os.Args[0]
-	log.Debug(programName)
+	config, feedTomlList = loadToml(cmdline.Filename, runTimestamp)
 
-	config, feedTomlList = loadToml(cmdline.Filename)
-
-	log.Debug("config:", config)
-	//log.Debug(feedlist)
+	log.Info("using config:", config)
 
 	for _, feedtoml := range feedTomlList[:1] {
-		//log.Debug(feed.Name)
-		//log.Debug(feed.Url)
 
-		var f Feed
+		var (
+			f Feed
+		) 
 		f.FeedToml = feedtoml
 
 		f.initFeed(&config)
 
 		// todo: parallel via channels??
-		f.update(config)
+		f.update()
+
+		// todo: flush all items on debug (schema change handling)
+
+
 	}
 }
