@@ -2,6 +2,8 @@ package main
 
 //--------------------------------------------------------------------------
 import (
+	"net/http"
+	"net/url"
 	"path"
 	"time"
 )
@@ -35,6 +37,16 @@ func main() {
 	config, feedTomlList = loadToml(cmdline.Filename, runTimestamp)
 
 	log.Infof("using config: %+v", config)
+
+	if config.Debug {
+		var proxyUrl *url.URL
+		// setting default transport proxy
+		proxyUrl, _ = url.Parse("http://localhost:8888")
+		if proxyUrl != nil {
+			http.DefaultTransport = &http.Transport{Proxy: http.ProxyURL(proxyUrl)}
+
+		}
+	}
 
 	for _, feedtoml := range feedTomlList[1:2] {
 

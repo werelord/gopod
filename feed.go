@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -12,7 +10,6 @@ import (
 	"time"
 
 	scribble "github.com/nanobox-io/golang-scribble"
-	"github.com/schollz/progressbar/v3"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
@@ -95,7 +92,7 @@ func (f *Feed) initFeed(config *Config) bool {
 
 //--------------------------------------------------------------------------
 func (f *Feed) initDB() {
-
+	// future: modify scribble to use 7zip archives?
 	if f.dbinitialized == false {
 		log.Infof("{%v} initializing feed db, path: %v", f.Shortname, f.dbPath)
 		var e error
@@ -168,13 +165,13 @@ func (f *Feed) update() {
 
 		} else {
 			// download file
-			body = f.downloadXml(f.xmlfile)
+			body, _ = Download(f.Url)
 			saveXmlToFile(body, f.xmlfile)
 		}
 		//------------------------------------- DEBUG -------------------------------------
 	} else {
 		// download file
-		body = f.downloadXml(f.xmlfile)
+		body, _ = Download(f.Url)
 		saveXmlToFile(body, f.xmlfile)
 	}
 
@@ -275,31 +272,6 @@ func (f Feed) generateFilename(xmldata XItemData, def string) string {
 
 	// fallthru to default
 	return def
-}
-
-//--------------------------------------------------------------------------
-// todo: move this
-func (f Feed) downloadXml(filename string) (body []byte) {
-	log.Debug("downloading ", f.Url)
-
-	var err error
-	var resp *http.Response
-
-	resp, err = http.Get(f.Url)
-
-	if err != nil {
-		log.Error("failed to get xml: ", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err = io.ReadAll(resp.Body)
-	if err != nil {
-		log.Error("failed to get response body: ", err)
-		return
-	}
-	//log.Debug(string(body))
-	return
 }
 
 //--------------------------------------------------------------------------
@@ -437,14 +409,8 @@ func (f *Feed) processNew(newItems []*ItemData) {
 			continue
 		}
 
-		tempfile, err := f.downloadPod(*item)
-		if err != nil {
+		if err := DownloadBuffered(item.Url, podfile); err != nil {
 			log.Error("Failed downloading pod:", err)
-			continue
-		}
-		// move tempfile to finished file
-		if err := os.Rename(tempfile, podfile); err != nil {
-			log.Debug("error moving temp file: ", err)
 			continue
 		}
 
@@ -461,47 +427,4 @@ func (f *Feed) processNew(newItems []*ItemData) {
 	log.Info("all new downloads completed, saving db")
 	f.saveDB()
 
-}
-
-//--------------------------------------------------------------------------
-// todo: move this
-func (f *Feed) downloadPod(item ItemData) (filepath string, err error) {
-
-	// todo: check to see if file exists, is downloaded
-
-	resp, err := http.Get(item.Url)
-
-	if err != nil {
-		log.Error("Failed to download pod episodeS: ", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	file, err := os.CreateTemp(f.mp3Path, item.Filename+"_temp*")
-	if err != nil {
-		log.Error("Failed creating temp file: ", err)
-		return
-	}
-	defer file.Close()
-
-	bar := progressbar.NewOptions64(resp.ContentLength,
-		progressbar.OptionSetDescription("downloading "+item.Filename),
-		progressbar.OptionFullWidth(),
-		progressbar.OptionShowBytes(true),
-		progressbar.OptionShowCount(),
-		progressbar.OptionOnCompletion(func() {
-			fmt.Fprint(os.Stderr, "\n")
-		}),
-		progressbar.OptionSetTheme(progressbar.Theme{Saucer: "=", SaucerPadding: " ", BarStart: "[", BarEnd: "]"}))
-
-	podWriter := bufio.NewWriter(file)
-	b, err := io.Copy(io.MultiWriter(podWriter, bar), resp.Body)
-	podWriter.Flush()
-	if err != nil {
-		log.Error("error in writing file: ", err)
-	} else {
-		log.Debugf("file written {%v} bytes: %.2fKB", path.Base(file.Name()), float64(b)/(1<<10))
-	}
-
-	return path.Clean(file.Name()), nil
 }
