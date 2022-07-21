@@ -28,6 +28,7 @@ type XChannelData struct {
 	ItunesOwner XItunesOwner
 	Author      string
 	Description string
+	PersonList  []XPodcastPersonData
 }
 
 type XChannelImage struct {
@@ -58,6 +59,7 @@ type XItemData struct {
 type XPodcastPersonData struct {
 	Email string
 	Href  string
+	Img   string
 	Role  string
 	Name  string
 }
@@ -102,10 +104,13 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 			feedData.Title = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "itunes:subtitle"):
 			feedData.Subtitle = elem.Text()
-		case strings.EqualFold(elem.FullTag(), "pubdate"):
+		case strings.EqualFold(elem.FullTag(), "pubdate") || strings.EqualFold(elem.FullTag(), "lastbuilddate"):
 			// todo: shortcut, check pub date
 			// we're assuming this would be early in the process
-			feedData.LastPubDate = parseDateEntry(elem.Text())
+			// assuming only one entry exists for this
+			if feedData.LastPubDate.IsZero() {
+				feedData.LastPubDate = parseDateEntry(elem.Text())
+			}
 		case strings.EqualFold(elem.FullTag(), "link"):
 			feedData.Link = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "image"):
@@ -122,6 +127,15 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 			feedData.ItunesOwner.Email = getChildElementText(elem, "itunes:email")
 		case strings.EqualFold(elem.FullTag(), "description"):
 			feedData.Description = elem.Text()
+		case strings.EqualFold(elem.FullTag(), "podcast:person"):
+			personData := XPodcastPersonData{Email: getAttributeText(elem, "email"),
+				Href: getAttributeText(elem, "href"),
+				Role: getAttributeText(elem, "role"),
+				Img:  getAttributeText(elem, "img"),
+				Name: elem.Text(),
+			}
+			feedData.PersonList = append(feedData.PersonList, personData)
+
 		case strings.EqualFold(elem.FullTag(), "item"):
 
 			if dupItemCount < maxDupes {
@@ -244,6 +258,7 @@ func parseItemEntry(elem *etree.Element) (item XItemData, err error) {
 			personData := XPodcastPersonData{Email: getAttributeText(child, "email"),
 				Href: getAttributeText(child, "href"),
 				Role: getAttributeText(child, "role"),
+				Img:  getAttributeText(child, "img"),
 				Name: child.Text(),
 			}
 			item.PersonList = append(item.PersonList, personData)

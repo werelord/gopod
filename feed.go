@@ -79,9 +79,9 @@ func (f *Feed) initFeed(config *Config) bool {
 	}
 
 	f.config = config
-	f.xmlfile = path.Join(config.workspace, f.Shortname+"."+config.timestampStr+".xml")
-	f.mp3Path = path.Join(config.workspace, f.Shortname)
 	f.dbPath = path.Join(config.workspace, f.Shortname, "db")
+	f.xmlfile = path.Join(f.dbPath, f.Shortname+"."+config.timestampStr+".xml")
+	f.mp3Path = path.Join(config.workspace, f.Shortname)
 
 	f.itemlist = orderedmap.New[string, *ItemData]()
 
@@ -250,7 +250,7 @@ func parseUrl(urlstr string) (filename string, parsedUrl string, err error) {
 }
 
 //--------------------------------------------------------------------------
-func (f Feed) generateFilename(xmldata XItemData, def string) string {
+func (f Feed) generateFilename(xmldata XItemData, urlfilename string) string {
 	// check to see if we neeed to parse.. simple search/replace
 	if f.FilenameParse != "" {
 		newstr := f.FilenameParse
@@ -265,13 +265,16 @@ func (f Feed) generateFilename(xmldata XItemData, def string) string {
 				newstr = strings.Replace(newstr, "#linkfinalpath#", finalLink, 1)
 			}
 		}
+		if strings.Contains(f.FilenameParse, "#urlfilename#") {
+			newstr = strings.Replace(newstr, "#urlfilename#", urlfilename, 1)
+		}
 
 		log.Debug("using generated filename: ", newstr)
 		return newstr
 	}
 
 	// fallthru to default
-	return def
+	return urlfilename
 }
 
 //--------------------------------------------------------------------------
