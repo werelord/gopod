@@ -11,8 +11,7 @@ import (
 
 //--------------------------------------------------------------------------
 type Config struct {
-	// nothing yet
-	Foo          bool `toml:"foo"`
+	//Foo          bool `toml:"foo"`
 	Debug        bool `toml:"debug"`
 	MaxDupChecks uint `toml:"maxdupchecks"`
 	// todo: change default

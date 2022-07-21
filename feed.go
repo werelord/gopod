@@ -73,6 +73,7 @@ const (
 	DOWNLOADFILE = false
 	SAVEDATABASE = false
 )
+
 //------------------------------------- DEBUG -------------------------------------
 
 // func (f Feed) Format(fs fmt.State, c rune) {
@@ -229,12 +230,8 @@ func (f *Feed) update() {
 		newItems = append([]*ItemData{&itemdata}, newItems...)
 
 	}
-	// temporary; don't save database for testing purposes
-	//------------------------------------- DEBUG -------------------------------------
-	if f.config.Debug == true {
-		f.saveDB()
-	}
-	//------------------------------------- DEBUG -------------------------------------
+
+	f.saveDB()
 
 	// process new entries
 	f.processNew(newItems)

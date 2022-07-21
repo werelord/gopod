@@ -21,27 +21,45 @@ import (
 //--------------------------------------------------------------------------
 type XChannelData struct {
 	Title       string
+	Subtitle    string
 	LastPubDate time.Time
 	Link        string
 	Image       XChannelImage
+	ItunesOwner XItunesOwner
 	Author      string
 	Description string
 }
 
 type XChannelImage struct {
-	Url   string
-	Title string
-	Link  string
+	Url            string
+	Title          string
+	Link           string
+	ItunesImageUrl string
+}
+
+type XItunesOwner struct {
+	Name  string
+	Email string
 }
 
 type XItemData struct {
-	Title       string
-	Pubdate     time.Time
-	Guid        string
-	Link        string
-	Imageurl    string
-	Description string `xml:",cdata"`
-	Enclosure   XEnclosureData
+	Title          string
+	Pubdate        time.Time
+	Guid           string
+	Link           string
+	Author         string
+	Imageurl       string
+	Description    string
+	ContentEncoded string
+	Enclosure      XEnclosureData
+	PersonList     []XPodcastPersonData
+}
+
+type XPodcastPersonData struct {
+	Email string
+	Href  string
+	Role  string
+	Name  string
 }
 
 type XEnclosureData struct {
@@ -82,6 +100,8 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 		switch {
 		case strings.EqualFold(elem.FullTag(), "title"):
 			feedData.Title = elem.Text()
+		case strings.EqualFold(elem.FullTag(), "itunes:subtitle"):
+			feedData.Subtitle = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "pubdate"):
 			// todo: shortcut, check pub date
 			// we're assuming this would be early in the process
@@ -89,18 +109,17 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 		case strings.EqualFold(elem.FullTag(), "link"):
 			feedData.Link = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "image"):
-			if urlnode := elem.SelectElement("url"); urlnode != nil {
-				feedData.Image.Url = elem.SelectElement("url").Text()
-			}
-			if titlenode := elem.SelectElement("title"); titlenode != nil {
-				feedData.Image.Title = titlenode.Text()
-			}
-			if linknode := elem.SelectElement("link"); linknode != nil {
-				feedData.Image.Link = linknode.Text()
-			}
-
+			feedData.Image.Url = getChildElementText(elem, "url")
+			feedData.Image.Title = getChildElementText(elem, "title")
+			feedData.Image.Link = getChildElementText(elem, "link")
+		case strings.EqualFold(elem.FullTag(), "itunes:image"):
+			// set it next to existing image data
+			feedData.Image.ItunesImageUrl = getAttributeText(elem, "href")
 		case strings.EqualFold(elem.FullTag(), "itunes:author"):
 			feedData.Author = elem.Text()
+		case strings.EqualFold(elem.FullTag(), "itunes:owner"):
+			feedData.ItunesOwner.Name = getChildElementText(elem, "itunes:name")
+			feedData.ItunesOwner.Email = getChildElementText(elem, "itunes:email")
 		case strings.EqualFold(elem.FullTag(), "description"):
 			feedData.Description = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "item"):
@@ -136,6 +155,22 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 	}
 
 	return
+}
+
+//--------------------------------------------------------------------------
+func getChildElementText(elem *etree.Element, childnode string) string {
+	if node := elem.SelectElement(childnode); node != nil {
+		return node.Text()
+	}
+	return ""
+}
+
+//--------------------------------------------------------------------------
+func getAttributeText(elem *etree.Element, attr string) string {
+	if node := elem.SelectAttr(attr); node != nil {
+		return node.Value
+	}
+	return ""
 }
 
 //--------------------------------------------------------------------------
@@ -197,12 +232,21 @@ func parseItemEntry(elem *etree.Element) (item XItemData, err error) {
 			item.Guid = child.Text()
 		case strings.EqualFold(child.FullTag(), "link"):
 			item.Link = child.Text()
+		case strings.EqualFold(child.FullTag(), "itunes:author"):
+			item.Author = child.Text()
 		case strings.EqualFold(child.FullTag(), "itunes:image"):
-			if href := child.SelectAttr("href"); href != nil {
-				item.Imageurl = href.Value
-			}
+			item.Imageurl = getAttributeText(child, "href")
 		case strings.EqualFold(child.FullTag(), "description"):
 			item.Description = child.Text()
+		case strings.EqualFold(child.FullTag(), "content:encoded"):
+			item.ContentEncoded = child.Text()
+		case strings.EqualFold(child.FullTag(), "podcast:person"):
+			personData := XPodcastPersonData{Email: getAttributeText(child, "email"),
+				Href: getAttributeText(child, "href"),
+				Role: getAttributeText(child, "role"),
+				Name: child.Text(),
+			}
+			item.PersonList = append(item.PersonList, personData)
 		case strings.EqualFold(child.FullTag(), "enclosure"):
 			if lenStr := child.SelectAttr("length"); lenStr != nil {
 				if l, e := strconv.Atoi(lenStr.Value); e == nil {
