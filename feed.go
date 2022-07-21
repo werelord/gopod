@@ -28,12 +28,6 @@ type Feed struct {
 	XMLFeedData XChannelData
 }
 
-type FeedToml struct {
-	Name      string `toml:"name"`
-	Shortname string `toml:"shortname"`
-	Url       string `toml:"url"`
-}
-
 type feedInternal struct {
 	// local items
 	db            *scribble.Driver
@@ -197,21 +191,24 @@ func (f *Feed) update() {
 	for pair := itemList.Newest(); pair != nil; pair = pair.Prev() {
 		// all these should be new entries..
 		var (
-			hash      = pair.Key
-			xmldata   = pair.Value
-			filename  string
-			parsedUrl string
-			err       error
+			hash        = pair.Key
+			xmldata     = pair.Value
+			urlfilename string
+			genfilename string
+			parsedUrl   string
+			err         error
 		)
 
-		if filename, parsedUrl, err = parseUrl(xmldata.Enclosure.Url); err != nil {
+		if urlfilename, parsedUrl, err = parseUrl(xmldata.Enclosure.Url); err != nil {
 			log.Error("Failed parsing url, skipping entry: ", err)
 			continue
 		}
 
+		genfilename = f.generateFilename(xmldata, urlfilename)
+
 		var itemdata = ItemData{
 			Hash:         hash,
-			Filename:     filename,
+			Filename:     genfilename,
 			Url:          parsedUrl,
 			Downloaded:   false,
 			pubTimeStamp: xmldata.Pubdate}
@@ -253,6 +250,31 @@ func parseUrl(urlstr string) (filename string, parsedUrl string, err error) {
 	f := path.Base(u.Path)
 
 	return f, u.String(), nil
+}
+
+//--------------------------------------------------------------------------
+func (f Feed) generateFilename(xmldata XItemData, def string) string {
+	// check to see if we neeed to parse.. simple search/replace
+	if f.FilenameParse != "" {
+		newstr := f.FilenameParse
+
+		if strings.Contains(f.FilenameParse, "#shortname#") {
+			newstr = strings.Replace(newstr, "#shortname#", f.Shortname, 1)
+		}
+		if strings.Contains(f.FilenameParse, "#linkfinalpath#") {
+			// get the final path portion from the link url
+			if u, err := url.Parse(xmldata.Link); err == nil {
+				finalLink := path.Base(u.Path)
+				newstr = strings.Replace(newstr, "#linkfinalpath#", finalLink, 1)
+			}
+		}
+
+		log.Debug("using generated filename: ", newstr)
+		return newstr
+	}
+
+	// fallthru to default
+	return def
 }
 
 //--------------------------------------------------------------------------
@@ -410,10 +432,10 @@ func (f *Feed) processNew(newItems []*ItemData) {
 			continue
 		}
 
-		// if f.config.Debug && DOWNLOADFILE == false {
-		// 	log.Debug("skipping downloading file due to flag")
-		// 	continue
-		// }
+		if f.config.Debug && DOWNLOADFILE == false {
+			log.Debug("skipping downloading file due to flag")
+			continue
+		}
 
 		tempfile, err := f.downloadPod(*item)
 		if err != nil {

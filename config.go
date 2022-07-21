@@ -26,6 +26,13 @@ type tomldoc struct {
 	Feedlist []FeedToml `toml:"feed"`
 }
 
+type FeedToml struct {
+	Name          string `toml:"name"`
+	Shortname     string `toml:"shortname"`
+	Url           string `toml:"url"`
+	FilenameParse string `toml:"filenameParse"`
+}
+
 //--------------------------------------------------------------------------
 func loadToml(filename string, timestamp time.Time) (Config, []FeedToml) {
 

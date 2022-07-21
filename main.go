@@ -34,9 +34,9 @@ func main() {
 
 	config, feedTomlList = loadToml(cmdline.Filename, runTimestamp)
 
-	log.Info("using config:", config)
+	log.Infof("using config: %+v", config)
 
-	for _, feedtoml := range feedTomlList[:1] {
+	for _, feedtoml := range feedTomlList[1:2] {
 
 		f := Feed{FeedToml: feedtoml}
 
