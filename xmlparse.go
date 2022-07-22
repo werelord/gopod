@@ -46,6 +46,7 @@ type XItunesOwner struct {
 type XItemData struct {
 	Title          string
 	Pubdate        time.Time
+	EpisodeStr     string
 	Guid           string
 	Link           string
 	Author         string
@@ -262,6 +263,8 @@ func parseItemEntry(elem *etree.Element) (item XItemData, err error) {
 				Name: child.Text(),
 			}
 			item.PersonList = append(item.PersonList, personData)
+		case strings.EqualFold(child.FullTag(), "itunes:episode"):
+			item.EpisodeStr = child.Text()
 		case strings.EqualFold(child.FullTag(), "enclosure"):
 			if lenStr := child.SelectAttr("length"); lenStr != nil {
 				if l, e := strconv.Atoi(lenStr.Value); e == nil {

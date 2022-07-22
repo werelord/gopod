@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,6 +18,8 @@ import (
 type Feed struct {
 	// toml information, extracted from config
 	FeedToml
+
+	// todo: archive flag
 
 	// internal, local to feed, not serialized (explicitly)
 	feedInternal
@@ -196,7 +199,7 @@ func (f *Feed) update() {
 			err         error
 		)
 
-		if urlfilename, parsedUrl, err = parseUrl(xmldata.Enclosure.Url); err != nil {
+		if urlfilename, parsedUrl, err = f.parseUrl(xmldata.Enclosure.Url); err != nil {
 			log.Error("Failed parsing url, skipping entry: ", err)
 			continue
 		}
@@ -233,7 +236,7 @@ func (f *Feed) update() {
 }
 
 //--------------------------------------------------------------------------
-func parseUrl(urlstr string) (filename string, parsedUrl string, err error) {
+func (f Feed) parseUrl(urlstr string) (filename string, parsedUrl string, err error) {
 	u, err := url.Parse(urlstr)
 	if err != nil {
 		log.Error("failed url parsing:", err)
@@ -244,9 +247,22 @@ func parseUrl(urlstr string) (filename string, parsedUrl string, err error) {
 	u.RawQuery = ""
 	u.Fragment = ""
 
-	f := path.Base(u.Path)
+	// handle url parsing, if needed
+	if f.UrlParse != "" {
+		// assuming host is direct domain..
+		trim := strings.SplitAfterN(u.Path, f.UrlParse, 2)
+		if len(trim) == 2 {
+			u.Host = f.UrlParse
+			u.Path = trim[1]
+		} else {
+			log.Warn("failed parsing url; split failed")
+			log.Warnf("url: '%v' urlParse: '%v'", u.String(), f.UrlParse)
+		}
+	}
 
-	return f, u.String(), nil
+	fname := path.Base(u.Path)
+
+	return fname, u.String(), nil
 }
 
 //--------------------------------------------------------------------------
@@ -264,6 +280,23 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) string {
 				finalLink := path.Base(u.Path)
 				newstr = strings.Replace(newstr, "#linkfinalpath#", finalLink, 1)
 			}
+		}
+		if strings.Contains(f.FilenameParse, "#episode#") {
+			var padLen = 3
+			rep := xmldata.EpisodeStr
+			if rep == "" {
+				rep = strings.Repeat("X", padLen)
+			} else if len(rep) < padLen {
+				// pad string with zeros minus length
+				rep = strings.Repeat("0", padLen-len(rep)) + rep
+			}
+			newstr = strings.Replace(newstr, "#episode#", rep, 1)
+		}
+		if strings.Contains(f.FilenameParse, "#regex#") {
+			// regex parse of url filename, insert submatch into filename
+			r, _ := regexp.Compile(f.FilenameRegex)
+			match := r.FindStringSubmatch(urlfilename)[r.NumSubexp()]
+			newstr = strings.Replace(newstr, "#regex#", match, 1)
 		}
 		if strings.Contains(f.FilenameParse, "#urlfilename#") {
 			newstr = strings.Replace(newstr, "#urlfilename#", urlfilename, 1)
