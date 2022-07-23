@@ -30,8 +30,12 @@ func init() {
 //--------------------------------------------------------------------------
 func main() {
 
-	//test()
-	//return
+	const RunTest = false
+
+	if RunTest {
+		test(defaultworking)
+		return
+	}
 
 	var (
 		config       Config

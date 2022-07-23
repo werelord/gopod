@@ -42,7 +42,8 @@ func Download(url string) (body []byte, err error) {
 	defer resp.Body.Close()
 	// todo: check more error codes
 	if resp.StatusCode != 200 {
-		log.Errorf("failed to download; response status code: %v", resp.Status)
+		err = fmt.Errorf("download failed; response status code: %v", resp.Status)
+		log.Error(err)
 		return
 	}
 

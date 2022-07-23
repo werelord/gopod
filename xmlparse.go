@@ -28,6 +28,7 @@ type XChannelData struct {
 	Image          XChannelImage
 	ItunesOwner    XItunesOwner
 	Author         string
+	Copyright      string
 	Description    string
 	PodcastFunding XPodcastFunding
 	PersonList     []XPodcastPersonData
@@ -128,11 +129,13 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 		case strings.EqualFold(elem.FullTag(), "itunes:image"):
 			// set it next to existing image data
 			feedData.Image.ItunesImageUrl = getAttributeText(elem, "href")
-		case strings.EqualFold(elem.FullTag(), "itunes:author"):
-			feedData.Author = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "itunes:owner"):
 			feedData.ItunesOwner.Name = getChildElementText(elem, "itunes:name")
 			feedData.ItunesOwner.Email = getChildElementText(elem, "itunes:email")
+		case strings.EqualFold(elem.FullTag(), "itunes:author"):
+			feedData.Author = elem.Text()
+		case strings.EqualFold(elem.FullTag(), "copyright"):
+			feedData.Copyright = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "description"):
 			feedData.Description = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "podcast:funding"):

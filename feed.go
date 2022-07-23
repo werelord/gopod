@@ -168,13 +168,19 @@ func (f *Feed) update() {
 
 		} else {
 			// download file
-			body, _ = Download(f.Url)
+			if body, err = Download(f.Url); err != nil {
+				log.Error(err)
+				return
+			}
 			saveXmlToFile(body, f.xmlfile)
 		}
 		//------------------------------------- DEBUG -------------------------------------
 	} else {
 		// download file
-		body, _ = Download(f.Url)
+		if body, err = Download(f.Url); err != nil {
+			log.Error("failed to download: ", err)
+			return
+		}
 		saveXmlToFile(body, f.xmlfile)
 	}
 
@@ -284,6 +290,18 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) string {
 		if strings.Contains(f.FilenameParse, "#episode#") {
 			var padLen = 3
 			rep := xmldata.EpisodeStr
+
+			//------------------------------------- DEBUG -------------------------------------
+			if f.config.Debug && f.Shortname == "russo" {
+				// grab the episode from the title, as the numbers don't match for these
+				r, _ := regexp.Compile("The Russo-Souhan Show ([0-9]*) - ")
+				eps := r.FindStringSubmatch(xmldata.Title)
+				if len(eps) == 2 {
+					rep = eps[1]
+				}
+			}
+			//------------------------------------- DEBUG -------------------------------------
+
 			if rep == "" {
 				rep = strings.Repeat("X", padLen)
 			} else if len(rep) < padLen {
@@ -291,6 +309,19 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) string {
 				rep = strings.Repeat("0", padLen-len(rep)) + rep
 			}
 			newstr = strings.Replace(newstr, "#episode#", rep, 1)
+		}
+		if strings.Contains(f.FilenameParse, "#title#") {
+			// use the title directly
+			titlestr := cleanFilename(xmldata.Title)
+			//------------------------------------- DEBUG -------------------------------------
+			if f.config.Debug && f.Shortname == "russo" {
+				// solely for russo
+				r, _ := regexp.Compile("The Russo-Souhan Show [0-9]* - ")
+				titlestr = r.ReplaceAllLiteralString(titlestr, "")
+			}
+			//------------------------------------- DEBUG -------------------------------------
+			titlestr = strings.ReplaceAll(titlestr, " ", "_")
+			newstr = strings.Replace(newstr, "#title#", titlestr, 1)
 		}
 		if strings.Contains(f.FilenameParse, "#urlfileregex#") {
 			// regex parse of url filename, insert submatch into filename
