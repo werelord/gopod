@@ -8,10 +8,13 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/flytam/filenamify"
 	"github.com/schollz/progressbar/v3"
 )
+
+const FILENAME_MAX_LENGTH = 50
 
 //--------------------------------------------------------------------------
 // download unbuffered
@@ -133,6 +136,21 @@ func createRequest(url string) (req *http.Request, err error) {
 
 //--------------------------------------------------------------------------
 func cleanFilename(filename string) string {
-	fname, _ := filenamify.Filenamify(filename, filenamify.Options{Replacement: "-"})
+	// only error this generates is if the replacement is a reserved character
+	fname, _ := filenamify.Filenamify(filename, filenamify.Options{Replacement: "-", MaxLength: FILENAME_MAX_LENGTH})
 	return fname
+}
+
+//--------------------------------------------------------------------------
+func trimOnWords(str string) string {
+	for {
+		var i int
+		if len(str) < FILENAME_MAX_LENGTH {
+			break
+		} else if i = strings.LastIndex(str, " "); i < 0 {
+			break
+		}
+		str = str[:i]
+	}
+	return str
 }

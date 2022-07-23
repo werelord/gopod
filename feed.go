@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	scribble "github.com/nanobox-io/golang-scribble"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
@@ -218,7 +219,11 @@ func (f *Feed) update() {
 			continue
 		}
 
-		genfilename = f.generateFilename(xmldata, urlfilename)
+		if genfilename, err = f.generateFilename(xmldata, urlfilename); err != nil {
+			log.Error("failed to generate filename:", err)
+			// to make sure we can continue, shortname.uuid.mp3
+			genfilename = f.Shortname + "." + strings.ReplaceAll(uuid.NewString(), "-", "") + ".mp3"
+		}
 
 		var itemdata = ItemData{
 			Hash:         hash,
@@ -280,8 +285,9 @@ func (f Feed) parseUrl(urlstr string) (filename string, parsedUrl string, err er
 }
 
 //--------------------------------------------------------------------------
-func (f Feed) generateFilename(xmldata XItemData, urlfilename string) string {
+func (f Feed) generateFilename(xmldata XItemData, urlfilename string) (string, error) {
 	// check to see if we neeed to parse.. simple search/replace
+
 	if f.FilenameParse != "" {
 		newstr := f.FilenameParse
 
@@ -290,11 +296,16 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) string {
 		}
 		if strings.Contains(f.FilenameParse, "#linkfinalpath#") {
 			// get the final path portion from the link url
+
 			if u, err := url.Parse(xmldata.Link); err == nil {
 				finalLink := path.Base(u.Path)
-				newstr = strings.Replace(newstr, "#linkfinalpath#", finalLink, 1)
+				newstr = strings.Replace(newstr, "#linkfinalpath#", cleanFilename(finalLink), 1)
+			} else {
+				log.Error("failed to parse link path.. not replacing:", err)
+				return "", err
 			}
 		}
+
 		if strings.Contains(f.FilenameParse, "#episode#") {
 			var padLen = 3
 			rep := xmldata.EpisodeStr
@@ -311,16 +322,32 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) string {
 			//------------------------------------- DEBUG -------------------------------------
 
 			if rep == "" {
-				rep = strings.Repeat("X", padLen)
+				// hack.. don't like this specific, but fuck it
+				if f.Shortname == "dfo" {
+					if r, err := regexp.Compile("([0-9]+)"); err == nil {
+						matchslice := r.FindStringSubmatch(xmldata.Title)
+						if len(matchslice) > 0 && matchslice[len(matchslice)-1] != "" {
+							rep = matchslice[len(matchslice)-1]
+							rep = strings.Repeat("0", padLen-len(rep)) + rep
+						}
+					}
+				}
+				if rep == "" { // still
+					// use date as a stopgap
+					rep = xmldata.Pubdate.Format("20060102")
+					//rep = strings.Repeat("X", padLen)
+				}
+
 			} else if len(rep) < padLen {
 				// pad string with zeros minus length
 				rep = strings.Repeat("0", padLen-len(rep)) + rep
 			}
-			newstr = strings.Replace(newstr, "#episode#", rep, 1)
+			newstr = strings.Replace(newstr, "#episode#", cleanFilename(rep), 1)
 		}
+
 		if strings.Contains(f.FilenameParse, "#title#") {
 			// use the title directly
-			titlestr := cleanFilename(xmldata.Title)
+			titlestr := xmldata.Title
 			//------------------------------------- DEBUG -------------------------------------
 			if f.config.Debug && f.Shortname == "russo" {
 				// solely for russo
@@ -328,39 +355,60 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) string {
 				titlestr = r.ReplaceAllLiteralString(titlestr, "")
 			}
 			//------------------------------------- DEBUG -------------------------------------
-			titlestr = strings.ReplaceAll(titlestr, " ", "_")
-			newstr = strings.Replace(newstr, "#title#", titlestr, 1)
+			if len(titlestr) > FILENAME_MAX_LENGTH {
+				// rather than cleanfilename truncating the string, manually truncate at the last word
+				var i int
+				for i = strings.LastIndex(titlestr, " "); i > FILENAME_MAX_LENGTH; {
+					//strings.TrimRight()
+				}
+			}
+			titlestr = strings.ReplaceAll(trimOnWords(titlestr), " ", "_")
+			newstr = strings.Replace(newstr, "#title#", cleanFilename(titlestr), 1)
 		}
+
 		if strings.Contains(f.FilenameParse, "#date#") {
 			// date format YYYYMMDD
 			newstr = strings.Replace(newstr, "#date#", xmldata.Pubdate.Format("20060102"), 1)
-
 		}
+
 		if strings.Contains(f.FilenameParse, "#urlfileregex#") {
 			// regex parse of url filename, insert submatch into filename
-			r, _ := regexp.Compile(f.Regex)
-			match := cleanFilename(r.FindStringSubmatch(urlfilename)[r.NumSubexp()])
-			// finally, replace strings with underscores; probably not necessary for this, but meh
-			match = strings.ReplaceAll(match, " ", "_")
-			newstr = strings.Replace(newstr, "#urlfileregex#", match, 1)
+			if r, err := regexp.Compile(f.Regex); err == nil {
+				matchSlice := r.FindStringSubmatch(urlfilename)
+				match := matchSlice[len(matchSlice)-1]
+				// finally, replace strings with underscores; probably not necessary for this, but meh
+				match = strings.ReplaceAll(trimOnWords(match), " ", "_")
+				newstr = strings.Replace(newstr, "#urlfileregex#", cleanFilename(match), 1)
+			} else {
+				log.Error("failed to compile regex (bad regex string?) not doing replacement", err)
+				return "", err
+			}
 		}
+
 		if strings.Contains(f.FilenameParse, "#titleregex#") {
-			r, _ := regexp.Compile(f.Regex)
-			match := cleanFilename(r.FindStringSubmatch(xmldata.Title)[r.NumSubexp()])
-			// finally, replace strings with underscores
-			match = strings.ReplaceAll(match, " ", "_")
-			newstr = strings.Replace(newstr, "#titleregex#", match, 1)
+
+			if r, err := regexp.Compile(f.Regex); err == nil {
+				matchSlice := r.FindStringSubmatch(xmldata.Title)
+				match := matchSlice[len(matchSlice)-1]
+				// finally, replace strings with underscores
+				match = strings.ReplaceAll(trimOnWords(match), " ", "_")
+				newstr = strings.Replace(newstr, "#titleregex#", cleanFilename(match), 1)
+			} else {
+				log.Error("failed to compile regex (bad regex string?) not doing replacement", err)
+				return "", err
+			}
 		}
+
 		if strings.Contains(f.FilenameParse, "#urlfilename#") {
-			newstr = strings.Replace(newstr, "#urlfilename#", urlfilename, 1)
+			newstr = strings.Replace(newstr, "#urlfilename#", cleanFilename(urlfilename), 1)
 		}
 
 		log.Debug("using generated filename: ", newstr)
-		return newstr
+		return newstr, nil
 	}
 
 	// fallthru to default
-	return urlfilename
+	return cleanFilename(urlfilename), nil
 }
 
 //--------------------------------------------------------------------------

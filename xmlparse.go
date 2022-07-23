@@ -169,6 +169,7 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 
 		case strings.EqualFold(elem.FullTag(), "item"):
 
+			// todo: need option to turn off dupe count (for full processing)
 			if dupItemCount < maxDupes {
 
 				// check to see if hash exists
