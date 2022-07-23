@@ -20,6 +20,8 @@ import (
 
 //--------------------------------------------------------------------------
 type XChannelData struct {
+	AtomLinkSelf   XAtomLink
+	NewFeedUrl     string
 	Title          string
 	Subtitle       string
 	PubDate        time.Time
@@ -32,6 +34,13 @@ type XChannelData struct {
 	Description    string
 	PodcastFunding XPodcastFunding
 	PersonList     []XPodcastPersonData
+}
+
+type XAtomLink struct {
+	// rel = self
+	Type  string
+	Href  string
+	Title string
 }
 
 type XChannelImage struct {
@@ -111,6 +120,14 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 		// for now, direct insert, because we're skipping items after a certain dup count
 		// todo: later use reflection
 		switch {
+		case strings.EqualFold(elem.FullTag(), "atom:link"):
+			if getAttributeText(elem, "rel") == "self" {
+				feedData.AtomLinkSelf.Type = getAttributeText(elem, "type")
+				feedData.AtomLinkSelf.Href = getAttributeText(elem, "href")
+				feedData.AtomLinkSelf.Title = getAttributeText(elem, "title")
+			}
+		case strings.EqualFold(elem.FullTag(), "itunes:new-feed-url"):
+			feedData.NewFeedUrl = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "title"):
 			feedData.Title = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "itunes:subtitle"):

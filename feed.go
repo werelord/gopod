@@ -193,6 +193,14 @@ func (f *Feed) update() {
 		return
 	}
 
+	// check url vs atom link & new feed url
+	// TODO: handle this
+	if f.Url != f.XMLFeedData.AtomLinkSelf.Href {
+		log.Warnf("Feed url possibly changing: '%v':'%v'", f.Url, f.XMLFeedData.AtomLinkSelf.Href)
+	} else if f.Url != f.XMLFeedData.NewFeedUrl {
+		log.Warnf("Feed url possibly changing: '%v':'%v'", f.Url, f.XMLFeedData.NewFeedUrl)
+	}
+
 	// maintain order on pairs; go from oldest to newest (each item moved to front)
 	for pair := itemList.Newest(); pair != nil; pair = pair.Prev() {
 		// all these should be new entries..
@@ -322,6 +330,11 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) string {
 			//------------------------------------- DEBUG -------------------------------------
 			titlestr = strings.ReplaceAll(titlestr, " ", "_")
 			newstr = strings.Replace(newstr, "#title#", titlestr, 1)
+		}
+		if strings.Contains(f.FilenameParse, "#date#") {
+			// date format YYYYMMDD
+			newstr = strings.Replace(newstr, "#date#", xmldata.Pubdate.Format("20060102"), 1)
+
 		}
 		if strings.Contains(f.FilenameParse, "#urlfileregex#") {
 			// regex parse of url filename, insert submatch into filename
