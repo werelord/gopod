@@ -12,12 +12,15 @@ var (
 	runTimestamp time.Time
 )
 
+// todo: changable
+const defaultworking = "e:\\gopod\\"
+
 //--------------------------------------------------------------------------
 func init() {
-	// todo: rotate log files with timestamp
-	var defaultworking = "e:\\gopod\\"
+
 	runTimestamp = time.Now()
 
+	// todo: rotate log files with timestamp
 	initLogging(path.Join(defaultworking, "gopod.log"))
 
 	// todo: flag to check item entries that aren't downloaded

@@ -20,15 +20,17 @@ import (
 
 //--------------------------------------------------------------------------
 type XChannelData struct {
-	Title       string
-	Subtitle    string
-	LastPubDate time.Time
-	Link        string
-	Image       XChannelImage
-	ItunesOwner XItunesOwner
-	Author      string
-	Description string
-	PersonList  []XPodcastPersonData
+	Title          string
+	Subtitle       string
+	PubDate        time.Time
+	LastBuildDate  time.Time
+	Link           string
+	Image          XChannelImage
+	ItunesOwner    XItunesOwner
+	Author         string
+	Description    string
+	PodcastFunding XPodcastFunding
+	PersonList     []XPodcastPersonData
 }
 
 type XChannelImage struct {
@@ -43,6 +45,11 @@ type XItunesOwner struct {
 	Email string
 }
 
+type XPodcastFunding struct {
+	Url  string
+	Text string
+}
+
 type XItemData struct {
 	Title          string
 	Pubdate        time.Time
@@ -50,8 +57,10 @@ type XItemData struct {
 	Guid           string
 	Link           string
 	Author         string
+	ItunesAuthor   string
 	Imageurl       string
 	Description    string
+	ItunesSummary  string
 	ContentEncoded string
 	Enclosure      XEnclosureData
 	PersonList     []XPodcastPersonData
@@ -105,13 +114,11 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 			feedData.Title = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "itunes:subtitle"):
 			feedData.Subtitle = elem.Text()
-		case strings.EqualFold(elem.FullTag(), "pubdate") || strings.EqualFold(elem.FullTag(), "lastbuilddate"):
+		case strings.EqualFold(elem.FullTag(), "pubdate"):
 			// todo: shortcut, check pub date
-			// we're assuming this would be early in the process
-			// assuming only one entry exists for this
-			if feedData.LastPubDate.IsZero() {
-				feedData.LastPubDate = parseDateEntry(elem.Text())
-			}
+			feedData.PubDate = parseDateEntry(elem.Text())
+		case strings.EqualFold(elem.FullTag(), "lastbuilddate"):
+			feedData.LastBuildDate = parseDateEntry(elem.Text())
 		case strings.EqualFold(elem.FullTag(), "link"):
 			feedData.Link = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "image"):
@@ -128,6 +135,9 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 			feedData.ItunesOwner.Email = getChildElementText(elem, "itunes:email")
 		case strings.EqualFold(elem.FullTag(), "description"):
 			feedData.Description = elem.Text()
+		case strings.EqualFold(elem.FullTag(), "podcast:funding"):
+			feedData.PodcastFunding.Url = getAttributeText(elem, "url")
+			feedData.PodcastFunding.Text = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "podcast:person"):
 			personData := XPodcastPersonData{Email: getAttributeText(elem, "email"),
 				Href: getAttributeText(elem, "href"),
@@ -247,14 +257,18 @@ func parseItemEntry(elem *etree.Element) (item XItemData, err error) {
 			item.Guid = child.Text()
 		case strings.EqualFold(child.FullTag(), "link"):
 			item.Link = child.Text()
-		case strings.EqualFold(child.FullTag(), "itunes:author"):
+		case strings.EqualFold(child.FullTag(), "author"):
 			item.Author = child.Text()
+		case strings.EqualFold(child.FullTag(), "itunes:author"):
+			item.ItunesAuthor = child.Text()
 		case strings.EqualFold(child.FullTag(), "itunes:image"):
 			item.Imageurl = getAttributeText(child, "href")
 		case strings.EqualFold(child.FullTag(), "description"):
 			item.Description = child.Text()
 		case strings.EqualFold(child.FullTag(), "content:encoded"):
 			item.ContentEncoded = child.Text()
+		case strings.EqualFold(child.FullTag(), "itunes:summary"):
+			item.ItunesSummary = child.Text()
 		case strings.EqualFold(child.FullTag(), "podcast:person"):
 			personData := XPodcastPersonData{Email: getAttributeText(child, "email"),
 				Href: getAttributeText(child, "href"),

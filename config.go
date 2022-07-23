@@ -31,7 +31,7 @@ type FeedToml struct {
 	Shortname     string `toml:"shortname"`
 	Url           string `toml:"url"`
 	FilenameParse string `toml:"filenameParse"`
-	FilenameRegex string `toml:"filenameRegex"`
+	Regex         string `toml:"regex"`
 	UrlParse      string `toml:"urlParse"`
 }
 

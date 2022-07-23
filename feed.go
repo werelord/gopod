@@ -53,7 +53,7 @@ type ItemData struct {
 	Filename     string
 	Url          string
 	Downloaded   bool
-	pubTimeStamp time.Time
+	PubTimeStamp time.Time
 }
 
 // exported fields for each item
@@ -211,7 +211,7 @@ func (f *Feed) update() {
 			Filename:     genfilename,
 			Url:          parsedUrl,
 			Downloaded:   false,
-			pubTimeStamp: xmldata.Pubdate}
+			PubTimeStamp: xmldata.Pubdate}
 
 		log.Infof("adding new item: :%+v", itemdata)
 
@@ -292,11 +292,20 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) string {
 			}
 			newstr = strings.Replace(newstr, "#episode#", rep, 1)
 		}
-		if strings.Contains(f.FilenameParse, "#regex#") {
+		if strings.Contains(f.FilenameParse, "#urlfileregex#") {
 			// regex parse of url filename, insert submatch into filename
-			r, _ := regexp.Compile(f.FilenameRegex)
-			match := r.FindStringSubmatch(urlfilename)[r.NumSubexp()]
-			newstr = strings.Replace(newstr, "#regex#", match, 1)
+			r, _ := regexp.Compile(f.Regex)
+			match := cleanFilename(r.FindStringSubmatch(urlfilename)[r.NumSubexp()])
+			// finally, replace strings with underscores; probably not necessary for this, but meh
+			match = strings.ReplaceAll(match, " ", "_")
+			newstr = strings.Replace(newstr, "#urlfileregex#", match, 1)
+		}
+		if strings.Contains(f.FilenameParse, "#titleregex#") {
+			r, _ := regexp.Compile(f.Regex)
+			match := cleanFilename(r.FindStringSubmatch(xmldata.Title)[r.NumSubexp()])
+			// finally, replace strings with underscores
+			match = strings.ReplaceAll(match, " ", "_")
+			newstr = strings.Replace(newstr, "#titleregex#", match, 1)
 		}
 		if strings.Contains(f.FilenameParse, "#urlfilename#") {
 			newstr = strings.Replace(newstr, "#urlfilename#", urlfilename, 1)
@@ -450,7 +459,7 @@ func (f *Feed) processNew(newItems []*ItemData) {
 			continue
 		}
 
-		if err := os.Chtimes(podfile, downloadTimestamp, item.pubTimeStamp); err != nil {
+		if err := os.Chtimes(podfile, downloadTimestamp, item.PubTimeStamp); err != nil {
 			log.Error("failed to change modified time: ", err)
 			// don't skip due to timestamp issue
 		}

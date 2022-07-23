@@ -20,6 +20,7 @@ require (
 
 require (
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
+	github.com/flytam/filenamify v1.1.0
 	github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25 // indirect
 	github.com/schollz/progressbar/v3 v3.8.7
 	github.com/wk8/go-ordered-map/v2 v2.0.0

@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 
+	"github.com/flytam/filenamify"
 	"github.com/schollz/progressbar/v3"
 )
 
@@ -96,7 +97,7 @@ func DownloadBuffered(url, destfile string) (err error) {
 		progressbar.OptionShowBytes(true),
 		progressbar.OptionShowCount(),
 		progressbar.OptionOnCompletion(func() { fmt.Fprint(os.Stderr, "\n") }),
-		progressbar.OptionSetTheme(progressbar.Theme{Saucer: "=", SaucerPadding: " ", BarStart: "[", BarEnd: "]"}))
+		progressbar.OptionSetTheme(progressbar.Theme{Saucer: "=", SaucerHead: ">", SaucerPadding: " ", BarStart: "[", BarEnd: "]"}))
 
 	podWriter := bufio.NewWriter(file)
 	b, err := io.Copy(io.MultiWriter(podWriter, bar), resp.Body)
@@ -127,4 +128,10 @@ func createRequest(url string) (req *http.Request, err error) {
 		req.Header.Add("User-Agent", `Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.149 Safari/537.36`)
 	}
 	return
+}
+
+//--------------------------------------------------------------------------
+func cleanFilename(filename string) string {
+	fname, _ := filenamify.Filenamify(filename, filenamify.Options{Replacement: "-"})
+	return fname
 }
