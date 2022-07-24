@@ -66,7 +66,7 @@ func initLogging(filename string) {
 	log.Out = os.Stdout
 	log.SetReportCaller(true)
 
-	filehook, err := NewLogrusFileHook(filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	filehook, err := NewLogrusFileHook(filename, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0666)
 	if err == nil {
 		log.AddHook(filehook)
 	}

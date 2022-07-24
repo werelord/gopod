@@ -28,6 +28,7 @@ type XChannelData struct {
 	LastBuildDate  time.Time
 	Link           string
 	Image          XChannelImage
+	ItunesImageUrl string
 	ItunesOwner    XItunesOwner
 	Author         string
 	Copyright      string
@@ -44,10 +45,9 @@ type XAtomLink struct {
 }
 
 type XChannelImage struct {
-	Url            string
-	Title          string
-	Link           string
-	ItunesImageUrl string
+	Url   string
+	Title string
+	Link  string
 }
 
 type XItunesOwner struct {
@@ -144,8 +144,7 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 			feedData.Image.Title = getChildElementText(elem, "title")
 			feedData.Image.Link = getChildElementText(elem, "link")
 		case strings.EqualFold(elem.FullTag(), "itunes:image"):
-			// set it next to existing image data
-			feedData.Image.ItunesImageUrl = getAttributeText(elem, "href")
+			feedData.ItunesImageUrl = getAttributeText(elem, "href")
 		case strings.EqualFold(elem.FullTag(), "itunes:owner"):
 			feedData.ItunesOwner.Name = getChildElementText(elem, "itunes:name")
 			feedData.ItunesOwner.Email = getChildElementText(elem, "itunes:email")
@@ -298,6 +297,15 @@ func parseItemEntry(elem *etree.Element) (item XItemData, err error) {
 				Name: child.Text(),
 			}
 			item.PersonList = append(item.PersonList, personData)
+		case strings.EqualFold(child.FullTag(), "media:content"):
+			// hijacking person data for media:credit
+			for _, media := range child.SelectElements("media:credit") {
+				personData := XPodcastPersonData{
+					Role: getAttributeText(media, "role"),
+					Name: media.Text(),
+				}
+				item.PersonList = append(item.PersonList, personData)
+			}
 		case strings.EqualFold(child.FullTag(), "itunes:episode"):
 			item.EpisodeStr = child.Text()
 		case strings.EqualFold(child.FullTag(), "enclosure"):

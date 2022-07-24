@@ -109,6 +109,7 @@ func (f *Feed) initDB() {
 		feedImport := FeedDBExport{Feed: f}
 
 		// load feed information
+		// todo: error occurs on new feed, handle more gracefully
 		if e := f.db.Read("./", "feed", &feedImport); e != nil {
 			log.Error("error reading feed info:", e)
 			// don't return, just log the error
@@ -196,9 +197,9 @@ func (f *Feed) update() {
 
 	// check url vs atom link & new feed url
 	// TODO: handle this
-	if f.Url != f.XMLFeedData.AtomLinkSelf.Href {
+	if f.XMLFeedData.AtomLinkSelf.Href != "" && f.Url != f.XMLFeedData.AtomLinkSelf.Href {
 		log.Warnf("Feed url possibly changing: '%v':'%v'", f.Url, f.XMLFeedData.AtomLinkSelf.Href)
-	} else if f.Url != f.XMLFeedData.NewFeedUrl {
+	} else if f.XMLFeedData.NewFeedUrl != "" && f.Url != f.XMLFeedData.NewFeedUrl {
 		log.Warnf("Feed url possibly changing: '%v':'%v'", f.Url, f.XMLFeedData.NewFeedUrl)
 	}
 
