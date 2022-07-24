@@ -40,9 +40,13 @@ func main() {
 	var (
 		config       Config
 		feedTomlList []FeedToml
+		err          error
 	)
 
-	config, feedTomlList = loadToml(cmdline.Filename, runTimestamp)
+	if config, feedTomlList, err = loadToml(cmdline.Filename, runTimestamp); err != nil {
+		log.Error("failed to read toml file; exiting!")
+		return
+	}
 
 	log.Infof("using config: %+v", config)
 

@@ -401,7 +401,11 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) (string, e
 		}
 
 		if strings.Contains(f.FilenameParse, "#urlfilename#") {
-			newstr = strings.Replace(newstr, "#urlfilename#", cleanFilename(urlfilename), 1)
+			// for now, only applies to urlfilename
+			if f.SkipFileTrim == false {
+				urlfilename = cleanFilename(urlfilename)
+			}
+			newstr = strings.Replace(newstr, "#urlfilename#", urlfilename, 1)
 		}
 
 		log.Debug("using generated filename: ", newstr)

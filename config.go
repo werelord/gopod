@@ -33,10 +33,11 @@ type FeedToml struct {
 	FilenameParse string `toml:"filenameParse"`
 	Regex         string `toml:"regex"`
 	UrlParse      string `toml:"urlParse"`
+	SkipFileTrim  bool   `toml:"skipFileTrim"`
 }
 
 //--------------------------------------------------------------------------
-func loadToml(filename string, timestamp time.Time) (Config, []FeedToml) {
+func loadToml(filename string, timestamp time.Time) (Config, []FeedToml, error) {
 
 	var ()
 	tomldoc := tomldoc{}
@@ -47,20 +48,19 @@ func loadToml(filename string, timestamp time.Time) (Config, []FeedToml) {
 	file, err := os.Open(filename)
 	if err != nil {
 		log.Error("failed to open "+filename+": ", err)
-		return tomldoc.Config, tomldoc.Feedlist
+		return tomldoc.Config, tomldoc.Feedlist, err
 	}
 	defer file.Close()
 
 	buf, err := io.ReadAll(file)
 	if err != nil {
-		log.Error("failed to open "+filename+": ", err)
-		return tomldoc.Config, tomldoc.Feedlist
+		log.Error("readall '%v' failed: ", filename, err)
+		return tomldoc.Config, tomldoc.Feedlist, err
 	}
 
-	err1 := toml.Unmarshal(buf, &tomldoc)
-	if err1 != nil {
-		log.Error("failed to open "+filename+": ", err)
-		return tomldoc.Config, tomldoc.Feedlist
+	if err := toml.Unmarshal(buf, &tomldoc); err != nil {
+		log.Error("toml.unmarshal failed: ", err)
+		return tomldoc.Config, tomldoc.Feedlist, err
 	}
 
 	// todo: move this??
@@ -72,6 +72,6 @@ func loadToml(filename string, timestamp time.Time) (Config, []FeedToml) {
 
 	//log.Debug(tomldoc)
 
-	return tomldoc.Config, tomldoc.Feedlist
+	return tomldoc.Config, tomldoc.Feedlist, nil
 
 }
