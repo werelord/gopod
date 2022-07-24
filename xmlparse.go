@@ -186,7 +186,7 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 					if item, e := parseItemEntry(elem); e == nil {
 						newItems.Set(hash, item)
 					} else {
-						log.Errorf("not adding item '", hash, "': ", e)
+						log.Warnf("parse failed; not adding item {'%v' (%v)}: %v", item.Title, hash, e)
 					}
 				}
 			} //else {
@@ -327,6 +327,12 @@ func parseItemEntry(elem *etree.Element) (item XItemData, err error) {
 			}
 		}
 	}
+
+	//make sure we have an enclosure
+	if item.Enclosure.Url == "" {
+		err = errors.New("missing enclosure tag")
+	}
+
 	//log.Debugf("%+v", item)
 	return
 }

@@ -54,6 +54,7 @@ type ItemData struct {
 	Filename     string
 	Url          string
 	Downloaded   bool
+	CDFilename   string // content-disposition filename
 	PubTimeStamp time.Time
 }
 
@@ -550,10 +551,19 @@ func (f *Feed) processNew(newItems []*ItemData) {
 			log.Debug("skipping downloading file due to flag")
 			continue
 		}
-
-		if err := DownloadBuffered(item.Url, podfile); err != nil {
+		if cd, err := DownloadBuffered(item.Url, podfile); err != nil {
 			log.Error("Failed downloading pod:", err)
 			continue
+		} else if strings.Contains(cd, "filename") {
+			// content disposition header, for the hell of it
+			if r, err := regexp.Compile("filename=\"(.*)\""); err == nil {
+				if matches := r.FindStringSubmatch(cd); len(matches) == 2 {
+					item.CDFilename = matches[1]
+				}
+			} else {
+				log.Warn("parsing content disposition had regex error: ", err)
+			}
+
 		}
 
 		if err := os.Chtimes(podfile, downloadTimestamp, item.PubTimeStamp); err != nil {

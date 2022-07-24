@@ -2,6 +2,8 @@ package main
 
 //--------------------------------------------------------------------------
 import (
+	"net/http"
+	"net/url"
 	"path"
 	"time"
 )
@@ -50,15 +52,18 @@ func main() {
 
 	log.Infof("using config: %+v", config)
 
-	// if config.Debug {
-	// 	var proxyUrl *url.URL
-	// 	// setting default transport proxy
-	// 	proxyUrl, _ = url.Parse("http://localhost:8888")
-	// 	if proxyUrl != nil {
-	// 		http.DefaultTransport = &http.Transport{Proxy: http.ProxyURL(proxyUrl)}
+	//------------------------------------- DEBUG -------------------------------------
+	const UseProxy = true
+	if config.Debug && UseProxy {
+		var proxyUrl *url.URL
+		// setting default transport proxy
+		proxyUrl, _ = url.Parse("http://localhost:8888")
+		if proxyUrl != nil {
+			http.DefaultTransport = &http.Transport{Proxy: http.ProxyURL(proxyUrl)}
 
-	// 	}
-	// }
+		}
+	}
+	//------------------------------------- DEBUG -------------------------------------
 
 	for _, feedtoml := range feedTomlList[1:2] {
 

@@ -39,6 +39,7 @@ type FeedToml struct {
 //--------------------------------------------------------------------------
 func loadToml(filename string, timestamp time.Time) (Config, []FeedToml, error) {
 
+	// todo: better handling of these objects (pointer?)
 	var ()
 	tomldoc := tomldoc{}
 	tomldoc.Config.timestamp = timestamp

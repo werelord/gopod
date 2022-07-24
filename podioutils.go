@@ -59,7 +59,7 @@ func Download(url string) (body []byte, err error) {
 }
 
 //--------------------------------------------------------------------------
-func DownloadBuffered(url, destfile string) (err error) {
+func DownloadBuffered(url, destfile string) (contentDisposition string, err error) {
 
 	var (
 		req  *http.Request
@@ -94,6 +94,10 @@ func DownloadBuffered(url, destfile string) (err error) {
 		log.Errorf("failed to download; response status code: %v", resp.Status)
 		return
 	}
+
+	// grab content disposition, if it exists
+	contentDisposition = resp.Header.Get("Content-Disposition")
+	log.Debug("Content-Disposition: ", contentDisposition)
 
 	bar := progressbar.NewOptions64(resp.ContentLength,
 		progressbar.OptionSetDescription(path.Base(destfile)),
