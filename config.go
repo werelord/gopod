@@ -34,6 +34,7 @@ type FeedToml struct {
 	Regex         string `toml:"regex"`
 	UrlParse      string `toml:"urlParse"`
 	SkipFileTrim  bool   `toml:"skipFileTrim"`
+	EpisodePad    int    `toml:"episodePad"`
 }
 
 //--------------------------------------------------------------------------

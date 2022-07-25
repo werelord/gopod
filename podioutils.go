@@ -14,7 +14,7 @@ import (
 	"github.com/schollz/progressbar/v3"
 )
 
-const FILENAME_MAX_LENGTH = 50
+const FILENAME_MAX_LENGTH = 200
 
 //--------------------------------------------------------------------------
 // download unbuffered
@@ -97,7 +97,7 @@ func DownloadBuffered(url, destfile string) (contentDisposition string, err erro
 
 	// grab content disposition, if it exists
 	contentDisposition = resp.Header.Get("Content-Disposition")
-	log.Debug("Content-Disposition: ", contentDisposition)
+	//log.Debug("Content-Disposition: ", contentDisposition)
 
 	bar := progressbar.NewOptions64(resp.ContentLength,
 		progressbar.OptionSetDescription(path.Base(destfile)),

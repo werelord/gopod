@@ -310,8 +310,10 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) (string, e
 
 		if strings.Contains(f.FilenameParse, "#episode#") {
 			var padLen = 3
+			if f.EpisodePad > 0 {
+				padLen = f.EpisodePad
+			}
 			rep := xmldata.EpisodeStr
-
 			//------------------------------------- DEBUG -------------------------------------
 			if f.config.Debug && f.Shortname == "russo" {
 				// grab the episode from the title, as the numbers don't match for these
@@ -324,6 +326,7 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) (string, e
 			//------------------------------------- DEBUG -------------------------------------
 
 			if rep == "" {
+				//------------------------------------- DEBUG -------------------------------------
 				// hack.. don't like this specific, but fuck it
 				if f.Shortname == "dfo" {
 					if r, err := regexp.Compile("([0-9]+)"); err == nil {
@@ -334,6 +337,7 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) (string, e
 						}
 					}
 				}
+				//------------------------------------- DEBUG -------------------------------------
 				if rep == "" { // still
 					// use date as a stopgap
 					rep = xmldata.Pubdate.Format("20060102")
@@ -357,13 +361,6 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) (string, e
 				titlestr = r.ReplaceAllLiteralString(titlestr, "")
 			}
 			//------------------------------------- DEBUG -------------------------------------
-			if len(titlestr) > FILENAME_MAX_LENGTH {
-				// rather than cleanfilename truncating the string, manually truncate at the last word
-				var i int
-				for i = strings.LastIndex(titlestr, " "); i > FILENAME_MAX_LENGTH; {
-					//strings.TrimRight()
-				}
-			}
 			titlestr = strings.ReplaceAll(trimOnWords(titlestr), " ", "_")
 			newstr = strings.Replace(newstr, "#title#", cleanFilename(titlestr), 1)
 		}
@@ -398,6 +395,15 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) (string, e
 			} else {
 				log.Error("failed to compile regex (bad regex string?) not doing replacement", err)
 				return "", err
+			}
+		}
+
+		if strings.Contains(f.FilenameParse, "#titleregex:") {
+			if parsed, err := f.titleSubmatchRegex(f.Regex, newstr, xmldata.Title); err != nil {
+				log.Error("failed parsing title:", err)
+				return "", err
+			} else {
+				newstr = cleanFilename(strings.ReplaceAll(trimOnWords(parsed), " ", "_"))
 			}
 		}
 

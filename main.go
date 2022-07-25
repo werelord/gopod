@@ -53,7 +53,7 @@ func main() {
 	log.Infof("using config: %+v", config)
 
 	//------------------------------------- DEBUG -------------------------------------
-	const UseProxy = true
+	const UseProxy = false
 	if config.Debug && UseProxy {
 		var proxyUrl *url.URL
 		// setting default transport proxy
