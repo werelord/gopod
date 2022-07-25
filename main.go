@@ -2,16 +2,20 @@ package main
 
 //--------------------------------------------------------------------------
 import (
+	"gopod/podutils"
 	"net/http"
 	"net/url"
 	"path"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 //--------------------------------------------------------------------------
 var (
 	cmdline      CommandLine
 	runTimestamp time.Time
+	log          *logrus.Logger
 )
 
 // todo: changable
@@ -23,7 +27,10 @@ func init() {
 	runTimestamp = time.Now()
 
 	// todo: rotate log files with timestamp
-	initLogging(path.Join(defaultworking, "gopod.log"))
+	log = podutils.InitLogging(path.Join(defaultworking, "gopod.log"))
+	if log == nil {
+		panic("logfile failed; wtf")
+	}
 
 	// todo: flag to check item entries that aren't downloaded
 	cmdline.initCommandLine(path.Join(defaultworking, "master.toml"))
