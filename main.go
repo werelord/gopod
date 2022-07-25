@@ -65,7 +65,7 @@ func main() {
 	}
 	//------------------------------------- DEBUG -------------------------------------
 
-	for _, feedtoml := range feedTomlList[1:2] {
+	for _, feedtoml := range feedTomlList {
 
 		f := Feed{FeedToml: feedtoml}
 

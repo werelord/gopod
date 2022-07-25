@@ -112,7 +112,7 @@ func (f *Feed) initDB() {
 		// load feed information
 		// todo: error occurs on new feed, handle more gracefully
 		if e := f.db.Read("./", "feed", &feedImport); e != nil {
-			log.Error("error reading feed info:", e)
+			log.Warn("error reading feed info (new feed?):", e)
 			// don't return, just log the error
 		} else {
 			// populate ordered map
@@ -351,51 +351,9 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) (string, e
 			newstr = strings.Replace(newstr, "#episode#", cleanFilename(rep), 1)
 		}
 
-		if strings.Contains(f.FilenameParse, "#title#") {
-			// use the title directly
-			titlestr := xmldata.Title
-			//------------------------------------- DEBUG -------------------------------------
-			if f.config.Debug && f.Shortname == "russo" {
-				// solely for russo
-				r, _ := regexp.Compile("The Russo-Souhan Show [0-9]* - ")
-				titlestr = r.ReplaceAllLiteralString(titlestr, "")
-			}
-			//------------------------------------- DEBUG -------------------------------------
-			titlestr = strings.ReplaceAll(trimOnWords(titlestr), " ", "_")
-			newstr = strings.Replace(newstr, "#title#", cleanFilename(titlestr), 1)
-		}
-
 		if strings.Contains(f.FilenameParse, "#date#") {
 			// date format YYYYMMDD
 			newstr = strings.Replace(newstr, "#date#", xmldata.Pubdate.Format("20060102"), 1)
-		}
-
-		if strings.Contains(f.FilenameParse, "#urlfileregex#") {
-			// regex parse of url filename, insert submatch into filename
-			if r, err := regexp.Compile(f.Regex); err == nil {
-				matchSlice := r.FindStringSubmatch(urlfilename)
-				match := matchSlice[len(matchSlice)-1]
-				// finally, replace strings with underscores; probably not necessary for this, but meh
-				match = strings.ReplaceAll(trimOnWords(match), " ", "_")
-				newstr = strings.Replace(newstr, "#urlfileregex#", cleanFilename(match), 1)
-			} else {
-				log.Error("failed to compile regex (bad regex string?) not doing replacement", err)
-				return "", err
-			}
-		}
-
-		if strings.Contains(f.FilenameParse, "#titleregex#") {
-
-			if r, err := regexp.Compile(f.Regex); err == nil {
-				matchSlice := r.FindStringSubmatch(xmldata.Title)
-				match := matchSlice[len(matchSlice)-1]
-				// finally, replace strings with underscores
-				match = strings.ReplaceAll(trimOnWords(match), " ", "_")
-				newstr = strings.Replace(newstr, "#titleregex#", cleanFilename(match), 1)
-			} else {
-				log.Error("failed to compile regex (bad regex string?) not doing replacement", err)
-				return "", err
-			}
 		}
 
 		if strings.Contains(f.FilenameParse, "#titleregex:") {
@@ -403,7 +361,7 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) (string, e
 				log.Error("failed parsing title:", err)
 				return "", err
 			} else {
-				newstr = cleanFilename(strings.ReplaceAll(trimOnWords(parsed), " ", "_"))
+				newstr = cleanFilename(strings.ReplaceAll(parsed, " ", "_"))
 			}
 		}
 
