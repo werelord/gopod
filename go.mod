@@ -25,5 +25,6 @@ require (
 	github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25 // indirect
 	github.com/schollz/progressbar/v3 v3.8.7
 	github.com/wk8/go-ordered-map/v2 v2.0.0
+	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e
 	golang.org/x/sys v0.0.0-20220128215802-99c3d69c2c27 // indirect
 )

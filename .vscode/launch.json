@@ -13,7 +13,10 @@
             "env": {},
             "console": "integratedTerminal",
             "args": [
-                //"--reload-config=master.toml"
+                //"--config=master.toml",
+                "update",   // command to run
+                "--feed=twit",
+                "--debug=true"
             ]
         }
     ]

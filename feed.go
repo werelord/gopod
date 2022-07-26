@@ -31,14 +31,14 @@ type Feed struct {
 
 type feedInternal struct {
 	// local items
-	db            *scribble.Driver
-	config        *Config
-	xmlfile       string
-	mp3Path       string
-	dbPath        string
-	dbinitialized bool
+	db      *scribble.Driver
+	xmlfile string
+	mp3Path string
+	dbPath  string
 	// itemlist is not explicitly exported, but converted to array to be exported
 	itemlist *orderedmap.OrderedMap[string, *ItemData]
+
+	dbinitialized bool
 }
 
 // exported fields for database serialization
@@ -66,8 +66,9 @@ type ItemExport struct {
 
 //------------------------------------- DEBUG -------------------------------------
 const (
-	DOWNLOADFILE = false
-	SAVEDATABASE = false
+	DOWNLOADFILE        = false
+	SAVEDATABASE        = true
+	numXmlFilesRetained = 5
 )
 
 //------------------------------------- DEBUG -------------------------------------
@@ -77,22 +78,24 @@ const (
 // }
 
 //--------------------------------------------------------------------------
-func (f *Feed) initFeed(config *Config) bool {
+func NewFeed(config *Config, feedToml FeedToml) *Feed {
+	feed := Feed{FeedToml: feedToml}
+	feed.InitFeed(config)
+	return &feed
+}
+
+//--------------------------------------------------------------------------
+func (f *Feed) InitFeed(config *Config) {
 
 	if len(f.Shortname) == 0 {
 		f.Shortname = f.Name
 	}
 
-	f.config = config
-	f.dbPath = path.Join(config.workspace, f.Shortname, "db")
-	f.xmlfile = path.Join(f.dbPath, f.Shortname+"."+config.timestampStr+".xml")
-	f.mp3Path = path.Join(config.workspace, f.Shortname)
+	f.dbPath = path.Join(Defaultworking, f.Shortname, "db")
+	f.xmlfile = path.Join(f.dbPath, f.Shortname+"."+config.TimestampStr+".xml")
+	f.mp3Path = path.Join(config.Workspace, f.Shortname)
 
 	f.itemlist = orderedmap.New[string, *ItemData]()
-
-	f.initDB()
-
-	return f.dbinitialized
 }
 
 //--------------------------------------------------------------------------
@@ -132,7 +135,7 @@ func (f Feed) saveDB() (err error) {
 	log.Info("Saving db for ", f.Shortname)
 
 	//------------------------------------- DEBUG -------------------------------------
-	if f.config.Debug && SAVEDATABASE == false {
+	if cmdline.Debug && SAVEDATABASE == false {
 		log.Debug("skipping saving database due to flag")
 		return
 	}
@@ -156,7 +159,10 @@ func (f Feed) saveDB() (err error) {
 }
 
 //--------------------------------------------------------------------------
-func (f *Feed) update() {
+func (f *Feed) Update() {
+
+	// make sure db is initialized
+	f.initDB()
 
 	var (
 		body     []byte
@@ -165,27 +171,30 @@ func (f *Feed) update() {
 	)
 	// check to see if xml exists
 	//------------------------------------- DEBUG -------------------------------------
-	if f.config.Debug {
-		if _, err = os.Stat(f.xmlfile); (f.config.Debug) && (err == nil) {
-			body = loadXmlFile(f.xmlfile)
+	// if cmdline.Debug {
+	// 	if _, err = os.Stat(f.xmlfile); err == nil {
+	// 		body = loadXmlFile(f.xmlfile)
 
-		} else {
-			// download file
-			if body, err = Download(f.Url); err != nil {
-				log.Error(err)
-				return
-			}
-			saveXmlToFile(body, f.xmlfile)
-		}
-		//------------------------------------- DEBUG -------------------------------------
-	} else {
-		// download file
-		if body, err = Download(f.Url); err != nil {
-			log.Error("failed to download: ", err)
-			return
-		}
-		saveXmlToFile(body, f.xmlfile)
+	// 	} else {
+	// 		// download file
+	// 		if body, err = Download(f.Url); err != nil {
+	// 			log.Error(err)
+	// 			return
+	// 		}
+	// 		saveXmlToFile(body, f.xmlfile)
+	// 	}
+	// 	//------------------------------------- DEBUG -------------------------------------
+	// } else {
+	// download file
+	if body, err = Download(f.Url); err != nil {
+		log.Error("failed to download: ", err)
+		return
 	}
+	saveXmlToFile(body, f.xmlfile)
+
+	// todo: this
+	//RotateFiles(f.xmlfile)
+	// }
 
 	// future: comparison operations for feedData?
 	var itemList *orderedmap.OrderedMap[string, XItemData]
@@ -315,7 +324,7 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) (string, e
 			}
 			rep := xmldata.EpisodeStr
 			//------------------------------------- DEBUG -------------------------------------
-			if f.config.Debug && f.Shortname == "russo" {
+			if cmdline.Debug && f.Shortname == "russo" {
 				// grab the episode from the title, as the numbers don't match for these
 				r, _ := regexp.Compile("The Russo-Souhan Show ([0-9]*) - ")
 				eps := r.FindStringSubmatch(xmldata.Title)
@@ -413,7 +422,7 @@ func (f Feed) itemExists(hash string) (exists bool) {
 
 //--------------------------------------------------------------------------
 func (f Feed) maxDuplicates() uint {
-	return f.config.MaxDupChecks
+	return config.MaxDupChecks
 }
 
 //--------------------------------------------------------------------------
@@ -445,7 +454,7 @@ func loadXmlFile(filename string) (buf []byte) {
 func (f *Feed) saveItemXml(item ItemData, xmldata XItemData) (err error) {
 	log.Infof("saving xmldata for %v{%v}", item.Filename, item.Hash)
 
-	if f.config.Debug && SAVEDATABASE == false {
+	if cmdline.Debug && SAVEDATABASE == false {
 		log.Debug("skipping saving database due to flag")
 		return
 	}
@@ -487,7 +496,7 @@ func (f *Feed) processNew(newItems []*ItemData) {
 		}
 
 		//------------------------------------- DEBUG -------------------------------------
-		if f.config.Debug && skipRemaining {
+		if cmdline.Debug && skipRemaining {
 			log.Debug("skip remaining set; previously downloaded items.. making sure downloaded == true")
 			item.Downloaded = true
 			continue
@@ -502,7 +511,7 @@ func (f *Feed) processNew(newItems []*ItemData) {
 			item.Downloaded = true
 
 			//------------------------------------- DEBUG -------------------------------------
-			if f.config.Debug {
+			if cmdline.Debug {
 				log.Debug("debug setup, setting skip remaining to true")
 				skipRemaining = true
 			}
@@ -511,7 +520,7 @@ func (f *Feed) processNew(newItems []*ItemData) {
 			continue
 		}
 
-		if f.config.Debug && DOWNLOADFILE == false {
+		if cmdline.Debug && DOWNLOADFILE == false {
 			log.Debug("skipping downloading file due to flag")
 			continue
 		}

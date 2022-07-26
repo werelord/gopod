@@ -51,14 +51,14 @@ func (f Feed) titleSubmatchRegex(regex, dststr, title string) (string, error) {
 
 				repl = strings.TrimSpace(matchSlice[i])
 				//------------------------------------- DEBUG -------------------------------------
-				if (f.config.Debug) && (i == 1) && (repl == "") {
+				if (cmdline.Debug) && (i == 1) && (repl == "") {
 					repl = "TNG"
 					for _, t := range episodehack {
 						if strings.Contains(title, t) {
 							repl = "DS9"
 						}
 					}
-				} else if (f.config.Debug) && (i == 1) && (repl == "Voyager") {
+				} else if (cmdline.Debug) && (i == 1) && (repl == "Voyager") {
 					repl = "VOY"
 				}
 			}

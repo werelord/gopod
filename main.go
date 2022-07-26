@@ -13,13 +13,15 @@ import (
 
 //--------------------------------------------------------------------------
 var (
-	cmdline      CommandLine
 	runTimestamp time.Time
 	log          *logrus.Logger
+	cmdline      CommandLine
+	config       *Config
 )
 
 // todo: changable
-const defaultworking = "e:\\gopod\\"
+
+const Defaultworking = "e:\\gopod\\"
 
 //--------------------------------------------------------------------------
 func init() {
@@ -27,13 +29,11 @@ func init() {
 	runTimestamp = time.Now()
 
 	// todo: rotate log files with timestamp
-	log = podutils.InitLogging(path.Join(defaultworking, "gopod.log"))
+	log = podutils.InitLogging(path.Join(Defaultworking, "gopod.log"))
 	if log == nil {
 		panic("logfile failed; wtf")
 	}
 
-	// todo: flag to check item entries that aren't downloaded
-	cmdline.initCommandLine(path.Join(defaultworking, "master.toml"))
 }
 
 //--------------------------------------------------------------------------
@@ -42,46 +42,92 @@ func main() {
 	const RunTest = false
 
 	if RunTest {
-		test(defaultworking)
+		test(Defaultworking)
 		return
 	}
 
 	var (
-		config       Config
-		feedTomlList []FeedToml
-		err          error
+		feedList map[string]*Feed
+		err      error
 	)
 
-	if config, feedTomlList, err = loadToml(cmdline.Filename, runTimestamp); err != nil {
+	// todo: flag to check item entries that aren't downloaded
+	if cmdline.initCommandLine(path.Join(Defaultworking, "master.toml")) == false {
+		log.Error("failed to init commandline")
+		return
+	}
+
+	if config, feedList, err = loadToml(cmdline.configFile, runTimestamp); err != nil {
 		log.Error("failed to read toml file; exiting!")
 		return
 	}
 
 	log.Infof("using config: %+v", config)
 
+	checkDebugProxy()
+
+	var cmdFunc commandFunc
+	if cmdFunc = parseCommand(); cmdFunc == nil {
+		log.Error("command not recognized (this should not happen)")
+		return
+	}
+
+	log.Debugf("running command: '%v'", cmdline.command)
+
+	if cmdline.feedShortname != "" {
+		if feed, exists := feedList[cmdline.feedShortname]; exists {
+			cmdFunc(feed)
+		} else {
+			log.Error("cannot find shortname '%v'", cmdline.feedShortname)
+		}
+	} else {
+		log.Infof("running '%v' on all feeds", cmdline.command)
+		for _, feed := range feedList {
+			cmdFunc(feed)
+
+			// future: parallel via channels??
+			// todo: flush all items on debug (schema change handling)
+		}
+	}
+
+}
+
+//--------------------------------------------------------------------------
+func checkDebugProxy() {
 	//------------------------------------- DEBUG -------------------------------------
-	const UseProxy = false
-	if config.Debug && UseProxy {
+	if cmdline.Debug && cmdline.useProxy {
 		var proxyUrl *url.URL
 		// setting default transport proxy
 		proxyUrl, _ = url.Parse("http://localhost:8888")
 		if proxyUrl != nil {
 			http.DefaultTransport = &http.Transport{Proxy: http.ProxyURL(proxyUrl)}
-
 		}
 	}
 	//------------------------------------- DEBUG -------------------------------------
+}
 
-	for _, feedtoml := range feedTomlList {
-
-		f := Feed{FeedToml: feedtoml}
-
-		f.initFeed(&config)
-
-		// todo: parallel via channels??
-		f.update()
-
-		// todo: flush all items on debug (schema change handling)
-
+func parseCommand() commandFunc {
+	switch cmdline.command {
+	case update:
+		return runUpdate
+	case checkDownloaded:
+		return runCheckDownloads
+	default:
+		return nil
 	}
+}
+
+// command functions
+//--------------------------------------------------------------------------
+type commandFunc func(*Feed)
+
+func runUpdate(f *Feed) {
+	log.Info("runing update on ", f.Shortname)
+	f.Update()
+}
+
+//--------------------------------------------------------------------------
+func runCheckDownloads(f *Feed) {
+	// todo: this
+	log.Debug("TODO")
 }

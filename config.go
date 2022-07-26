@@ -12,16 +12,15 @@ import (
 //--------------------------------------------------------------------------
 type Config struct {
 	//Foo          bool `toml:"foo"`
-	Debug        bool `toml:"debug"`
 	MaxDupChecks uint `toml:"maxdupchecks"`
 	// todo: change default
-	workspace    string
-	timestamp    time.Time
-	timestampStr string
+	Workspace    string
+	Timestamp    time.Time
+	TimestampStr string
 }
 
 //--------------------------------------------------------------------------
-type tomldoc struct {
+type tomldocImport struct {
 	Config   Config     `toml:"config"`
 	Feedlist []FeedToml `toml:"feed"`
 }
@@ -38,42 +37,46 @@ type FeedToml struct {
 }
 
 //--------------------------------------------------------------------------
-func loadToml(filename string, timestamp time.Time) (Config, []FeedToml, error) {
+func loadToml(filename string, timestamp time.Time) (*Config, map[string]*Feed, error) {
 
 	// todo: better handling of these objects (pointer?)
-	var ()
-	tomldoc := tomldoc{}
-	tomldoc.Config.timestamp = timestamp
-	tomldoc.Config.timestampStr = timestamp.Format("20060102_150405")
-	tomldoc.Config.workspace = path.Dir(filename)
+	tomldoc := tomldocImport{}
+	tomldoc.Config.Timestamp = timestamp
+	tomldoc.Config.TimestampStr = timestamp.Format("20060102_150405")
+	tomldoc.Config.Workspace = path.Dir(filename)
 
 	file, err := os.Open(filename)
 	if err != nil {
 		log.Error("failed to open "+filename+": ", err)
-		return tomldoc.Config, tomldoc.Feedlist, err
+		return nil, nil, err
 	}
 	defer file.Close()
 
 	buf, err := io.ReadAll(file)
 	if err != nil {
 		log.Error("readall '%v' failed: ", filename, err)
-		return tomldoc.Config, tomldoc.Feedlist, err
+		return nil, nil, err
 	}
 
 	if err := toml.Unmarshal(buf, &tomldoc); err != nil {
 		log.Error("toml.unmarshal failed: ", err)
-		return tomldoc.Config, tomldoc.Feedlist, err
+		return nil, nil, err
 	}
 
 	// todo: move this??
 	//------------------------------------- DEBUG -------------------------------------
-	if tomldoc.Config.Debug {
-		tomldoc.Config.timestampStr = "DEBUG"
+	if cmdline.Debug {
+		tomldoc.Config.TimestampStr = "DEBUG"
 	}
 	//------------------------------------- DEBUG -------------------------------------
 
-	//log.Debug(tomldoc)
+	// move feedlist into shortname map
+	feedMap := make(map[string]*Feed)
+	for _, feedtoml := range tomldoc.Feedlist {
+		f := NewFeed(&tomldoc.Config, feedtoml)
+		feedMap[f.Shortname] = f
+	}
 
-	return tomldoc.Config, tomldoc.Feedlist, nil
+	return &tomldoc.Config, feedMap, nil
 
 }

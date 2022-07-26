@@ -18,6 +18,7 @@ type LogrusFileHook struct {
 //--------------------------------------------------------------------------
 func NewLogrusFileHook(file string, flag int, chmod os.FileMode) (*LogrusFileHook, error) {
 	plainFormatter := &logrus.TextFormatter{DisableColors: true}
+	// todo: are wa leaking resources by not closing the file??
 	logFile, err := os.OpenFile(file, flag, chmod)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "unable to write file on filehook %v", err)
