@@ -1,4 +1,4 @@
-package main
+package pod
 
 import (
 	"fmt"
@@ -10,15 +10,19 @@ import (
 	"strings"
 	"time"
 
+	"gopod/podconfig"
+	"gopod/podutils"
+
 	"github.com/google/uuid"
 	scribble "github.com/nanobox-io/golang-scribble"
+	log "github.com/sirupsen/logrus"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 //--------------------------------------------------------------------------
 type Feed struct {
 	// toml information, extracted from config
-	FeedToml
+	podconfig.FeedToml
 
 	// todo: archive flag
 
@@ -26,7 +30,7 @@ type Feed struct {
 	feedInternal
 
 	// channel entries from xml, exported
-	XMLFeedData XChannelData
+	XMLFeedData podutils.XChannelData
 }
 
 type feedInternal struct {
@@ -61,14 +65,18 @@ type ItemData struct {
 // exported fields for each item
 type ItemExport struct {
 	Hash        string
-	ItemXmlData XItemData
+	ItemXmlData podutils.XItemData
 }
 
 //------------------------------------- DEBUG -------------------------------------
 const (
-	DOWNLOADFILE        = false
+	DOWNLOADFILE        = true
 	SAVEDATABASE        = true
 	numXmlFilesRetained = 5
+)
+
+var (
+	config *podconfig.Config
 )
 
 //------------------------------------- DEBUG -------------------------------------
@@ -78,20 +86,22 @@ const (
 // }
 
 //--------------------------------------------------------------------------
-func NewFeed(config *Config, feedToml FeedToml) *Feed {
+func NewFeed(config *podconfig.Config, feedToml podconfig.FeedToml) *Feed {
 	feed := Feed{FeedToml: feedToml}
 	feed.InitFeed(config)
 	return &feed
 }
 
 //--------------------------------------------------------------------------
-func (f *Feed) InitFeed(config *Config) {
+func (f *Feed) InitFeed(cfg *podconfig.Config) {
 
 	if len(f.Shortname) == 0 {
 		f.Shortname = f.Name
 	}
 
-	f.dbPath = path.Join(Defaultworking, f.Shortname, "db")
+	config = cfg
+
+	f.dbPath = path.Join(config.Workspace, f.Shortname, "db")
 	f.xmlfile = path.Join(f.dbPath, f.Shortname+"."+config.TimestampStr+".xml")
 	f.mp3Path = path.Join(config.Workspace, f.Shortname)
 
@@ -135,7 +145,7 @@ func (f Feed) saveDB() (err error) {
 	log.Info("Saving db for ", f.Shortname)
 
 	//------------------------------------- DEBUG -------------------------------------
-	if cmdline.Debug && SAVEDATABASE == false {
+	if config.Debug && SAVEDATABASE == false {
 		log.Debug("skipping saving database due to flag")
 		return
 	}
@@ -171,13 +181,13 @@ func (f *Feed) Update() {
 	)
 	// check to see if xml exists
 	//------------------------------------- DEBUG -------------------------------------
-	// if cmdline.Debug {
+	// if config.Debug {
 	// 	if _, err = os.Stat(f.xmlfile); err == nil {
 	// 		body = loadXmlFile(f.xmlfile)
 
 	// 	} else {
 	// 		// download file
-	// 		if body, err = Download(f.Url); err != nil {
+	// 		if body, err = podutils.Download(f.Url); err != nil {
 	// 			log.Error(err)
 	// 			return
 	// 		}
@@ -185,8 +195,8 @@ func (f *Feed) Update() {
 	// 	}
 	// 	//------------------------------------- DEBUG -------------------------------------
 	// } else {
-	// download file
-	if body, err = Download(f.Url); err != nil {
+	//download file
+	if body, err = podutils.Download(f.Url); err != nil {
 		log.Error("failed to download: ", err)
 		return
 	}
@@ -197,8 +207,8 @@ func (f *Feed) Update() {
 	// }
 
 	// future: comparison operations for feedData?
-	var itemList *orderedmap.OrderedMap[string, XItemData]
-	f.XMLFeedData, itemList, err = parseXml(body, f)
+	var itemList *orderedmap.OrderedMap[string, podutils.XItemData]
+	f.XMLFeedData, itemList, err = podutils.ParseXml(body, f)
 
 	if err != nil {
 		log.Error("failed to parse xml: ", err)
@@ -296,7 +306,7 @@ func (f Feed) parseUrl(urlstr string) (filename string, parsedUrl string, err er
 }
 
 //--------------------------------------------------------------------------
-func (f Feed) generateFilename(xmldata XItemData, urlfilename string) (string, error) {
+func (f Feed) generateFilename(xmldata podutils.XItemData, urlfilename string) (string, error) {
 	// check to see if we neeed to parse.. simple search/replace
 
 	if f.FilenameParse != "" {
@@ -310,7 +320,7 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) (string, e
 
 			if u, err := url.Parse(xmldata.Link); err == nil {
 				finalLink := path.Base(u.Path)
-				newstr = strings.Replace(newstr, "#linkfinalpath#", cleanFilename(finalLink), 1)
+				newstr = strings.Replace(newstr, "#linkfinalpath#", podutils.CleanFilename(finalLink), 1)
 			} else {
 				log.Error("failed to parse link path.. not replacing:", err)
 				return "", err
@@ -324,7 +334,7 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) (string, e
 			}
 			rep := xmldata.EpisodeStr
 			//------------------------------------- DEBUG -------------------------------------
-			if cmdline.Debug && f.Shortname == "russo" {
+			if config.Debug && f.Shortname == "russo" {
 				// grab the episode from the title, as the numbers don't match for these
 				r, _ := regexp.Compile("The Russo-Souhan Show ([0-9]*) - ")
 				eps := r.FindStringSubmatch(xmldata.Title)
@@ -357,7 +367,7 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) (string, e
 				// pad string with zeros minus length
 				rep = strings.Repeat("0", padLen-len(rep)) + rep
 			}
-			newstr = strings.Replace(newstr, "#episode#", cleanFilename(rep), 1)
+			newstr = strings.Replace(newstr, "#episode#", podutils.CleanFilename(rep), 1)
 		}
 
 		if strings.Contains(f.FilenameParse, "#date#") {
@@ -370,14 +380,14 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) (string, e
 				log.Error("failed parsing title:", err)
 				return "", err
 			} else {
-				newstr = cleanFilename(strings.ReplaceAll(parsed, " ", "_"))
+				newstr = podutils.CleanFilename(strings.ReplaceAll(parsed, " ", "_"))
 			}
 		}
 
 		if strings.Contains(f.FilenameParse, "#urlfilename#") {
 			// for now, only applies to urlfilename
 			if f.SkipFileTrim == false {
-				urlfilename = cleanFilename(urlfilename)
+				urlfilename = podutils.CleanFilename(urlfilename)
 			}
 			newstr = strings.Replace(newstr, "#urlfilename#", urlfilename, 1)
 		}
@@ -387,7 +397,7 @@ func (f Feed) generateFilename(xmldata XItemData, urlfilename string) (string, e
 	}
 
 	// fallthru to default
-	return cleanFilename(urlfilename), nil
+	return podutils.CleanFilename(urlfilename), nil
 }
 
 //--------------------------------------------------------------------------
@@ -415,18 +425,18 @@ func saveXmlToFile(buf []byte, filename string) {
 //--------------------------------------------------------------------------
 // feedProcess implementation
 //--------------------------------------------------------------------------
-func (f Feed) itemExists(hash string) (exists bool) {
+func (f Feed) ItemExists(hash string) (exists bool) {
 	_, exists = f.itemlist.Get(hash)
 	return
 }
 
 //--------------------------------------------------------------------------
-func (f Feed) maxDuplicates() uint {
+func (f Feed) MaxDuplicates() uint {
 	return config.MaxDupChecks
 }
 
 //--------------------------------------------------------------------------
-func (f Feed) checkTimestamp(t time.Time) bool {
+func (f Feed) CheckTimestamp(t time.Time) bool {
 	// todo: this
 	return true
 }
@@ -451,10 +461,10 @@ func loadXmlFile(filename string) (buf []byte) {
 }
 
 //--------------------------------------------------------------------------
-func (f *Feed) saveItemXml(item ItemData, xmldata XItemData) (err error) {
+func (f *Feed) saveItemXml(item ItemData, xmldata podutils.XItemData) (err error) {
 	log.Infof("saving xmldata for %v{%v}", item.Filename, item.Hash)
 
-	if cmdline.Debug && SAVEDATABASE == false {
+	if config.Debug && SAVEDATABASE == false {
 		log.Debug("skipping saving database due to flag")
 		return
 	}
@@ -496,7 +506,7 @@ func (f *Feed) processNew(newItems []*ItemData) {
 		}
 
 		//------------------------------------- DEBUG -------------------------------------
-		if cmdline.Debug && skipRemaining {
+		if config.Debug && skipRemaining {
 			log.Debug("skip remaining set; previously downloaded items.. making sure downloaded == true")
 			item.Downloaded = true
 			continue
@@ -511,7 +521,7 @@ func (f *Feed) processNew(newItems []*ItemData) {
 			item.Downloaded = true
 
 			//------------------------------------- DEBUG -------------------------------------
-			if cmdline.Debug {
+			if config.Debug {
 				log.Debug("debug setup, setting skip remaining to true")
 				skipRemaining = true
 			}
@@ -520,11 +530,11 @@ func (f *Feed) processNew(newItems []*ItemData) {
 			continue
 		}
 
-		if cmdline.Debug && DOWNLOADFILE == false {
+		if config.Debug && DOWNLOADFILE == false {
 			log.Debug("skipping downloading file due to flag")
 			continue
 		}
-		if cd, err := DownloadBuffered(item.Url, podfile); err != nil {
+		if cd, err := podutils.DownloadBuffered(item.Url, podfile); err != nil {
 			log.Error("Failed downloading pod:", err)
 			continue
 		} else if strings.Contains(cd, "filename") {

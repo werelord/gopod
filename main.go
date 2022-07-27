@@ -2,26 +2,28 @@ package main
 
 //--------------------------------------------------------------------------
 import (
-	"gopod/podutils"
 	"net/http"
 	"net/url"
 	"path"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"gopod/commandline"
+	"gopod/logger"
+	"gopod/pod"
+	"gopod/podconfig"
+
+	log "github.com/sirupsen/logrus"
 )
 
 //--------------------------------------------------------------------------
 var (
 	runTimestamp time.Time
-	log          *logrus.Logger
-	cmdline      CommandLine
-	config       *Config
+	cmdline      *commandline.CommandLine
 )
 
 // todo: changable
 
-const Defaultworking = "e:\\gopod\\"
+const defaultworking = "e:\\gopod\\"
 
 //--------------------------------------------------------------------------
 func init() {
@@ -29,11 +31,7 @@ func init() {
 	runTimestamp = time.Now()
 
 	// todo: rotate log files with timestamp
-	log = podutils.InitLogging(path.Join(Defaultworking, "gopod.log"))
-	if log == nil {
-		panic("logfile failed; wtf")
-	}
-
+	logger.InitLogging(path.Join(defaultworking, "gopod.log"))
 }
 
 //--------------------------------------------------------------------------
@@ -42,27 +40,42 @@ func main() {
 	const RunTest = false
 
 	if RunTest {
-		test(Defaultworking)
+		test(defaultworking)
 		return
 	}
 
 	var (
-		feedList map[string]*Feed
+		config   *podconfig.Config
+		feedList *[]podconfig.FeedToml
+		feedMap  map[string]*pod.Feed
 		err      error
 	)
 
 	// todo: flag to check item entries that aren't downloaded
-	if cmdline.initCommandLine(path.Join(Defaultworking, "master.toml")) == false {
-		log.Error("failed to init commandline")
+	if cmdline, err = commandline.InitCommandLine(path.Join(defaultworking, "master.toml")); err != nil {
+		log.Error("failed to init commandline:", err)
 		return
 	}
 
-	if config, feedList, err = loadToml(cmdline.configFile, runTimestamp); err != nil {
+	if config, feedList, err = podconfig.LoadToml(cmdline.ConfigFile, runTimestamp); err != nil {
 		log.Error("failed to read toml file; exiting!")
 		return
 	}
 
+	//------------------------------------- DEBUG -------------------------------------
+	config.Debug = cmdline.Debug
+	if cmdline.Debug {
+		config.TimestampStr = "DEBUG"
+	}
+	//------------------------------------- DEBUG -------------------------------------
 	log.Infof("using config: %+v", config)
+
+	// move feedlist into shortname map
+	feedMap = make(map[string]*pod.Feed)
+	for _, feedtoml := range *feedList {
+		f := pod.NewFeed(config, feedtoml)
+		feedMap[f.Shortname] = f
+	}
 
 	checkDebugProxy()
 
@@ -72,30 +85,29 @@ func main() {
 		return
 	}
 
-	log.Debugf("running command: '%v'", cmdline.command)
+	log.Debugf("running command: '%v'", cmdline.Command)
 
-	if cmdline.feedShortname != "" {
-		if feed, exists := feedList[cmdline.feedShortname]; exists {
+	if cmdline.FeedShortname != "" {
+		if feed, exists := feedMap[cmdline.FeedShortname]; exists {
 			cmdFunc(feed)
 		} else {
-			log.Error("cannot find shortname '%v'", cmdline.feedShortname)
+			log.Error("cannot find shortname '%v'", cmdline.FeedShortname)
 		}
 	} else {
-		log.Infof("running '%v' on all feeds", cmdline.command)
-		for _, feed := range feedList {
+		log.Infof("running '%v' on all feeds", cmdline.Command)
+		for _, feed := range feedMap {
 			cmdFunc(feed)
 
 			// future: parallel via channels??
 			// todo: flush all items on debug (schema change handling)
 		}
 	}
-
 }
 
 //--------------------------------------------------------------------------
 func checkDebugProxy() {
 	//------------------------------------- DEBUG -------------------------------------
-	if cmdline.Debug && cmdline.useProxy {
+	if cmdline.Debug && cmdline.UseProxy {
 		var proxyUrl *url.URL
 		// setting default transport proxy
 		proxyUrl, _ = url.Parse("http://localhost:8888")
@@ -106,11 +118,12 @@ func checkDebugProxy() {
 	//------------------------------------- DEBUG -------------------------------------
 }
 
+//--------------------------------------------------------------------------
 func parseCommand() commandFunc {
-	switch cmdline.command {
-	case update:
+	switch cmdline.Command {
+	case commandline.Update:
 		return runUpdate
-	case checkDownloaded:
+	case commandline.CheckDownloaded:
 		return runCheckDownloads
 	default:
 		return nil
@@ -119,15 +132,15 @@ func parseCommand() commandFunc {
 
 // command functions
 //--------------------------------------------------------------------------
-type commandFunc func(*Feed)
+type commandFunc func(*pod.Feed)
 
-func runUpdate(f *Feed) {
-	log.Info("runing update on ", f.Shortname)
+func runUpdate(f *pod.Feed) {
+	log.Infof("runing update on '%v'", f.Shortname)
 	f.Update()
 }
 
 //--------------------------------------------------------------------------
-func runCheckDownloads(f *Feed) {
+func runCheckDownloads(f *pod.Feed) {
 	// todo: this
 	log.Debug("TODO")
 }

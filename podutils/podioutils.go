@@ -1,4 +1,4 @@
-package main
+package podutils
 
 import (
 	"bufio"
@@ -11,6 +11,7 @@ import (
 
 	"github.com/flytam/filenamify"
 	"github.com/schollz/progressbar/v3"
+	log "github.com/sirupsen/logrus"
 )
 
 const FILENAME_MAX_LENGTH = 200
@@ -138,7 +139,7 @@ func createRequest(url string) (req *http.Request, err error) {
 }
 
 //--------------------------------------------------------------------------
-func cleanFilename(filename string) string {
+func CleanFilename(filename string) string {
 	// only error this generates is if the replacement is a reserved character
 	fname, _ := filenamify.Filenamify(filename, filenamify.Options{Replacement: "-", MaxLength: FILENAME_MAX_LENGTH})
 	return fname

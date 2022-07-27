@@ -1,16 +1,16 @@
-package main
+package podutils
 
 import (
 	"strconv"
 	"strings"
 	"time"
-
+	"errors"
 	"crypto/sha1"
 	"encoding/base64"
 	"net/url"
 
-	"errors"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/araddon/dateparse"
 	"github.com/beevik/etree"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
@@ -90,14 +90,14 @@ type XEnclosureData struct {
 	Url     string
 }
 
-type feedProcess interface {
-	maxDuplicates() uint
-	itemExists(hash string) bool
-	checkTimestamp(timestamp time.Time) bool
+type FeedProcess interface {
+	MaxDuplicates() uint
+	ItemExists(hash string) bool
+	CheckTimestamp(timestamp time.Time) bool
 }
 
 //--------------------------------------------------------------------------
-func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *orderedmap.OrderedMap[string, XItemData], err error) {
+func ParseXml(xmldata []byte, fp FeedProcess) (feedData XChannelData, newItems *orderedmap.OrderedMap[string, XItemData], err error) {
 
 	// fuck the ignore list
 	//ignoreList := []string{"atom:link", "lastBuildDate"}
@@ -113,7 +113,7 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 	root := doc.SelectElement("rss").SelectElement("channel")
 	var (
 		dupItemCount uint = 0
-		maxDupes          = fp.maxDuplicates()
+		maxDupes          = fp.MaxDuplicates()
 	)
 
 	for _, elem := range root.ChildElements() {
@@ -178,7 +178,7 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 					continue
 				}
 
-				if exists := fp.itemExists(hash); exists {
+				if exists := fp.ItemExists(hash); exists {
 					// exists, increment the dup counter
 					//log.Debug("item exists, incrementing dup counter")
 					dupItemCount++
@@ -193,7 +193,6 @@ func parseXml(xmldata []byte, fp feedProcess) (feedData XChannelData, newItems *
 			//log.Debug("dup counter over limit, skipping...")
 			//}
 
-			// itemList = append(itemList, elem)
 		default:
 			//log.Debug("unhandled tag: " + elem.FullTag())
 		}

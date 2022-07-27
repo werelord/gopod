@@ -1,10 +1,10 @@
-package podutils
+package logger
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 //--------------------------------------------------------------------------
@@ -12,12 +12,12 @@ type LogrusFileHook struct {
 	file      *os.File
 	flag      int
 	chmod     os.FileMode
-	formatter *logrus.TextFormatter
+	formatter *log.TextFormatter
 }
 
 //--------------------------------------------------------------------------
 func NewLogrusFileHook(file string, flag int, chmod os.FileMode) (*LogrusFileHook, error) {
-	plainFormatter := &logrus.TextFormatter{DisableColors: true}
+	plainFormatter := &log.TextFormatter{DisableColors: true}
 	// todo: are wa leaking resources by not closing the file??
 	logFile, err := os.OpenFile(file, flag, chmod)
 	if err != nil {
@@ -30,7 +30,7 @@ func NewLogrusFileHook(file string, flag int, chmod os.FileMode) (*LogrusFileHoo
 
 //--------------------------------------------------------------------------
 // Fire event for LogrusFileHook
-func (hook *LogrusFileHook) Fire(entry *logrus.Entry) error {
+func (hook *LogrusFileHook) Fire(entry *log.Entry) error {
 
 	plainformat, err := hook.formatter.Format(entry)
 	if err != nil {
@@ -49,22 +49,20 @@ func (hook *LogrusFileHook) Fire(entry *logrus.Entry) error {
 
 //--------------------------------------------------------------------------
 // Levels entry
-func (hook *LogrusFileHook) Levels() []logrus.Level {
-	return logrus.AllLevels
+func (hook *LogrusFileHook) Levels() []log.Level {
+	return log.AllLevels
 }
 
 //--------------------------------------------------------------------------
-func InitLogging(filename string) (log *logrus.Logger) {
+func InitLogging(filename string) error {
 	// todo: rotate log files
 	// todo: somehow differentiate between debug/release programmatically
 
-	log = logrus.New()
-
 	//log.SetLevel(logrus.WarnLevel)
-	log.SetLevel(logrus.TraceLevel)
-	log.Formatter = &logrus.TextFormatter{ForceColors: true, FullTimestamp: true}
-	log.Level = logrus.TraceLevel
-	log.Out = os.Stdout
+	log.SetLevel(log.TraceLevel)
+	log.SetFormatter(&log.TextFormatter{ForceColors: true, FullTimestamp: true})
+	log.SetLevel(log.TraceLevel)
+	log.SetOutput(os.Stdout)
 	log.SetReportCaller(true)
 
 	filehook, err := NewLogrusFileHook(filename, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0666)
@@ -72,7 +70,7 @@ func InitLogging(filename string) (log *logrus.Logger) {
 		log.AddHook(filehook)
 	} else {
 		fmt.Print("failed creating logfile hook: ", err)
+		return err
 	}
-
-	return
+	return nil
 }

@@ -14,9 +14,9 @@
             "console": "integratedTerminal",
             "args": [
                 //"--config=master.toml",
-                "update",   // command to run
-                "--feed=twit",
-                "--debug=true"
+                //"update",   // command to run
+                "-feed=twit",
+                "-debug=true"
             ]
         }
     ]

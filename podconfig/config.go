@@ -1,6 +1,7 @@
-package main
+package podconfig
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -17,6 +18,7 @@ type Config struct {
 	Workspace    string
 	Timestamp    time.Time
 	TimestampStr string
+	Debug        bool
 }
 
 //--------------------------------------------------------------------------
@@ -37,7 +39,7 @@ type FeedToml struct {
 }
 
 //--------------------------------------------------------------------------
-func loadToml(filename string, timestamp time.Time) (*Config, map[string]*Feed, error) {
+func LoadToml(filename string, timestamp time.Time) (*Config, *[]FeedToml, error) {
 
 	// todo: better handling of these objects (pointer?)
 	tomldoc := tomldocImport{}
@@ -47,36 +49,19 @@ func loadToml(filename string, timestamp time.Time) (*Config, map[string]*Feed, 
 
 	file, err := os.Open(filename)
 	if err != nil {
-		log.Error("failed to open "+filename+": ", err)
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to open %v: %v ", filename, err)
 	}
 	defer file.Close()
 
 	buf, err := io.ReadAll(file)
 	if err != nil {
-		log.Error("readall '%v' failed: ", filename, err)
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("readall '%v' failed: %v", filename, err)
 	}
 
 	if err := toml.Unmarshal(buf, &tomldoc); err != nil {
-		log.Error("toml.unmarshal failed: ", err)
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("toml.unmarshal failed: %v ", err)
 	}
 
-	// todo: move this??
-	//------------------------------------- DEBUG -------------------------------------
-	if cmdline.Debug {
-		tomldoc.Config.TimestampStr = "DEBUG"
-	}
-	//------------------------------------- DEBUG -------------------------------------
-
-	// move feedlist into shortname map
-	feedMap := make(map[string]*Feed)
-	for _, feedtoml := range tomldoc.Feedlist {
-		f := NewFeed(&tomldoc.Config, feedtoml)
-		feedMap[f.Shortname] = f
-	}
-
-	return &tomldoc.Config, feedMap, nil
+	return &tomldoc.Config, &tomldoc.Feedlist, nil
 
 }
