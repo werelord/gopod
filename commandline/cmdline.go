@@ -1,6 +1,7 @@
-package main
+package commandline
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -11,52 +12,56 @@ import (
 type commandType int
 
 const ( // commands
-	update commandType = iota
-	checkDownloaded
+	Update commandType = iota
+	CheckDownloaded
 )
 
 func (cmd commandType) Format(fs fmt.State, c rune) {
-	m := map[commandType]string{update: "update", checkDownloaded: "checkDownloaded"}
+	m := map[commandType]string{
+		Update:          "update",
+		CheckDownloaded: "checkDownloaded",
+	}
 	fs.Write([]byte(m[cmd]))
 }
 
 //--------------------------------------------------------------------------
 type CommandLine struct {
-	configFile    string
-	command       commandType
-	feedShortname string
-	useProxy      bool
+	ConfigFile    string
+	Command       commandType
+	FeedShortname string
+	UseProxy      bool
 	Debug         bool
 }
 
 //--------------------------------------------------------------------------
-func (c *CommandLine) initCommandLine(defaultConfig string) bool {
+func InitCommandLine(defaultConfig string) (*CommandLine, error) {
 
-	flag.StringVar(&c.configFile, "config", defaultConfig, "what config toml to use")
-	flag.StringVar(&c.feedShortname, "feed", "", "specify a specific feed (shortname) to work on")
-	flag.BoolVar(&c.useProxy, "use-proxy", false, "use the preconfigured proxy")
+	var c CommandLine
+
+	// flag package is just shit; need to ignore non-flagged arguments (which it doesn't do)
+	flag.StringVar(&c.ConfigFile, "config", defaultConfig, "what config toml to use")
+	flag.StringVar(&c.FeedShortname, "feed", "", "specify a specific feed (shortname) to work on")
+	flag.BoolVar(&c.UseProxy, "use-proxy", false, "use the preconfigured proxy")
 	flag.BoolVar(&c.Debug, "debug", false, "debugging")
 
 	flag.Parse()
 
-	if c.configFile != "" {
-		if _, err := os.Stat(c.configFile); err != nil {
-			log.Error("missing config file: ", err)
-			return false
+	if c.ConfigFile != "" {
+		if _, err := os.Stat(c.ConfigFile); err != nil {
+			return nil, fmt.Errorf("missing config file: %v", err)
 		}
 	} else {
-		log.Error("config cannot be blank!")
-		return false
+		return nil, errors.New("config cannot be blank")
 	}
 
 	switch {
 	case slices.Contains(flag.Args(), "update"):
-		c.command = update
+		c.Command = Update
 	case slices.Contains(flag.Args(), "checkDownloaded"):
-		c.command = checkDownloaded
+		c.Command = CheckDownloaded
 	default:
-		c.command = update
+		c.Command = Update
 	}
 
-	return true
+	return &c, nil
 }
