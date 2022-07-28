@@ -19,6 +19,7 @@ require (
 )
 
 require (
+	github.com/DavidGamba/go-getoptions v0.25.3
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/flytam/filenamify v1.1.0
 	github.com/google/uuid v1.3.0

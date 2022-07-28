@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -101,9 +102,9 @@ func (f *Feed) InitFeed(cfg *podconfig.Config) {
 
 	config = cfg
 
-	f.dbPath = path.Join(config.Workspace, f.Shortname, "db")
-	f.xmlfile = path.Join(f.dbPath, f.Shortname+"."+config.TimestampStr+".xml")
-	f.mp3Path = path.Join(config.Workspace, f.Shortname)
+	f.dbPath = filepath.Join(config.Workspace, f.Shortname, "db")
+	f.xmlfile = filepath.Join(f.dbPath, f.Shortname+"."+config.TimestampStr+".xml")
+	f.mp3Path = filepath.Join(config.Workspace, f.Shortname)
 
 	f.itemlist = orderedmap.New[string, *ItemData]()
 }
@@ -300,7 +301,7 @@ func (f Feed) parseUrl(urlstr string) (filename string, parsedUrl string, err er
 		}
 	}
 
-	fname := path.Base(u.Path)
+	fname := filepath.Base(u.Path)
 
 	return fname, u.String(), nil
 }
@@ -472,7 +473,7 @@ func (f *Feed) saveItemXml(item ItemData, xmldata podutils.XItemData) (err error
 	// make sure db is init
 	f.initDB()
 
-	jsonFile := strings.TrimSuffix(item.Filename, path.Ext(item.Filename))
+	jsonFile := strings.TrimSuffix(item.Filename, filepath.Ext(item.Filename))
 
 	var i ItemExport
 	i.Hash = item.Hash
@@ -497,7 +498,7 @@ func (f *Feed) processNew(newItems []*ItemData) {
 	for _, item := range newItems {
 		log.Debugf("processing new item: {%v %v}", item.Filename, item.Hash)
 
-		podfile := path.Join(f.mp3Path, item.Filename)
+		podfile := filepath.Join(f.mp3Path, item.Filename)
 		downloadTimestamp := time.Now()
 		var fileExists bool
 

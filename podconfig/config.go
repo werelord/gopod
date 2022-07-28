@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
@@ -45,7 +45,7 @@ func LoadToml(filename string, timestamp time.Time) (*Config, *[]FeedToml, error
 	tomldoc := tomldocImport{}
 	tomldoc.Config.Timestamp = timestamp
 	tomldoc.Config.TimestampStr = timestamp.Format("20060102_150405")
-	tomldoc.Config.Workspace = path.Dir(filename)
+	tomldoc.Config.Workspace = filepath.Dir(filename)
 
 	file, err := os.Open(filename)
 	if err != nil {
@@ -64,4 +64,14 @@ func LoadToml(filename string, timestamp time.Time) (*Config, *[]FeedToml, error
 
 	return &tomldoc.Config, &tomldoc.Feedlist, nil
 
+}
+
+//--------------------------------------------------------------------------
+func (c *Config) SetDebug(dbg bool) {
+	c.Debug = dbg
+	//------------------------------------- DEBUG -------------------------------------
+	if dbg {
+		c.TimestampStr = "DEBUG"
+	}
+	//------------------------------------- DEBUG -------------------------------------
 }

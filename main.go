@@ -4,7 +4,7 @@ package main
 import (
 	"net/http"
 	"net/url"
-	"path"
+	"path/filepath"
 	"time"
 
 	"gopod/commandline"
@@ -23,7 +23,7 @@ var (
 
 // todo: changable
 
-const defaultworking = "e:\\gopod\\"
+var defaultworking = filepath.FromSlash("e:/gopod/")
 
 //--------------------------------------------------------------------------
 func init() {
@@ -31,7 +31,7 @@ func init() {
 	runTimestamp = time.Now()
 
 	// todo: rotate log files with timestamp
-	logger.InitLogging(path.Join(defaultworking, "gopod.log"))
+	logger.InitLogging(filepath.Join(defaultworking, "gopod.log"))
 }
 
 //--------------------------------------------------------------------------
@@ -52,7 +52,7 @@ func main() {
 	)
 
 	// todo: flag to check item entries that aren't downloaded
-	if cmdline, err = commandline.InitCommandLine(path.Join(defaultworking, "master.toml")); err != nil {
+	if cmdline, err = commandline.InitCommandLine(filepath.Join(defaultworking, "master.toml")); err != nil {
 		log.Error("failed to init commandline:", err)
 		return
 	}
@@ -63,10 +63,7 @@ func main() {
 	}
 
 	//------------------------------------- DEBUG -------------------------------------
-	config.Debug = cmdline.Debug
-	if cmdline.Debug {
-		config.TimestampStr = "DEBUG"
-	}
+	config.SetDebug(cmdline.Debug)
 	//------------------------------------- DEBUG -------------------------------------
 	log.Infof("using config: %+v", config)
 

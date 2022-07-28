@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 
 	"github.com/flytam/filenamify"
@@ -36,7 +35,7 @@ func Download(url string) (body []byte, err error) {
 	resp, err = client.Do(req)
 
 	log.Debugf("response status: %v", resp.Status)
-	log.Debugf("err: %+v", err)
+	//log.Debugf("err: %+v", err)
 
 	if err != nil {
 		log.Error("failed to download: ", err)
@@ -100,7 +99,7 @@ func DownloadBuffered(url, destfile string) (contentDisposition string, err erro
 	//log.Debug("Content-Disposition: ", contentDisposition)
 
 	bar := progressbar.NewOptions64(resp.ContentLength,
-		progressbar.OptionSetDescription(path.Base(destfile)),
+		progressbar.OptionSetDescription(filepath.Base(destfile)),
 		progressbar.OptionFullWidth(),
 		progressbar.OptionShowBytes(true),
 		progressbar.OptionShowCount(),
@@ -114,7 +113,7 @@ func DownloadBuffered(url, destfile string) (contentDisposition string, err erro
 		log.Error("error in writing file: ", err)
 		return
 	} else {
-		log.Debugf("file written {%v} bytes: %.2fKB", path.Base(file.Name()), float64(b)/(1<<10))
+		log.Debugf("file written {%v} bytes: %.2fKB", filepath.Base(file.Name()), float64(b)/(1<<10))
 	}
 	// explicit close
 	file.Close()
