@@ -31,7 +31,7 @@ func init() {
 	runTimestamp = time.Now()
 
 	// todo: rotate log files with timestamp
-	logger.InitLogging(filepath.Join(defaultworking, "gopod.log"))
+	logger.InitLogging(filepath.Join(defaultworking, "gopod.log"), runTimestamp)
 }
 
 //--------------------------------------------------------------------------

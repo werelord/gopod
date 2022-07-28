@@ -17,12 +17,13 @@ const ( // commands
 	CheckDownloaded
 )
 
+var cmdMap = map[commandType]string{
+	Update:          "update",
+	CheckDownloaded: "checkDownloaded",
+}
+
 func (cmd commandType) Format(fs fmt.State, c rune) {
-	m := map[commandType]string{
-		Update:          "update",
-		CheckDownloaded: "checkDownloaded",
-	}
-	fs.Write([]byte(m[cmd]))
+	fs.Write([]byte(cmdMap[cmd]))
 }
 
 //--------------------------------------------------------------------------

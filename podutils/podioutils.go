@@ -4,9 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 
 	"github.com/flytam/filenamify"
 	"github.com/schollz/progressbar/v3"
@@ -142,4 +145,50 @@ func CleanFilename(filename string) string {
 	// only error this generates is if the replacement is a reserved character
 	fname, _ := filenamify.Filenamify(filename, filenamify.Options{Replacement: "-", MaxLength: FILENAME_MAX_LENGTH})
 	return fname
+}
+
+//--------------------------------------------------------------------------
+func RotateFiles(path, regexPattern string, numToKeep uint) error {
+
+	var (
+		r        *regexp.Regexp
+		err      error
+		filelist []fs.FileInfo
+	)
+
+	if r, err = regexp.Compile(regexPattern); err != nil {
+		return err
+	}
+
+	err = filepath.WalkDir(path, func(filename string, d fs.DirEntry, err error) error {
+		if d.IsDir() == false {
+			if r.MatchString(filename) {
+				if fi, e := d.Info(); e == nil {
+					filelist = append(filelist, fi)
+				} else {
+					log.Warn("error getting file info (not adding to list): ", e)
+				}
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// sort the resulting slice
+	sort.Slice(filelist, func(i, j int) bool {
+		return filelist[i].ModTime().After(filelist[j].ModTime())
+	})
+
+	// remove the X number of files beyond the limit
+	for _, f := range filelist[numToKeep:] {
+		log.Debug("removing file: ", f.Name())
+		if err := os.Remove(filepath.Join(path, f.Name())); err != nil {
+			log.Warnf("failed to remove '%v': %v", f.Name(), err)
+		}
+	}
+
+	return nil
 }
