@@ -14,7 +14,6 @@ import (
 type Config struct {
 	MaxDupChecks     int `toml:"dupcheckmax"`
 	XmlFilesRetained int  `toml:"xmlfilesretained"`
-	// todo: change default
 	Workspace    string
 	Timestamp    time.Time
 	TimestampStr string

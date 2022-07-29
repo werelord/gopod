@@ -107,6 +107,8 @@ func (r ParseCanceledError) Error() string {
 	return r.cancelReason
 }
 
+func (r ParseCanceledError) Is(target error) bool { return target == ParseCanceledError{} }
+
 //--------------------------------------------------------------------------
 func ParseXml(xmldata []byte, fp FeedProcess) (feedData *XChannelData, newItems *orderedmap.OrderedMap[string, XItemData], err error) {
 

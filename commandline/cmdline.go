@@ -28,7 +28,6 @@ func (cmd commandType) Format(fs fmt.State, c rune) {
 
 //--------------------------------------------------------------------------
 type CommandLine struct {
-	WorkingDir    string
 	ConfigFile    string
 	Command       commandType
 	FeedShortname string
@@ -89,9 +88,6 @@ func InitCommandLine(defaultConfig string) (*CommandLine, error) {
 	} else {
 		return nil, errors.New("config cannot be blank")
 	}
-
-	// set working dir to config path
-	c.WorkingDir = filepath.Dir(c.ConfigFile)
 
 	if slices.Contains(remaining, "update") {
 		c.Command = Update

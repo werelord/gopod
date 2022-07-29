@@ -60,7 +60,6 @@ func (hook *LogrusFileHook) Levels() []log.Level {
 
 //--------------------------------------------------------------------------
 func InitLogging(filename string, timestamp time.Time) error {
-	// todo: rotate log files
 	// todo: somehow differentiate between debug/release programmatically
 
 	dir, file := filepath.Split(filename)
@@ -69,7 +68,6 @@ func InitLogging(filename string, timestamp time.Time) error {
 	lfname := fmt.Sprintf("%v.%v%v", file[0:len(ext)+1], timestamp.Format("20060102_150405"), ext)
 	logfile := filepath.Join(dir, lfname)
 
-	//log.SetLevel(logrus.WarnLevel)
 	log.SetLevel(log.TraceLevel)
 	log.SetFormatter(&log.TextFormatter{ForceColors: true, FullTimestamp: true})
 	log.SetLevel(log.TraceLevel)

@@ -53,7 +53,7 @@ func main() {
 		return
 	}
 
-	logger.InitLogging(filepath.Join(cmdline.WorkingDir, "gopod.log"), runTimestamp)
+	logger.InitLogging(filepath.Join(filepath.Dir(cmdline.ConfigFile), "gopod.log"), runTimestamp)
 
 	if config, feedList, err = podconfig.LoadToml(cmdline.ConfigFile, runTimestamp); err != nil {
 		log.Error("failed to read toml file; exiting!")
@@ -86,7 +86,7 @@ func main() {
 		if feed, exists := feedMap[cmdline.FeedShortname]; exists {
 			cmdFunc(feed)
 		} else {
-			log.Error("cannot find shortname '%v'; not running command %v!", cmdline.FeedShortname, cmdline.Command)
+			log.Errorf("cannot find shortname '%v'; not running command %v!", cmdline.FeedShortname, cmdline.Command)
 			os.Exit(1)
 		}
 	} else {
@@ -95,7 +95,6 @@ func main() {
 			cmdFunc(feed)
 
 			// future: parallel via channels??
-			// todo: flush all items on debug (schema change handling)
 		}
 	}
 }

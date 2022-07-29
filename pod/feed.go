@@ -1,7 +1,9 @@
 package pod
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"path"
@@ -123,10 +125,13 @@ func (f *Feed) initDB() {
 		feedImport := FeedDBExport{Feed: f}
 
 		// load feed information
-		// todo: error occurs on new feed, handle more gracefully
 		if e := f.db.Read("./", "feed", &feedImport); e != nil {
-			log.Warn("error reading feed info (new feed?):", e)
-			// don't return, just log the error
+			if errors.Is(e, fs.ErrNotExist) {
+				log.Info("file doesn't exist; likely new feed")
+			} else {
+				log.Warn("error reading feed info:", e)
+				return
+			}
 		} else {
 			// populate ordered map
 			for _, item := range feedImport.ItemListExport {
@@ -190,20 +195,15 @@ func (f *Feed) Update() {
 	var itemList *orderedmap.OrderedMap[string, podutils.XItemData]
 	newXmlData, itemList, err = podutils.ParseXml(body, f)
 
-	var (
-		parseError    error
-		parseCanceled bool
-	)
-
 	if err != nil {
-		if parseError, parseCanceled = err.(*podutils.ParseCanceledError); parseCanceled == false {
+		if errors.Is(err, podutils.ParseCanceledError{}) {
+			log.Info("parse cancelled: ", err)
+			return
+		} else {
 			// not canceled; some other error.. exit
 			log.Error("failed to parse xml: ", err)
 			// save the file (don't rotate) for future examination
 			f.saveAndRotateXml(body, false)
-			return
-		} else {
-			log.Info("parse cancelled: ", parseError)
 			return
 		}
 	}
@@ -482,7 +482,6 @@ func (f *Feed) saveItemXml(item ItemData, xmldata podutils.XItemData) (err error
 
 //--------------------------------------------------------------------------
 func (f *Feed) processNew(newItems []*ItemData) {
-	// todo: this
 
 	//------------------------------------- DEBUG -------------------------------------
 	var skipRemaining = false
@@ -550,7 +549,6 @@ func (f *Feed) processNew(newItems []*ItemData) {
 
 		log.Debug("finished downloading file: ", podfile)
 		item.Downloaded = true
-		// todo: change change modified time
 	}
 
 	log.Info("all new downloads completed, saving db")
