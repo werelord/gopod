@@ -77,7 +77,8 @@ const (
 //------------------------------------- DEBUG -------------------------------------
 
 var (
-	config *podconfig.Config
+	config  *podconfig.Config
+	numDups uint // number of dupiclates counted before skipping remaining items in xmlparse
 )
 
 // func (f Feed) Format(fs fmt.State, c rune) {
@@ -415,14 +416,16 @@ func (f Feed) generateFilename(xmldata podutils.XItemData, urlfilename string) (
 //--------------------------------------------------------------------------
 // feedProcess implementation
 //--------------------------------------------------------------------------
-func (f Feed) ItemExists(hash string) (exists bool) {
-	_, exists = f.itemlist.Get(hash)
-	return
-}
 
 //--------------------------------------------------------------------------
-func (f Feed) MaxDuplicates() uint {
-	return uint(config.MaxDupChecks)
+func (f Feed) SkipParsingItem(hash string) (skip bool, cancelRemaining bool) {
+	_, skip = f.itemlist.Get(hash)
+
+	if (config.MaxDupChecks >= 0) && (skip == true) {
+		numDups++
+		cancelRemaining = (numDups >= uint(config.MaxDupChecks))
+	}
+	return
 }
 
 //--------------------------------------------------------------------------

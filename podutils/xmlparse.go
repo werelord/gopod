@@ -90,8 +90,9 @@ type XEnclosureData struct {
 }
 
 type FeedProcess interface {
-	MaxDuplicates() uint
-	ItemExists(hash string) bool
+	// returns true if current item should be skipped
+	// cancel remaining will skip all remaining items (will have no future checks)
+	SkipParsingItem(hash string) (skip bool, cancelRemaining bool)
 	// returns true if parsing should halt on pub date; parse returns ParseCanceledError on true
 	CancelOnPubDate(timestamp time.Time) (cont bool)
 	// returns true if parsing should halt on build date; parse returns ParseCanceledError on true
@@ -123,8 +124,9 @@ func ParseXml(xmldata []byte, fp FeedProcess) (feedData *XChannelData, newItems 
 
 	root := doc.SelectElement("rss").SelectElement("channel")
 	var (
-		dupItemCount uint = 0
-		maxDupes          = fp.MaxDuplicates()
+		// dupItemCount  uint = 0
+		// maxDupes           = fp.MaxDuplicates()
+		skipRemaining bool
 	)
 
 	for _, elem := range root.ChildElements() {
@@ -190,30 +192,23 @@ func ParseXml(xmldata []byte, fp FeedProcess) (feedData *XChannelData, newItems 
 
 		case strings.EqualFold(elem.FullTag(), "item"):
 
-			// todo: need option to turn off dupe count (for full processing)
-			if dupItemCount < maxDupes {
-
+			if skipRemaining == false {
 				// check to see if hash exists
 				hash, e := calcHash(elem)
 				if e != nil {
 					log.Error(e)
 					continue
 				}
-
-				if exists := fp.ItemExists(hash); exists {
-					// exists, increment the dup counter
-					//log.Debug("item exists, incrementing dup counter")
-					dupItemCount++
-				} else {
+				var skipitem = false
+				if skipitem, skipRemaining = fp.SkipParsingItem(hash); skipitem == false {
+					// not skipping item; automatically add to new item set
 					if item, e := parseItemEntry(elem); e == nil {
 						newItems.Set(hash, item)
 					} else {
 						log.Warnf("parse failed; not adding item {'%v' (%v)}: %v", item.Title, hash, e)
 					}
 				}
-			} //else {
-			//log.Debug("dup counter over limit, skipping...")
-			//}
+			}
 
 		default:
 			//log.Debug("unhandled tag: " + elem.FullTag())

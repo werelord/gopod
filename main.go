@@ -22,21 +22,23 @@ var (
 	cmdline      *commandline.CommandLine
 )
 
-// todo: changable
-
-var defaultworking = filepath.FromSlash("e:/gopod/")
-
 //--------------------------------------------------------------------------
 func init() {
 
 	runTimestamp = time.Now()
 
-	// todo: rotate log files with timestamp
-	logger.InitLogging(filepath.Join(defaultworking, "gopod.log"), runTimestamp)
 }
 
 //--------------------------------------------------------------------------
 func main() {
+
+	var (
+		config         *podconfig.Config
+		feedList       *[]podconfig.FeedToml
+		feedMap        map[string]*pod.Feed
+		err            error
+		defaultworking = filepath.FromSlash("e:\\gopod\\")
+	)
 
 	const RunTest = false
 
@@ -45,18 +47,13 @@ func main() {
 		return
 	}
 
-	var (
-		config   *podconfig.Config
-		feedList *[]podconfig.FeedToml
-		feedMap  map[string]*pod.Feed
-		err      error
-	)
-
 	// todo: flag to check item entries that aren't downloaded
 	if cmdline, err = commandline.InitCommandLine(filepath.Join(defaultworking, "master.toml")); err != nil {
 		log.Error("failed to init commandline:", err)
 		return
 	}
+
+	logger.InitLogging(filepath.Join(cmdline.WorkingDir, "gopod.log"), runTimestamp)
 
 	if config, feedList, err = podconfig.LoadToml(cmdline.ConfigFile, runTimestamp); err != nil {
 		log.Error("failed to read toml file; exiting!")
