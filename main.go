@@ -4,6 +4,7 @@ package main
 import (
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -88,7 +89,8 @@ func main() {
 		if feed, exists := feedMap[cmdline.FeedShortname]; exists {
 			cmdFunc(feed)
 		} else {
-			log.Error("cannot find shortname '%v'", cmdline.FeedShortname)
+			log.Error("cannot find shortname '%v'; not running command %v!", cmdline.FeedShortname, cmdline.Command)
+			os.Exit(1)
 		}
 	} else {
 		log.Infof("running '%v' on all feeds", cmdline.Command)

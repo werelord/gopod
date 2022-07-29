@@ -12,8 +12,8 @@ import (
 
 //--------------------------------------------------------------------------
 type Config struct {
-	//Foo          bool `toml:"foo"`
-	MaxDupChecks uint `toml:"maxdupchecks"`
+	MaxDupChecks     int `toml:"dupcheckmax"`
+	XmlFilesRetained int  `toml:"xmlfilesretained"`
 	// todo: change default
 	Workspace    string
 	Timestamp    time.Time
@@ -47,6 +47,10 @@ func LoadToml(filename string, timestamp time.Time) (*Config, *[]FeedToml, error
 	tomldoc.Config.TimestampStr = timestamp.Format("20060102_150405")
 	tomldoc.Config.Workspace = filepath.Dir(filename)
 
+	// defaults, if not defined in config
+	tomldoc.Config.MaxDupChecks = 3
+	tomldoc.Config.XmlFilesRetained = 4
+
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to open %v: %v ", filename, err)
@@ -69,9 +73,4 @@ func LoadToml(filename string, timestamp time.Time) (*Config, *[]FeedToml, error
 //--------------------------------------------------------------------------
 func (c *Config) SetDebug(dbg bool) {
 	c.Debug = dbg
-	//------------------------------------- DEBUG -------------------------------------
-	if dbg {
-		c.TimestampStr = "DEBUG"
-	}
-	//------------------------------------- DEBUG -------------------------------------
 }

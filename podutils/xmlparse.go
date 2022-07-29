@@ -1,18 +1,17 @@
 package podutils
 
 import (
+	"crypto/sha1"
+	"encoding/base64"
+	"errors"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
-	"errors"
-	"crypto/sha1"
-	"encoding/base64"
-	"net/url"
 
-
-	log "github.com/sirupsen/logrus"
 	"github.com/araddon/dateparse"
 	"github.com/beevik/etree"
+	log "github.com/sirupsen/logrus"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
@@ -93,15 +92,27 @@ type XEnclosureData struct {
 type FeedProcess interface {
 	MaxDuplicates() uint
 	ItemExists(hash string) bool
-	CheckTimestamp(timestamp time.Time) bool
+	// returns true if parsing should halt on pub date; parse returns ParseCanceledError on true
+	CancelOnPubDate(timestamp time.Time) (cont bool)
+	// returns true if parsing should halt on build date; parse returns ParseCanceledError on true
+	CancelOnBuildDate(timestamp time.Time) (cont bool)
+}
+
+type ParseCanceledError struct {
+	cancelReason string
+}
+
+func (r ParseCanceledError) Error() string {
+	return r.cancelReason
 }
 
 //--------------------------------------------------------------------------
-func ParseXml(xmldata []byte, fp FeedProcess) (feedData XChannelData, newItems *orderedmap.OrderedMap[string, XItemData], err error) {
+func ParseXml(xmldata []byte, fp FeedProcess) (feedData *XChannelData, newItems *orderedmap.OrderedMap[string, XItemData], err error) {
 
 	// fuck the ignore list
 	//ignoreList := []string{"atom:link", "lastBuildDate"}
 
+	feedData = &XChannelData{}
 	newItems = orderedmap.New[string, XItemData]()
 
 	doc := etree.NewDocument()
@@ -118,7 +129,9 @@ func ParseXml(xmldata []byte, fp FeedProcess) (feedData XChannelData, newItems *
 
 	for _, elem := range root.ChildElements() {
 		// for now, direct insert, because we're skipping items after a certain dup count
-		// todo: later use reflection
+		// or skipping based on pubdate or lastbuilddate
+		// this is really pointless because etree loads the entire xml into memory anyways..
+		// future: use reflection
 		switch {
 		case strings.EqualFold(elem.FullTag(), "atom:link"):
 			if getAttributeText(elem, "rel") == "self" {
@@ -133,10 +146,19 @@ func ParseXml(xmldata []byte, fp FeedProcess) (feedData XChannelData, newItems *
 		case strings.EqualFold(elem.FullTag(), "itunes:subtitle"):
 			feedData.Subtitle = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "pubdate"):
-			// todo: shortcut, check pub date
 			feedData.PubDate = parseDateEntry(elem.Text())
+			if feedData.PubDate.IsZero() == false {
+				if fp.CancelOnPubDate(feedData.PubDate) == true {
+					return feedData, newItems, &ParseCanceledError{"cancelled by CheckPubDate()"}
+				}
+			}
 		case strings.EqualFold(elem.FullTag(), "lastbuilddate"):
 			feedData.LastBuildDate = parseDateEntry(elem.Text())
+			if feedData.LastBuildDate.IsZero() == false {
+				if fp.CancelOnBuildDate(feedData.LastBuildDate) == true {
+					return feedData, newItems, &ParseCanceledError{"cancelled by CheckLastBuildDate()"}
+				}
+			}
 		case strings.EqualFold(elem.FullTag(), "link"):
 			feedData.Link = elem.Text()
 		case strings.EqualFold(elem.FullTag(), "image"):

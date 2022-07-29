@@ -2,7 +2,6 @@ package pod
 
 import (
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"path"
@@ -71,16 +70,15 @@ type ItemExport struct {
 
 //------------------------------------- DEBUG -------------------------------------
 const (
-	DOWNLOADFILE        = true
-	SAVEDATABASE        = true
-	numXmlFilesRetained = 5
+	DOWNLOADFILE = true
+	SAVEDATABASE = true
 )
+
+//------------------------------------- DEBUG -------------------------------------
 
 var (
 	config *podconfig.Config
 )
-
-//------------------------------------- DEBUG -------------------------------------
 
 // func (f Feed) Format(fs fmt.State, c rune) {
 // 	fs.Write([]byte("Name:" + f.Shortname + " url: " + f.Url))
@@ -176,45 +174,43 @@ func (f *Feed) Update() {
 	f.initDB()
 
 	var (
-		body     []byte
-		err      error
-		newItems []*ItemData
+		body       []byte
+		err        error
+		newXmlData *podutils.XChannelData
+		newItems   []*ItemData
 	)
-	// check to see if xml exists
-	//------------------------------------- DEBUG -------------------------------------
-	// if config.Debug {
-	// 	if _, err = os.Stat(f.xmlfile); err == nil {
-	// 		body = loadXmlFile(f.xmlfile)
-
-	// 	} else {
-	// 		// download file
-	// 		if body, err = podutils.Download(f.Url); err != nil {
-	// 			log.Error(err)
-	// 			return
-	// 		}
-	// 		saveXmlToFile(body, f.xmlfile)
-	// 	}
-	// 	//------------------------------------- DEBUG -------------------------------------
-	// } else {
-	//download file
+	// download file
+	// todo: check header for last modified; we could possibly skip parsing
 	if body, err = podutils.Download(f.Url); err != nil {
 		log.Error("failed to download: ", err)
 		return
 	}
-	saveXmlToFile(body, f.xmlfile)
 
-	// todo: this
-	//RotateFiles(f.xmlfile)
-	// }
-
-	// future: comparison operations for feedData?
 	var itemList *orderedmap.OrderedMap[string, podutils.XItemData]
-	f.XMLFeedData, itemList, err = podutils.ParseXml(body, f)
+	newXmlData, itemList, err = podutils.ParseXml(body, f)
+
+	var (
+		parseError    error
+		parseCanceled bool
+	)
 
 	if err != nil {
-		log.Error("failed to parse xml: ", err)
-		return
+		if parseError, parseCanceled = err.(*podutils.ParseCanceledError); parseCanceled == false {
+			// not canceled; some other error.. exit
+			log.Error("failed to parse xml: ", err)
+			// save the file (don't rotate) for future examination
+			f.saveAndRotateXml(body, false)
+			return
+		} else {
+			log.Info("parse cancelled: ", parseError)
+			return
+		}
 	}
+
+	// if we're at this point, save the new channel data (buildDate or PubDate has changed)
+	f.saveAndRotateXml(body, true)
+	// future: comparison operations for feedData instead of direct insertion?
+	f.XMLFeedData = *newXmlData
 
 	// check url vs atom link & new feed url
 	// TODO: handle this
@@ -273,6 +269,21 @@ func (f *Feed) Update() {
 
 	// process new entries
 	f.processNew(newItems)
+
+}
+
+//--------------------------------------------------------------------------
+func (f Feed) saveAndRotateXml(body []byte, shouldRotate bool) {
+	// for external reference
+	if err := podutils.SaveToFile(body, f.xmlfile); err != nil {
+		log.Error("failed saving xml file: ", err)
+		// not exiting; not a fatal error as the parsing happens on the byte string
+	} else if shouldRotate && config.XmlFilesRetained > 0 {
+		log.Debug("rotating xml files..")
+		podutils.RotateFiles(filepath.Dir(f.xmlfile),
+			fmt.Sprintf("%v.([0-9]{8}_[0-9]{6})|(DEBUG).xml", f.Shortname),
+			uint(config.XmlFilesRetained))
+	}
 
 }
 
@@ -402,28 +413,6 @@ func (f Feed) generateFilename(xmldata podutils.XItemData, urlfilename string) (
 }
 
 //--------------------------------------------------------------------------
-// todo: move this
-func saveXmlToFile(buf []byte, filename string) {
-
-	log.Debug("Saving to file: " + filename)
-
-	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
-
-	if err != nil {
-		log.Error("error opening file for writing:", err)
-		return
-	}
-	defer file.Close()
-	count, err := file.Write(buf)
-	if err != nil {
-		log.Error("error writing bytes to file: ", err)
-
-	} else {
-		log.Debug("bytes written to file: " + fmt.Sprint(count))
-	}
-}
-
-//--------------------------------------------------------------------------
 // feedProcess implementation
 //--------------------------------------------------------------------------
 func (f Feed) ItemExists(hash string) (exists bool) {
@@ -433,32 +422,33 @@ func (f Feed) ItemExists(hash string) (exists bool) {
 
 //--------------------------------------------------------------------------
 func (f Feed) MaxDuplicates() uint {
-	return config.MaxDupChecks
+	return uint(config.MaxDupChecks)
 }
 
 //--------------------------------------------------------------------------
-func (f Feed) CheckTimestamp(t time.Time) bool {
-	// todo: this
-	return true
-}
-
-//--------------------------------------------------------------------------
-// todo: move this, make config use this
-func loadXmlFile(filename string) (buf []byte) {
-
-	log.Debug("loading data from file: " + filename)
-	file, err := os.Open(filename)
-	if err != nil {
-		log.Error("failed to open "+filename+": ", err)
-	} else {
-		defer file.Close()
-		buf, err = io.ReadAll(file)
-		if err != nil {
-			log.Error("failed to open "+filename+": ", err)
+// returns true if parsing should halt on pub date; parse returns ParseCanceledError on true
+func (f Feed) CancelOnPubDate(xmlPubDate time.Time) (cont bool) {
+	//log.Tracef("Checking build date; \nFeed.Pubdate:'%v' \nxmlBuildDate:'%v'", f.XMLFeedData.PubDate.Unix(), xmlPubDate.Unix())
+	if f.XMLFeedData.PubDate.IsZero() == false {
+		if xmlPubDate.After(f.XMLFeedData.PubDate) == false {
+			log.Info("new pub date not after previous; cancelling parse")
+			return true
 		}
 	}
+	return false
+}
 
-	return
+//--------------------------------------------------------------------------
+// returns true if parsing should halt on build date; parse returns ParseCanceledError on true
+func (f Feed) CancelOnBuildDate(xmlBuildDate time.Time) (cont bool) {
+	//log.Tracef("Checking build date; Feed.LastBuildDate:'%v', xmlBuildDate:'%v'", f.XMLFeedData.LastBuildDate, xmlBuildDate)
+	if f.XMLFeedData.LastBuildDate.IsZero() == false {
+		if xmlBuildDate.After(f.XMLFeedData.LastBuildDate) == false {
+			log.Info("new build date not after previous; cancelling parse")
+			return true
+		}
+	}
+	return false
 }
 
 //--------------------------------------------------------------------------

@@ -52,7 +52,7 @@ func InitCommandLine(defaultConfig string) (*CommandLine, error) {
 		opt.Alias("f"))
 	opt.BoolVar(&c.UseProxy, "use-proxy", false,
 		opt.Description("use preconfigured proxy"),
-		opt.Alias("prox"))
+		opt.Alias("p", "useproxy"))
 	opt.BoolVar(&c.Debug, "debug", false,
 		opt.Description("Debug"),
 		opt.Alias("dbg"))

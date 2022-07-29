@@ -16,6 +16,7 @@
                 //"--config", "master.toml",
                 "update",   // command to run
                 "--feed=twit",
+                //"--useproxy",
                 "--debug=true"
             ]
         }
