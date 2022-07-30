@@ -1,12 +1,11 @@
 package podutils
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 
 	"github.com/flytam/filenamify"
@@ -62,51 +61,60 @@ func CleanFilename(filename string) string {
 }
 
 //--------------------------------------------------------------------------
-func RotateFiles(path, regexPattern string, numToKeep uint) error {
+func RotateFiles(path, pattern string, numToKeep uint) error {
 
 	var (
-		r        *regexp.Regexp
 		err      error
-		filelist []fs.FileInfo
+		filelist []string
 	)
 
-	if r, err = regexp.Compile(regexPattern); err != nil {
-		return err
-	}
+	fp := filepath.Join(path, pattern)
 
-	err = filepath.WalkDir(path, func(filename string, d fs.DirEntry, err error) error {
-		if d.IsDir() == false {
-			if r.MatchString(filename) {
-				if fi, e := d.Info(); e == nil {
-					filelist = append(filelist, fi)
-				} else {
-					log.Warn("error getting file info (not adding to list): ", e)
-				}
-			}
-		}
-		return nil
-	})
-
-	if err != nil {
+	if filelist, err = filepath.Glob(fp); err != nil {
 		return err
 	}
 
 	// make sure we have any to remove
 	if len(filelist) > int(numToKeep) {
-
-		// sort the resulting slice
-		sort.Slice(filelist, func(i, j int) bool {
-			return filelist[i].ModTime().After(filelist[j].ModTime())
-		})
+		sort.Sort(sort.Reverse(sort.StringSlice(filelist)))
+		for i, f := range filelist {
+			fmt.Printf("%v: %v\n", i, f)
+		}
 
 		// remove the X number of files beyond the limit
 		for _, f := range filelist[numToKeep:] {
-			log.Debug("removing file: ", f.Name())
-			if err := os.Remove(filepath.Join(path, f.Name())); err != nil {
-				log.Warnf("failed to remove '%v': %v", f.Name(), err)
+			log.Debug("removing file: ", filepath.Base(f))
+			if err := os.Remove(f); err != nil {
+				log.Warnf("failed to remove '%v': %v", filepath.Base(f), err)
 			}
 		}
 	}
 
 	return nil
+}
+
+//--------------------------------------------------------------------------
+func CreateSymlink(source, symDest string) error {
+	if FileExists(symDest) {
+		// remove the symlink before recreating it..
+		if err := os.Remove(symDest); err != nil {
+			log.Warn("failed to remove latest symlink: ", err)
+			return err
+		}
+	}
+
+	if err := os.Symlink(source, symDest); err != nil {
+		log.Warn("failed to create symlink: ", err)
+		return err
+	}
+	return nil
+}
+
+//--------------------------------------------------------------------------
+func FileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	bo1 := err == nil
+	bo2 := (errors.Is(err, os.ErrNotExist) == false)
+	return bo1 || bo2
+	//return (err == nil) || (errors.Is(err, os.ErrNotExist) == false)
 }

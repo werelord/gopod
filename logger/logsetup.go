@@ -13,24 +13,26 @@ import (
 //--------------------------------------------------------------------------
 type LogrusFileHook struct {
 	file      *os.File
-	flag      int
-	chmod     os.FileMode
 	formatter *log.TextFormatter
+	levels    []log.Level
 }
 
 const numLogsToKeep = 5
 
 //--------------------------------------------------------------------------
-func NewLogrusFileHook(file string, flag int, chmod os.FileMode) (*LogrusFileHook, error) {
+func NewLogrusFileHook(file string, levels []log.Level) (*LogrusFileHook, error) {
+
 	plainFormatter := &log.TextFormatter{DisableColors: true}
-	// todo: are wa leaking resources by not closing the file??
+	flag := os.O_CREATE | os.O_TRUNC | os.O_RDWR
+	var chmod os.FileMode = 0666
+
+	// gc will close the file handle; fuck the finalizer
 	logFile, err := os.OpenFile(file, flag, chmod)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "unable to write file on filehook %v", err)
 		return nil, err
 	}
-
-	return &LogrusFileHook{logFile, flag, chmod, plainFormatter}, err
+	return &LogrusFileHook{logFile, plainFormatter, levels}, err
 }
 
 //--------------------------------------------------------------------------
@@ -55,18 +57,12 @@ func (hook *LogrusFileHook) Fire(entry *log.Entry) error {
 //--------------------------------------------------------------------------
 // Levels entry
 func (hook *LogrusFileHook) Levels() []log.Level {
-	return log.AllLevels
+	return hook.levels
 }
 
 //--------------------------------------------------------------------------
-func InitLogging(filename string, timestamp time.Time) error {
+func InitLogging(workingdir string, shortname string, timestamp time.Time) error {
 	// todo: somehow differentiate between debug/release programmatically
-
-	dir, file := filepath.Split(filename)
-	ext := filepath.Ext(file)
-
-	lfname := fmt.Sprintf("%v.%v%v", file[0:len(ext)+1], timestamp.Format("20060102_150405"), ext)
-	logfile := filepath.Join(dir, lfname)
 
 	log.SetLevel(log.TraceLevel)
 	log.SetFormatter(&log.TextFormatter{ForceColors: true, FullTimestamp: true})
@@ -74,27 +70,55 @@ func InitLogging(filename string, timestamp time.Time) error {
 	log.SetOutput(os.Stdout)
 	log.SetReportCaller(true)
 
-	filehook, err := NewLogrusFileHook(logfile, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0666)
-	if err == nil {
-		log.AddHook(filehook)
-	} else {
-		fmt.Print("failed creating logfile hook: ", err)
+	logdir := filepath.Join(workingdir, ".logs")
+	allLevelsFile := filepath.Join(logdir, fmt.Sprintf("%v.all.%v.%v", shortname, timestamp.Format("20060102_150405"), "log"))
+	errorLevelsFile := filepath.Join(logdir, fmt.Sprintf("%v.error.%v.%v", shortname, timestamp.Format("20060102_150405"), "log"))
+
+	if err := addFileHook(allLevelsFile, log.AllLevels); err != nil {
+		fmt.Print("failed creating logfile hook (all levels): ", err)
 		return err
+
+	} else {
+		// set error/warn file hooks
+		errLevels := []log.Level{log.PanicLevel, log.FatalLevel, log.ErrorLevel, log.WarnLevel}
+		if err := addFileHook(errorLevelsFile, errLevels); err != nil {
+			log.Error("failed creating logfile hook (error levels): ", err)
+			// don't fail on this one
+		}
 	}
-	log.Infof("logging initialized on '%v'; creating symlink to latest", logfile)
-	symlink := filepath.Join(dir, fmt.Sprintf("%v.latest%v", file[0:len(ext)+1], ext))
+
+	log.Infof("logging initialized on '%v'; creating symlinks to latest", filepath.Base(allLevelsFile))
+	// create symlinks in workingdir, pointing to files in logdir
+	allSymlink := filepath.Join(workingdir, fmt.Sprintf("%v.all.latest.log", shortname))
+	errSymlink := filepath.Join(workingdir, fmt.Sprintf("%v.error.latest.log", shortname))
 
 	// remove the symlink before recreating it..
-	if (os.Remove(symlink)) != nil {
-		log.Warn("failed to remove latest symlink: ", err)
-	} else if err := os.Symlink(logfile, symlink); err != nil {
-		log.Warn("failed to create symlink: ", err)
+	if err := podutils.CreateSymlink(allLevelsFile, allSymlink); err != nil {
+		log.Warn("failed to create symlink file (all levels): ", err)
+
+	} else if err2 := podutils.CreateSymlink(errorLevelsFile, errSymlink); err != nil {
+		log.Warn("failed to create symlink file (error levels): ", err2)
 	}
 
 	// rotate logfiles
-	if err := podutils.RotateFiles(dir, "gopod.[0-9]{8}_[0-9]{6}.log", numLogsToKeep); err != nil {
+	if err := podutils.RotateFiles(logdir, "gopod.all.*.log", numLogsToKeep); err != nil {
+		log.Warn("failed to rotate logs: ", err)
+	}
+	if err := podutils.RotateFiles(logdir, "gopod.error.*.log", numLogsToKeep); err != nil {
 		log.Warn("failed to rotate logs: ", err)
 	}
 
 	return nil
+}
+
+//--------------------------------------------------------------------------
+func addFileHook(filename string, levels []log.Level) error {
+	if filehook, err := NewLogrusFileHook(filename, levels); err != nil {
+		return err
+
+	} else {
+		// stupid GC shit..
+		log.AddHook(filehook)
+		return nil
+	}
 }

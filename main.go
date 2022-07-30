@@ -53,7 +53,7 @@ func main() {
 		return
 	}
 
-	logger.InitLogging(filepath.Join(filepath.Dir(cmdline.ConfigFile), "gopod.log"), runTimestamp)
+	logger.InitLogging(filepath.Dir(cmdline.ConfigFile), "gopod", runTimestamp)
 
 	if config, feedList, err = podconfig.LoadToml(cmdline.ConfigFile, runTimestamp); err != nil {
 		log.Error("failed to read toml file; exiting!")
