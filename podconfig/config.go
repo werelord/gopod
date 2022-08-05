@@ -2,6 +2,7 @@ package podconfig
 
 import (
 	"fmt"
+	"gopod/commandline"
 	"io"
 	"os"
 	"path/filepath"
@@ -13,11 +14,12 @@ import (
 //--------------------------------------------------------------------------
 type Config struct {
 	MaxDupChecks     int `toml:"dupcheckmax"`
-	XmlFilesRetained int  `toml:"xmlfilesretained"`
-	Workspace    string
-	Timestamp    time.Time
-	TimestampStr string
-	Debug        bool
+	XmlFilesRetained int `toml:"xmlfilesretained"`
+	Workspace        string
+	Timestamp        time.Time
+	TimestampStr     string
+	// add in commandline options explicitly
+	commandline.CommandLineOptions
 }
 
 //--------------------------------------------------------------------------
@@ -67,9 +69,4 @@ func LoadToml(filename string, timestamp time.Time) (*Config, *[]FeedToml, error
 
 	return &tomldoc.Config, &tomldoc.Feedlist, nil
 
-}
-
-//--------------------------------------------------------------------------
-func (c *Config) SetDebug(dbg bool) {
-	c.Debug = dbg
 }

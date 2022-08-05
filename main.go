@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -22,7 +21,6 @@ import (
 //--------------------------------------------------------------------------
 var (
 	runTimestamp time.Time
-	cmdline      *commandline.CommandLine
 )
 
 //--------------------------------------------------------------------------
@@ -36,6 +34,7 @@ func init() {
 func main() {
 
 	var (
+		cmdline        *commandline.CommandLine
 		config         *podconfig.Config
 		feedList       *[]podconfig.FeedToml
 		feedMap        map[string]*pod.Feed
@@ -72,9 +71,9 @@ func main() {
 		return
 	}
 
-	//------------------------------------- DEBUG -------------------------------------
-	config.SetDebug(cmdline.Debug)
-	//------------------------------------- DEBUG -------------------------------------
+	// settings passed from commandline
+	config.CommandLineOptions = cmdline.CommandLineOptions
+
 	log.Infof("using config: %+v", config)
 
 	// move feedlist into shortname map
@@ -84,10 +83,12 @@ func main() {
 		feedMap[f.Shortname] = f
 	}
 
-	checkDebugProxy()
+	if len(cmdline.Proxy) > 0 {
+		setProxy(cmdline.Proxy)
+	}
 
 	var cmdFunc commandFunc
-	if cmdFunc = parseCommand(); cmdFunc == nil {
+	if cmdFunc = parseCommand(cmdline.Command); cmdFunc == nil {
 		log.Error("command not recognized (this should not happen)")
 		return
 	}
@@ -101,7 +102,7 @@ func main() {
 			cmdFunc(feed)
 		} else {
 			log.Errorf("cannot find shortname '%v'; not running command %v!", cmdline.FeedShortname, cmdline.Command)
-			os.Exit(1)
+			return
 		}
 	} else {
 		log.Infof("running '%v' on all feeds", cmdline.Command)
@@ -114,22 +115,20 @@ func main() {
 }
 
 //--------------------------------------------------------------------------
-func checkDebugProxy() {
-	//------------------------------------- DEBUG -------------------------------------
-	if cmdline.Debug && cmdline.UseProxy {
-		var proxyUrl *url.URL
-		// setting default transport proxy
-		proxyUrl, _ = url.Parse("http://localhost:8888")
-		if proxyUrl != nil {
+func setProxy(urlstr string) {
+	if len(urlstr) > 0 {
+		// setting default transport proxy.. don't care about the error on parse,
+		if proxyUrl, err := url.ParseRequestURI(urlstr); err != nil {
+			log.Error("Failed to parse proxy url: ", err)
+		} else if proxyUrl != nil {
 			http.DefaultTransport = &http.Transport{Proxy: http.ProxyURL(proxyUrl)}
 		}
 	}
-	//------------------------------------- DEBUG -------------------------------------
 }
 
 //--------------------------------------------------------------------------
-func parseCommand() commandFunc {
-	switch cmdline.Command {
+func parseCommand(cmd commandline.CommandType) commandFunc {
+	switch cmd {
 	case commandline.Update:
 		return runUpdate
 	case commandline.CheckDownloaded:

@@ -10,30 +10,36 @@ import (
 	"github.com/DavidGamba/go-getoptions"
 )
 
-type commandType int
+type CommandType int
 
 const ( // commands
-	Update commandType = iota
+	Update CommandType = iota
 	CheckDownloaded
 )
 
-var cmdMap = map[commandType]string{
+var cmdMap = map[CommandType]string{
 	Update:          "update",
 	CheckDownloaded: "checkDownloaded",
 }
 
-func (cmd commandType) Format(fs fmt.State, c rune) {
+func (cmd CommandType) Format(fs fmt.State, c rune) {
 	fs.Write([]byte(cmdMap[cmd]))
 }
 
 //--------------------------------------------------------------------------
 type CommandLine struct {
 	ConfigFile    string
-	Command       commandType
+	Command       CommandType
 	FeedShortname string
-	UseProxy      bool
-	Debug         bool
-	SkipDownload  bool
+	Proxy         string
+
+	CommandLineOptions
+}
+
+type CommandLineOptions struct {
+	Debug       bool
+	Simulate    bool
+	ForceUpdate bool
 }
 
 //--------------------------------------------------------------------------
@@ -41,32 +47,7 @@ func InitCommandLine(defaultConfig string) (*CommandLine, error) {
 
 	var c CommandLine
 
-	opt := getoptions.New()
-	opt.SetUnknownMode(getoptions.Pass)
-
-	opt.StringVar(&c.ConfigFile, "config", defaultConfig,
-		opt.Description("TOML config to use; full path to file, or file in "+filepath.Dir(defaultConfig)),
-		opt.Alias("c"),
-		opt.ArgName("config.toml"))
-	opt.StringVar(&c.FeedShortname, "feed", "",
-		opt.Description("feed shortname to compile on"),
-		opt.Alias("f"), opt.ArgName("shortname"))
-	opt.BoolVar(&c.UseProxy, "use-proxy", false,
-		opt.Description("use preconfigured proxy"),
-		opt.Alias("p", "useproxy"))
-	opt.BoolVar(&c.Debug, "debug", false,
-		opt.Description("Debug"),
-		opt.Alias("dbg"))
-
-	updateCommand := opt.NewCommand("update", "update feeds")
-	updateCommand.BoolVar(&c.SkipDownload, "skipdownload", false, opt.Alias("s"),
-		opt.Description("skip download of found files"))
-	updateCommand.SetCommandFn(c.generateCmdFunc(Update))
-
-	checkcommand := opt.NewCommand("checkdownloads", "check downloads of files")
-	checkcommand.SetCommandFn(c.generateCmdFunc(CheckDownloaded))
-
-	opt.HelpCommand("help", opt.Alias("h", "?"))
+	opt := c.buildOptions(defaultConfig)
 
 	//fmt.Printf("%+v\n", os.Args[1:])
 	remaining, err := opt.Parse(os.Args[1:])
@@ -101,7 +82,40 @@ func InitCommandLine(defaultConfig string) (*CommandLine, error) {
 }
 
 //--------------------------------------------------------------------------
-func (c *CommandLine) generateCmdFunc(t commandType) getoptions.CommandFn {
+func (c *CommandLine) buildOptions(defaultConfig string) *getoptions.GetOpt {
+	opt := getoptions.New()
+	opt.SetUnknownMode(getoptions.Pass)
+
+	opt.StringVar(&c.ConfigFile, "config", defaultConfig,
+		opt.Description("TOML config to use; full path to file, or file in "+filepath.Dir(defaultConfig)),
+		opt.Alias("c"),
+		opt.ArgName("config.toml"))
+	opt.StringVar(&c.FeedShortname, "feed", "",
+		opt.Description("feed shortname to compile on"),
+		opt.Alias("f"), opt.ArgName("shortname"))
+	opt.StringVar(&c.Proxy, "proxy", "",
+		opt.Description("use proxy url"),
+		opt.Alias("p", " proxy"))
+	opt.BoolVar(&c.Debug, "debug", false,
+		opt.Description("Debug"),
+		opt.Alias("dbg"))
+
+	updateCommand := opt.NewCommand("update", "update feeds")
+	updateCommand.BoolVar(&c.Simulate, "simulate", false, opt.Alias("sim"),
+		opt.Description("Simulate; will not download items or save database"))
+	updateCommand.BoolVar(&c.ForceUpdate, "force", false,
+		opt.Description("force update on xml and items (will process everything in feed"))
+	updateCommand.SetCommandFn(c.generateCmdFunc(Update))
+
+	checkcommand := opt.NewCommand("checkdownloads", "check downloads of files")
+	checkcommand.SetCommandFn(c.generateCmdFunc(CheckDownloaded))
+
+	opt.HelpCommand("help", opt.Alias("h", "?"))
+	return opt
+}
+
+//--------------------------------------------------------------------------
+func (c *CommandLine) generateCmdFunc(t CommandType) getoptions.CommandFn {
 	fn := func(context.Context, *getoptions.GetOpt, []string) error {
 		//fmt.Printf("setting command to %v\n", t)
 		c.Command = t

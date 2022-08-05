@@ -17,8 +17,9 @@
                 //"--config", "master.toml",
                 "update",   // command to run
                 "--feed=twit",
-                //"--useproxy",
-                //"--skipdownload",
+                //"--proxy", "http://localhost:8888",
+                "--simulate",
+                //"--force",
                 "--debug=true"
             ]
         }

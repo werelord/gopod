@@ -70,14 +70,6 @@ type ItemExport struct {
 	ItemXmlData podutils.XItemData
 }
 
-//------------------------------------- DEBUG -------------------------------------
-const (
-	DOWNLOADFILE = true
-	SAVEDATABASE = true
-)
-
-//------------------------------------- DEBUG -------------------------------------
-
 var (
 	config  *podconfig.Config
 	numDups uint // number of dupiclates counted before skipping remaining items in xmlparse
@@ -149,12 +141,10 @@ func (f Feed) saveDB() (err error) {
 
 	log.Info("Saving db for ", f.Shortname)
 
-	//------------------------------------- DEBUG -------------------------------------
-	if config.Debug && SAVEDATABASE == false {
-		log.Debug("skipping saving database due to flag")
+	if config.Simulate {
+		log.Info("skipping saving database due to sim flag")
 		return
 	}
-	//------------------------------------- DEBUG -------------------------------------
 
 	// make sure database is initialized
 	f.initDB()
@@ -419,6 +409,11 @@ func (f Feed) generateFilename(xmldata podutils.XItemData, urlfilename string) (
 
 //--------------------------------------------------------------------------
 func (f Feed) SkipParsingItem(hash string) (skip bool, cancelRemaining bool) {
+
+	if config.ForceUpdate {
+		return false, false
+	}
+
 	_, skip = f.itemlist.Get(hash)
 
 	if (config.MaxDupChecks >= 0) && (skip == true) {
@@ -431,6 +426,11 @@ func (f Feed) SkipParsingItem(hash string) (skip bool, cancelRemaining bool) {
 //--------------------------------------------------------------------------
 // returns true if parsing should halt on pub date; parse returns ParseCanceledError on true
 func (f Feed) CancelOnPubDate(xmlPubDate time.Time) (cont bool) {
+
+	if config.ForceUpdate {
+		return false
+	}
+
 	//log.Tracef("Checking build date; \nFeed.Pubdate:'%v' \nxmlBuildDate:'%v'", f.XMLFeedData.PubDate.Unix(), xmlPubDate.Unix())
 	if f.XMLFeedData.PubDate.IsZero() == false {
 		if xmlPubDate.After(f.XMLFeedData.PubDate) == false {
@@ -444,6 +444,11 @@ func (f Feed) CancelOnPubDate(xmlPubDate time.Time) (cont bool) {
 //--------------------------------------------------------------------------
 // returns true if parsing should halt on build date; parse returns ParseCanceledError on true
 func (f Feed) CancelOnBuildDate(xmlBuildDate time.Time) (cont bool) {
+
+	if config.ForceUpdate {
+		return false
+	}
+
 	//log.Tracef("Checking build date; Feed.LastBuildDate:'%v', xmlBuildDate:'%v'", f.XMLFeedData.LastBuildDate, xmlBuildDate)
 	if f.XMLFeedData.LastBuildDate.IsZero() == false {
 		if xmlBuildDate.After(f.XMLFeedData.LastBuildDate) == false {
@@ -456,10 +461,10 @@ func (f Feed) CancelOnBuildDate(xmlBuildDate time.Time) (cont bool) {
 
 //--------------------------------------------------------------------------
 func (f *Feed) saveItemXml(item ItemData, xmldata podutils.XItemData) (err error) {
-	log.Infof("saving xmldata for %v{%v}", item.Filename, item.Hash)
+	log.Infof("saving xmldata for %v{%v}, (%v)", item.Filename, item.Hash, f.Shortname)
 
-	if config.Debug && SAVEDATABASE == false {
-		log.Debug("skipping saving database due to flag")
+	if config.Simulate {
+		log.Debug("skipping saving item database due to sim flag")
 		return
 	}
 
@@ -523,8 +528,8 @@ func (f *Feed) processNew(newItems []*ItemData) {
 			continue
 		}
 
-		if config.Debug && DOWNLOADFILE == false {
-			log.Debug("skipping downloading file due to flag")
+		if config.Simulate {
+			log.Info("skipping downloading file due to sim flag")
 			continue
 		}
 		if cd, err := podutils.DownloadBuffered(item.Url, podfile); err != nil {
