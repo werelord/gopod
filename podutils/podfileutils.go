@@ -77,9 +77,9 @@ func RotateFiles(path, pattern string, numToKeep uint) error {
 	// make sure we have any to remove
 	if len(filelist) > int(numToKeep) {
 		sort.Sort(sort.Reverse(sort.StringSlice(filelist)))
-		for i, f := range filelist {
-			fmt.Printf("%v: %v\n", i, f)
-		}
+		// for i, f := range filelist {
+		// 	fmt.Printf("%v: %v\n", i, f)
+		// }
 
 		// remove the X number of files beyond the limit
 		for _, f := range filelist[numToKeep:] {

@@ -2,6 +2,8 @@ package main
 
 //--------------------------------------------------------------------------
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,6 +15,7 @@ import (
 	"gopod/pod"
 	"gopod/podconfig"
 
+	"github.com/DavidGamba/go-getoptions"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -49,11 +52,20 @@ func main() {
 
 	// todo: flag to check item entries that aren't downloaded
 	if cmdline, err = commandline.InitCommandLine(filepath.Join(defaultworking, "master.toml")); err != nil {
-		log.Error("failed to init commandline:", err)
+		// if help called, no errors to output
+		if errors.Is(err, getoptions.ErrorHelpCalled) == false {
+			fmt.Println("failed to init commandline:", err)
+		}
 		return
 	}
 
-	logger.InitLogging(filepath.Dir(cmdline.ConfigFile), "gopod", runTimestamp)
+	if err := logger.InitLogging(filepath.Dir(cmdline.ConfigFile), "gopod", runTimestamp); err != nil {
+		fmt.Println("failed to initialize logging: ", err)
+		return
+	}
+
+	// logging initialized, lets output commandline struct
+	log.Debugf("cmdline: %+v", cmdline)
 
 	if config, feedList, err = podconfig.LoadToml(cmdline.ConfigFile, runTimestamp); err != nil {
 		log.Error("failed to read toml file; exiting!")
@@ -81,6 +93,8 @@ func main() {
 	}
 
 	log.Debugf("running command: '%v'", cmdline.Command)
+
+	// todo: separate updating xml feed with downloading files (move to higher abstraction)
 
 	if cmdline.FeedShortname != "" {
 		if feed, exists := feedMap[cmdline.FeedShortname]; exists {

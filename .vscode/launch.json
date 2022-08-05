@@ -13,10 +13,12 @@
             "env": {},
             "console": "integratedTerminal",
             "args": [
+                //"--help",
                 //"--config", "master.toml",
                 "update",   // command to run
                 "--feed=twit",
                 //"--useproxy",
+                //"--skipdownload",
                 "--debug=true"
             ]
         }
