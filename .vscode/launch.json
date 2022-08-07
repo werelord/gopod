@@ -16,10 +16,11 @@
                 //"--help",
                 //"--config", "master.toml",
                 "update",   // command to run
+                //"checkdownloads",
                 "--feed=twit",
                 //"--proxy", "http://localhost:8888",
-                "--simulate",
-                //"--force",
+                //"--simulate",
+                "--force",
                 "--debug=true"
             ]
         }

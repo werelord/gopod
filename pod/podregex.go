@@ -9,7 +9,7 @@ import (
 )
 
 //--------------------------------------------------------------------------
-func (f Feed) titleSubmatchRegex(regex, dststr, title string) (string, error) {
+func (i ItemData) titleSubmatchRegex(regex, dststr, title string) (string, error) {
 
 	var (
 		r   *regexp.Regexp

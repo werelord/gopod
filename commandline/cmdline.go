@@ -13,11 +13,13 @@ import (
 type CommandType int
 
 const ( // commands
-	Update CommandType = iota
+	Unknown CommandType = iota
+	Update
 	CheckDownloaded
 )
 
 var cmdMap = map[CommandType]string{
+	Unknown:         "unknown command",
 	Update:          "update",
 	CheckDownloaded: "checkDownloaded",
 }
@@ -64,6 +66,9 @@ func InitCommandLine(defaultConfig string) (*CommandLine, error) {
 	if err := opt.Dispatch(ctx, remaining); err != nil {
 		// if ErrorHelpCalled, caller will handle it
 		return nil, err
+	} else if c.Command == Unknown {
+		// getopts should already have outputted the help text
+		return nil, errors.New("command not recognized")
 	}
 
 	if c.ConfigFile != "" {
