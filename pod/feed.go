@@ -18,7 +18,7 @@ import (
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 type Feed struct {
 	// toml information, extracted from config
 	podconfig.FeedToml
@@ -33,7 +33,7 @@ type Feed struct {
 }
 
 type feedInternal struct {
-	// local items
+	// local items, not exported to database
 	db      *scribble.Driver
 	xmlfile string
 	mp3Path string
@@ -42,6 +42,37 @@ type feedInternal struct {
 	itemlist *orderedmap.OrderedMap[string, *ItemData]
 
 	dbinitialized bool
+}
+
+type XmlDBEntry struct {
+	XmlFeedData podutils.XChannelData
+}
+type ItemListDBEntry struct {
+	ItemEntryList []*FeedItemEntry
+}
+
+// conversions
+func toSlice(omap *orderedmap.OrderedMap[string, *ItemData]) (entrySlice []*FeedItemEntry) {
+	for pair := omap.Oldest(); pair != nil; pair = pair.Next() {
+		entrySlice = append(entrySlice, &pair.Value.FeedItemEntry)
+	}
+
+	return
+}
+
+func toOrderedMap(f *Feed, entrySlice []*FeedItemEntry) *orderedmap.OrderedMap[string, *ItemData] {
+
+	omap := orderedmap.New[string, *ItemData]()
+	// populate ordered map
+	for _, item := range entrySlice {
+		itemdata := ItemData{
+			parent:        f,
+			FeedItemEntry: *item,
+		}
+		omap.Set(item.Hash, &itemdata)
+	}
+
+	return omap
 }
 
 // exported fields for database serialization
@@ -60,14 +91,14 @@ var (
 // 	fs.Write([]byte("Name:" + f.Shortname + " url: " + f.Url))
 // }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func NewFeed(config *podconfig.Config, feedToml podconfig.FeedToml) *Feed {
 	feed := Feed{FeedToml: feedToml}
 	feed.InitFeed(config)
 	return &feed
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (f *Feed) InitFeed(cfg *podconfig.Config) {
 
 	if len(f.Shortname) == 0 {
@@ -83,7 +114,7 @@ func (f *Feed) InitFeed(cfg *podconfig.Config) {
 	f.itemlist = orderedmap.New[string, *ItemData]()
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (f *Feed) initDB() {
 	// future: modify scribble to use 7zip archives?
 	if f.dbinitialized == false {
@@ -106,21 +137,27 @@ func (f *Feed) initDB() {
 				return
 			}
 		} else {
-			// populate ordered map
-			for _, item := range feedImport.ItemEntryList {
-				itemdata := ItemData{
-					parent:        f,
-					FeedItemEntry: *item,
-				}
-				f.itemlist.Set(item.Hash, &itemdata)
-			}
+			f.itemlist = toOrderedMap(f, feedImport.ItemEntryList)
 		}
 
 		f.dbinitialized = true
 	}
 }
 
-//--------------------------------------------------------------------------
+// for db conversion only
+func (f Feed) CreateExport() []any {
+
+	f.initDB()
+
+	xmlStruct := XmlDBEntry{XmlFeedData: f.XMLFeedData}
+	itemStruct := ItemListDBEntry{ItemEntryList: toSlice(f.itemlist)}
+
+	list := []any{&xmlStruct, &itemStruct}
+
+	return list
+}
+
+// --------------------------------------------------------------------------
 func (f Feed) saveDB() (err error) {
 
 	log.Info("Saving db for ", f.Shortname)
@@ -147,7 +184,7 @@ func (f Feed) saveDB() (err error) {
 	return nil
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (f *Feed) Update() {
 
 	// make sure db is initialized
@@ -205,7 +242,6 @@ func (f *Feed) Update() {
 			itemerror error
 		)
 
-		
 		if _, exists := f.itemlist.Get(hash); exists {
 			// if the old item exists, it will get replaced on setting this new item
 			// this should only happen when force == true; log warning if this is not the case
@@ -242,7 +278,7 @@ func (f *Feed) Update() {
 
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (f Feed) saveAndRotateXml(body []byte, shouldRotate bool) {
 	// for external reference
 	if err := podutils.SaveToFile(body, f.xmlfile); err != nil {
@@ -261,7 +297,7 @@ func (f Feed) saveAndRotateXml(body []byte, shouldRotate bool) {
 // feedProcess implementation
 //--------------------------------------------------------------------------
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (f Feed) SkipParsingItem(hash string) (skip bool, cancelRemaining bool) {
 
 	if config.ForceUpdate {
@@ -277,7 +313,7 @@ func (f Feed) SkipParsingItem(hash string) (skip bool, cancelRemaining bool) {
 	return
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 // returns true if parsing should halt on pub date; parse returns ParseCanceledError on true
 func (f Feed) CancelOnPubDate(xmlPubDate time.Time) (cont bool) {
 
@@ -295,7 +331,7 @@ func (f Feed) CancelOnPubDate(xmlPubDate time.Time) (cont bool) {
 	return false
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 // returns true if parsing should halt on build date; parse returns ParseCanceledError on true
 func (f Feed) CancelOnBuildDate(xmlBuildDate time.Time) (cont bool) {
 
@@ -313,7 +349,7 @@ func (f Feed) CancelOnBuildDate(xmlBuildDate time.Time) (cont bool) {
 	return false
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (f *Feed) processNew(newItems []*ItemData) {
 
 	//------------------------------------- DEBUG -------------------------------------

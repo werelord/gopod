@@ -13,24 +13,25 @@ import (
 	"gopod/logger"
 	"gopod/pod"
 	"gopod/podconfig"
+	"gopod/poddb"
 
 	"github.com/DavidGamba/go-getoptions"
 	log "github.com/sirupsen/logrus"
 )
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 var (
 	runTimestamp time.Time
 )
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func init() {
 
 	runTimestamp = time.Now()
 
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func main() {
 
 	var (
@@ -41,13 +42,6 @@ func main() {
 		err            error
 		defaultworking = filepath.FromSlash("e:\\gopod\\")
 	)
-
-	const RunTest = false
-
-	if RunTest {
-		test(defaultworking)
-		return
-	}
 
 	// todo: flag to check item entries that aren't downloaded
 	if cmdline, err = commandline.InitCommandLine(filepath.Join(defaultworking, "master.toml")); err != nil {
@@ -62,6 +56,8 @@ func main() {
 		fmt.Println("failed to initialize logging: ", err)
 		return
 	}
+
+	poddb.SetDBPath(filepath.Join(filepath.Dir(cmdline.ConfigFile), ".db"))
 
 	// logging initialized, lets output commandline struct
 	log.Debugf("cmdline: %+v", cmdline)
@@ -81,6 +77,12 @@ func main() {
 	for _, feedtoml := range *feedList {
 		f := pod.NewFeed(config, feedtoml)
 		feedMap[f.Shortname] = f
+	}
+
+	//	const RunTest = true
+	if true {
+		test(feedMap)
+		return
 	}
 
 	if len(cmdline.Proxy) > 0 {
@@ -114,7 +116,7 @@ func main() {
 	}
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func setProxy(urlstr string) {
 	if len(urlstr) > 0 {
 		// setting default transport proxy.. don't care about the error on parse,
@@ -126,7 +128,7 @@ func setProxy(urlstr string) {
 	}
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func parseCommand(cmd commandline.CommandType) commandFunc {
 	switch cmd {
 	case commandline.Update:
@@ -139,7 +141,7 @@ func parseCommand(cmd commandline.CommandType) commandFunc {
 }
 
 // command functions
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 type commandFunc func(*pod.Feed)
 
 func runUpdate(f *pod.Feed) {
@@ -147,7 +149,7 @@ func runUpdate(f *pod.Feed) {
 	f.Update()
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func runCheckDownloads(f *pod.Feed) {
 	// todo: this
 	log.Debug("TODO")

@@ -1,132 +1,76 @@
 package main
 
-// json-based database, for the hell of it
+import (
+	"gopod/pod"
+	"gopod/poddb"
 
-//	"fmt"
+	log "github.com/sirupsen/logrus"
+)
 
-//	"github.com/pelletier/go-toml"
+func test(flist map[string]*pod.Feed) {
 
-// type Postgres struct {
-// 	User     string
-// 	Password string
-// }
+	
+	//tryFetch(db)
+	
+	for _, f := range flist {
 
-// type Configtest struct {
-// 	Postgres Postgres
-// }
-
-func test() {
-	// 	doc := []byte(`
-	// [Postgres]
-	// User = "pelletier"
-	// Password = "mypassword"`)
-
-	// 	config := Configtest{}
-	// 	toml.Unmarshal(doc, &config)
-	// 	fmt.Println("user=", config.Postgres.User)
-
-	// log.Debug("debug")
-	// log.Warn("ofo")
-	// log.WithFields(logrus.Fields{
-	// 	"arm": true,
-	// }).Info("true")
-	//logger.Print("foo")
-
-	// load the
-
-	/*
-		db, err := scribble.New("./", nil)
+		db, err := poddb.NewDB(f.Shortname)
 		if err != nil {
-			log.Error("Error", err)
+			log.Error("failed: ", err)
+			return
 		}
 
-		// Write a fish to the database
-		for _, name := range []string{"onefish", "twofish", "redfish", "bluefish"} {
-			db.Write("armfish", name, tFish{Name: name})
-		}
+		fexport := f.CreateExport()
 
-		// Write a fish to the database
-		f := tFish{Name: "fucker", Foo: "foobar", Bar: "barfoo"}
-		log.Debug("fish:", f)
-		if err := db.Write("armfish", "onefish", f); err != nil {
-			log.Error("Error", err)
-		}
-
-		// Read a fish from the database (passing fish by reference)
-		onefish := tFish{}
-		if err := db.Read("armfish", "onefish", &onefish); err != nil {
-			log.Error("Error", err)
-		}
-		log.Debug("onefish:", onefish)
-
-		// Read all fish from the database, unmarshaling the response.
-		records, err := db.ReadAll("armfish")
-		if err != nil {
-			log.Error("Error", err)
-		}
-		log.Debug(records)
-
-		fishies := []tFish{}
-		for _, f := range records {
-			fishFound := tFish{}
-			if err := json.Unmarshal([]byte(f), &fishFound); err != nil {
-				log.Debug("Error", err)
-			}
-			fishies = append(fishies, fishFound)
-		}
-		log.Debug("fishies: ", fishies)
-
-		// Delete a fish from the database
-		// if err := db.Delete("fish", "onefish"); err != nil {
-		// 	fmt.Println("Error", err)
-		// }
-
-		// // Delete all fish from the database
-		// if err := db.Delete("fish", ""); err != nil {
-		// 	fmt.Println("Error", err)
-		// }
-
-			dir := "./"
-
-			db, err := scribble.New(dir, nil)
+		for _, entry := range fexport {
+			log.Debugf("Inserting entry: %+v", entry)
+			id, err := db.InsertyByEntry(entry)
 			if err != nil {
-				fmt.Println("Error", err)
+				log.Error("error: ", err)
 			}
+			log.Debugf("id returned: %v", id)
+		}
+	}
 
-			// Write a fish to the database
-			for _, name := range []string{"onefish", "twofish", "redfish", "bluefish"} {
-				db.Write("fish", name, Fish{Name: name})
-			}
+	poddb.DumpCollections(".\\dbexport")
+}
 
-			// Read a fish from the database (passing fish by reference)
-			onefish := Fish{}
-			if err := db.Read("fish", "onefish", &onefish); err != nil {
-				fmt.Println("Error", err)
-			}
+func tryFetch(db *poddb.PodDB) {
+	var (
+		err       error
+		id        string
+		xmlStruct pod.XmlDBEntry
+		itemlist  pod.ItemListDBEntry
 
-			// Read all fish from the database, unmarshaling the response.
-			records, err := db.ReadAll("fish")
-			if err != nil {
-				fmt.Println("Error", err)
-			}
+		arm = struct {
+			Name string
+			Age  int
+		}{}
 
-			fishies := []Fish{}
-			for _, f := range records {
-				fishFound := Fish{}
-				if err := json.Unmarshal([]byte(f), &fishFound); err != nil {
-					fmt.Println("Error", err)
-				}
-				fishies = append(fishies, fishFound)
-			}
+		leg = struct {
+			Foobar string
+		}{}
+	)
 
-			// // Delete a fish from the database
-			// if err := db.Delete("fish", "onefish"); err != nil {
-			// 	fmt.Println("Error", err)
-			// }
-			//
-			// // Delete all fish from the database
-			// if err := db.Delete("fish", ""); err != nil {
-			// 	fmt.Println("Error", err)
-			// }
-	*/
+	if id, err = db.FetchById("foobar", &xmlStruct); err != nil {
+		log.Errorf("error fetching by id: %v (id='%v')", err, id)
+	}
+
+	if id, err = db.FetchByEntry(&arm); err != nil {
+		log.Errorf("error fetching by entry: %v (id='%v')", err, id)
+	}
+
+	if id, err = db.FetchByEntry(&leg); err != nil {
+		log.Errorf("error fetching by entry: %v (id='%v')", err, id)
+	}
+
+	if id, err = db.FetchById("53d30df7-7a39-4a2e-a4fb-dca70da3736f", &xmlStruct); err != nil {
+		log.Error("error fetching by id: ", err)
+	}
+	log.Debugf("id: %v, xml retrieved: %+v", id, xmlStruct.XmlFeedData.Title)
+
+	if id, err = db.FetchByEntry(&itemlist); err != nil {
+		log.Error("error fetching by entry: ", err)
+	}
+	log.Debugf("id: %v, list retrieved: %+v", id, len(itemlist.ItemEntryList))
 }
