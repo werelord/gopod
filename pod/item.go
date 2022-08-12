@@ -41,7 +41,7 @@ type ItemExport struct {
 	ItemXmlData podutils.XItemData
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (i ItemData) Format(fs fmt.State, c rune) {
 	str := fmt.Sprintf("Hash:'%v' Filename:'%v' Downloaded:%v PubTimeStamp:'%v'",
 		i.Hash, i.Filename, i.Downloaded, i.PubTimeStamp)
@@ -77,7 +77,7 @@ func CreateNewItemEntry(f *Feed, hash string, xmlData *podutils.XItemData) (*Ite
 	return &item, nil
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (i *ItemData) parseUrl() (err error) {
 
 	var urlstr = i.xmlData.Enclosure.Url
@@ -110,7 +110,7 @@ func (i *ItemData) parseUrl() (err error) {
 	return nil
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (i *ItemData) generateFilename() error {
 	// check to see if we neeed to parse.. simple search/replace
 
@@ -220,7 +220,7 @@ func (i *ItemData) generateFilename() error {
 	return nil
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (i *ItemData) saveItemXml() (err error) {
 	log.Infof("saving xmldata for %v{%v}, (%v)", i.Filename, i.Hash, i.parent.Shortname)
 

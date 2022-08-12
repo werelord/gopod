@@ -17,46 +17,38 @@ import (
 
 // separating out this to keep feed.go not as verbose
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 type XChannelData struct {
-	AtomLinkSelf   XAtomLink
-	NewFeedUrl     string
-	Title          string
-	Subtitle       string
-	PubDate        time.Time
-	LastBuildDate  time.Time
-	Link           string
-	Image          XChannelImage
+	AtomLinkSelf struct {
+		// rel = self
+		Type  string
+		Href  string
+		Title string
+	}
+	NewFeedUrl    string
+	Title         string
+	Subtitle      string
+	PubDate       time.Time
+	LastBuildDate time.Time
+	Link          string
+	Image         struct {
+		Url   string
+		Title string
+		Link  string
+	}
 	ItunesImageUrl string
-	ItunesOwner    XItunesOwner
+	ItunesOwner    struct {
+		Name  string
+		Email string
+	}
 	Author         string
 	Copyright      string
 	Description    string
-	PodcastFunding XPodcastFunding
-	PersonList     []XPodcastPersonData
-}
-
-type XAtomLink struct {
-	// rel = self
-	Type  string
-	Href  string
-	Title string
-}
-
-type XChannelImage struct {
-	Url   string
-	Title string
-	Link  string
-}
-
-type XItunesOwner struct {
-	Name  string
-	Email string
-}
-
-type XPodcastFunding struct {
-	Url  string
-	Text string
+	PodcastFunding struct {
+		Url  string
+		Text string
+	}
+	PersonList []XPodcastPersonData
 }
 
 type XItemData struct {
@@ -71,8 +63,12 @@ type XItemData struct {
 	Description    string
 	ItunesSummary  string
 	ContentEncoded string
-	Enclosure      XEnclosureData
-	PersonList     []XPodcastPersonData
+	Enclosure      struct {
+		Length  uint
+		TypeStr string
+		Url     string
+	}
+	PersonList []XPodcastPersonData
 }
 
 type XPodcastPersonData struct {
@@ -81,12 +77,6 @@ type XPodcastPersonData struct {
 	Img   string
 	Role  string
 	Name  string
-}
-
-type XEnclosureData struct {
-	Length  uint
-	TypeStr string
-	Url     string
 }
 
 type FeedProcess interface {
@@ -109,7 +99,7 @@ func (r ParseCanceledError) Error() string {
 
 func (r ParseCanceledError) Is(target error) bool { return target == ParseCanceledError{} }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func ParseXml(xmldata []byte, fp FeedProcess) (feedData *XChannelData, newItems *orderedmap.OrderedMap[string, XItemData], err error) {
 
 	// fuck the ignore list
@@ -220,7 +210,7 @@ func ParseXml(xmldata []byte, fp FeedProcess) (feedData *XChannelData, newItems 
 	return
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func getChildElementText(elem *etree.Element, childnode string) string {
 	if node := elem.SelectElement(childnode); node != nil {
 		return node.Text()
@@ -228,7 +218,7 @@ func getChildElementText(elem *etree.Element, childnode string) string {
 	return ""
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func getAttributeText(elem *etree.Element, attr string) string {
 	if node := elem.SelectAttr(attr); node != nil {
 		return node.Value
@@ -236,7 +226,7 @@ func getAttributeText(elem *etree.Element, attr string) string {
 	return ""
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func calcHash(elem *etree.Element) (string, error) {
 	// first, get the guid/urlstr, check to see if it exists
 	var (
@@ -273,7 +263,7 @@ func calcHash(elem *etree.Element) (string, error) {
 	return hash, nil
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func parseDateEntry(date string) time.Time {
 	t, e := dateparse.ParseAny(date)
 	if e != nil {
@@ -282,7 +272,7 @@ func parseDateEntry(date string) time.Time {
 	return t
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func parseItemEntry(elem *etree.Element) (item XItemData, err error) {
 
 	for _, child := range elem.ChildElements() {
