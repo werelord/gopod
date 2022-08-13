@@ -197,7 +197,6 @@ func (f *Feed) Update() {
 		newItems   []*ItemData
 	)
 	// download file
-	// todo: check header for last modified; we could possibly skip parsing
 	if body, err = podutils.Download(f.Url); err != nil {
 		log.Error("failed to download: ", err)
 		return

@@ -242,7 +242,7 @@ func (i *ItemData) saveItemXml() (err error) {
 	export.Hash = i.Hash
 	export.ItemXmlData = *i.xmlData
 
-	if e := i.parent.db.Write("items", jsonFile, i); e != nil {
+	if e := i.parent.db.Write("items", jsonFile, export); e != nil {
 		log.Error("failed to write database file: ", e)
 		return e
 	}

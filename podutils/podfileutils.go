@@ -14,7 +14,7 @@ import (
 
 const filenamMaxLength = 200
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func SaveToFile(buf []byte, filename string) error {
 
 	log.Debug("Saving to file: " + filename)
@@ -34,9 +34,9 @@ func SaveToFile(buf []byte, filename string) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 // load file (unbuffered)
-func loadFile(filename string) (buf []byte, err error) {
+func LoadFile(filename string) (buf []byte, err error) {
 
 	var file *os.File
 
@@ -53,14 +53,14 @@ func loadFile(filename string) (buf []byte, err error) {
 	return buf, nil
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func CleanFilename(filename string) string {
 	// only error this generates is if the replacement is a reserved character
 	fname, _ := filenamify.Filenamify(filename, filenamify.Options{Replacement: "-", MaxLength: filenamMaxLength})
 	return fname
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func RotateFiles(path, pattern string, numToKeep uint) error {
 
 	var (
@@ -93,7 +93,7 @@ func RotateFiles(path, pattern string, numToKeep uint) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func CreateSymlink(source, symDest string) error {
 	if FileExists(symDest) {
 		// remove the symlink before recreating it..
@@ -110,7 +110,7 @@ func CreateSymlink(source, symDest string) error {
 	return nil
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func FileExists(filename string) bool {
 	_, err := os.Stat(filename)
 	bo1 := err == nil
