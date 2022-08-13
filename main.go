@@ -21,7 +21,8 @@ import (
 
 // --------------------------------------------------------------------------
 var (
-	runTimestamp time.Time
+	runTimestamp   time.Time
+	defaultworking = filepath.FromSlash("e:\\gopod\\")
 )
 
 // --------------------------------------------------------------------------
@@ -35,12 +36,11 @@ func init() {
 func main() {
 
 	var (
-		cmdline        *commandline.CommandLine
-		config         *podconfig.Config
-		feedList       *[]podconfig.FeedToml
-		feedMap        map[string]*pod.Feed
-		err            error
-		defaultworking = filepath.FromSlash("e:\\gopod\\")
+		cmdline  *commandline.CommandLine
+		config   *podconfig.Config
+		feedList *[]podconfig.FeedToml
+		feedMap  map[string]*pod.Feed
+		err      error
 	)
 
 	// todo: flag to check item entries that aren't downloaded
@@ -81,7 +81,7 @@ func main() {
 
 	//	const RunTest = true
 	if true {
-		test(feedMap)
+		test(feedMap, filepath.Join(filepath.Dir(cmdline.ConfigFile), ".db"))
 		return
 	}
 

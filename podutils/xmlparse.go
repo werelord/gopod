@@ -1,8 +1,6 @@
 package podutils
 
 import (
-	"crypto/sha1"
-	"encoding/base64"
 	"errors"
 	"net/url"
 	"strconv"
@@ -255,9 +253,7 @@ func calcHash(elem *etree.Element) (string, error) {
 	}
 
 	// at least url or guid exists, hash the combination
-	sha := sha1.New()
-	sha.Write([]byte(guid + urlstr))
-	hash := base64.URLEncoding.EncodeToString(sha.Sum(nil))
+	hash := GenerateHash(guid + urlstr)
 	//log.Debugf("guid: '%+v', url: '%+v', hash: '%+v'", guid, urlstr, hash)
 
 	return hash, nil

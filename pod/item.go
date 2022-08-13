@@ -41,6 +41,12 @@ type ItemExport struct {
 	ItemXmlData podutils.XItemData
 }
 
+// todo: merge export into this
+type ItemDBEntry struct {
+	Hash        string
+	XmlItemData podutils.XItemData
+}
+
 // --------------------------------------------------------------------------
 func (i ItemData) Format(fs fmt.State, c rune) {
 	str := fmt.Sprintf("Hash:'%v' Filename:'%v' Downloaded:%v PubTimeStamp:'%v'",
@@ -251,3 +257,9 @@ func (i *ItemData) saveItemXml() (err error) {
 }
 
 // todo: add loading item xml data, when needed
+// func (i ItemData) loadItemXml() error {
+
+// 	i.parent.initDB()
+
+// 	if e := i.parent.db.Read("items", )
+// }

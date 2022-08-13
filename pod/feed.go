@@ -1,6 +1,7 @@
 package pod
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -44,10 +45,9 @@ type feedInternal struct {
 	dbinitialized bool
 }
 
-type XmlDBEntry struct {
-	XmlFeedData podutils.XChannelData
-}
-type ItemListDBEntry struct {
+type FeedDBEntry struct {
+	Hash          string
+	XmlFeedData   podutils.XChannelData
 	ItemEntryList []*FeedItemEntry
 }
 
@@ -145,14 +145,44 @@ func (f *Feed) initDB() {
 }
 
 // for db conversion only
-func (f Feed) CreateExport() []any {
+func (f Feed) CreateExport() *FeedDBEntry {
 
 	f.initDB()
 
-	xmlStruct := XmlDBEntry{XmlFeedData: f.XMLFeedData}
-	itemStruct := ItemListDBEntry{ItemEntryList: toSlice(f.itemlist)}
+	feedStruct := FeedDBEntry{
+		Hash:          podutils.GenerateHash(f.Shortname),
+		XmlFeedData:   f.XMLFeedData,
+		ItemEntryList: toSlice(f.itemlist),
+	}
 
-	list := []any{&xmlStruct, &itemStruct}
+	return &feedStruct
+}
+
+// for db conversion only
+func (f Feed) CreateItemExport() []*ItemDBEntry {
+
+	f.initDB()
+
+	records, err := f.db.ReadAll("items")
+	if err != nil {
+		log.Error("error: ", err)
+	}
+
+	var list = make([]*ItemDBEntry, 0, len(records))
+
+	// put these in reverse order.. fuck it
+	for i := len(records) - 1; i >= 0; i-- {
+		var item = records[i]
+		var entry = ItemExport{}
+
+		if err := json.Unmarshal([]byte(item), &entry); err != nil {
+			log.Error("unmarshal error: ", err)
+		}
+		list = append(list, &ItemDBEntry{
+			Hash:        entry.Hash,
+			XmlItemData: entry.ItemXmlData,
+		})
+	}
 
 	return list
 }

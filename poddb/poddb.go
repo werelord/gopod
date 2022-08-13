@@ -22,13 +22,30 @@ func (e ErrorDoesNotExist) Error() string {
 
 // abstract away db structure
 type PodDB struct {
-	collection string
+	feedCollection Collection
+	itemCollection Collection
 }
 
-type Entry struct {
-	Id    string
-	Name  string
+type Collection struct {
+	name string
+}
+
+type DBEntry struct {
+	ID    string
 	Entry any
+}
+
+type GeneratorFunc func() any
+
+func (d PodDB) FeedCollection() Collection {
+	return d.feedCollection
+}
+func (d PodDB) ItemCollection() Collection {
+	return d.itemCollection
+}
+
+func (c Collection) NewQuery() *clover.Query {
+	return clover.NewQuery(c.name)
 }
 
 // common to all instances
@@ -45,7 +62,9 @@ func NewDB(coll string) (*PodDB, error) {
 	if coll == "" {
 		return nil, errors.New("collection name cannot be empty")
 	}
-	var podDB = PodDB{collection: coll}
+	var podDB = PodDB{}
+	podDB.feedCollection.name = coll
+	podDB.itemCollection.name = coll + "_items"
 
 	db, err := clover.Open(dbpath)
 	if err != nil {
@@ -54,13 +73,21 @@ func NewDB(coll string) (*PodDB, error) {
 	defer db.Close()
 
 	// make sure collection exists
-	if exists, err := db.HasCollection(podDB.collection); err != nil {
+	if exists, err := db.HasCollection(podDB.feedCollection.name); err != nil {
 		return nil, fmt.Errorf("failed checking collection exists, wtf: %w", err)
 	} else if exists == false {
-		if err := db.CreateCollection(podDB.collection); err != nil {
+		if err := db.CreateCollection(podDB.feedCollection.name); err != nil {
 			return nil, err
 		}
 	}
+	if exists, err := db.HasCollection(podDB.itemCollection.name); err != nil {
+		return nil, fmt.Errorf("failed checking collection exists, wtf: %w", err)
+	} else if exists == false {
+		if err := db.CreateCollection(podDB.itemCollection.name); err != nil {
+			return nil, err
+		}
+	}
+
 	// collection should exist at this point
 
 	return &podDB, nil
@@ -68,35 +95,37 @@ func NewDB(coll string) (*PodDB, error) {
 }
 
 // --------------------------------------------------------------------------
-// inserts by entry. Will use struct field name as key; struct field value as the value
-func (d PodDB) InsertyByEntry(entry any) (string, error) {
-	return d.insert("", entry)
+// inserts by entry. Will use struct Hash field as document key;
+// struct field value as the value to be inserted..
+// will take the first valid
+func (c Collection) InsertyByEntry(entry any) (string, error) {
+	return c.insert("", entry)
 }
 
 // --------------------------------------------------------------------------
 // inserts by id, replacing the entry if ID is found
 // Will use struct field name as key; struct field value as the value
-func (d PodDB) InsertyById(id string, entry any) (string, error) {
-	return d.insert(id, entry)
+func (c Collection) InsertyById(id string, entry any) (string, error) {
+	return c.insert(id, entry)
 }
 
 // --------------------------------------------------------------------------
 // inserts entry, replacing via key if it exists..
 // will use ID if exists, otherwise will try to find based on key
 // returns ID of inserted item if successful, error otherwise
-func (d PodDB) insert(id string, entry any) (string, error) {
+func (c Collection) insert(id string, entry any) (string, error) {
 	var (
 		db  *clover.DB
 		err error
 		doc *clover.Document
 
-		entryName string
-		entryVal  any
+		entryMap map[string]any
 
+		hash string
 	)
 
-	entryName, entryVal, err = parseEntry(entry)
-	if (err != nil) {
+	entryMap, hash, err = parseAndVerifyEntry(entry)
+	if err != nil {
 		return "", err
 	}
 
@@ -106,13 +135,14 @@ func (d PodDB) insert(id string, entry any) (string, error) {
 	}
 	defer db.Close()
 
+	// todo: move this if into InsertBy* methods
 	if id == "" {
 		// find doc by name based on entry
-		if doc, err = d.findDocByName(db, entryName); err != nil && errors.As(err, &ErrorDoesNotExist{}) == false {
+		if doc, err = c.findDocByHash(db, hash); err != nil && errors.As(err, &ErrorDoesNotExist{}) == false {
 			log.Warnf("failed to find document: ", err)
 		}
 	} else {
-		if doc, err = d.findDocById(db, id); err != nil {
+		if doc, err = c.findDocById(db, id); err != nil {
 			log.Warn("failed to find document: ", err)
 		}
 	}
@@ -122,26 +152,29 @@ func (d PodDB) insert(id string, entry any) (string, error) {
 		doc = clover.NewDocument()
 	}
 
-	doc.Set(entryName, entryVal)
+	for k, v := range entryMap {
+		doc.Set(k, v)
+	}
 
-	db.Save(d.collection, doc)
+	db.Save(c.name, doc)
 	log.Debug("document saved, id: ", doc.ObjectId())
 
 	return doc.ObjectId(), nil
 }
 
 // --------------------------------------------------------------------------
-func (d PodDB) FetchByEntry(value any) (string, error) {
+func (c Collection) FetchByEntry(value any) (string, error) {
 	var (
 		db  *clover.DB
 		err error
 		doc *clover.Document
 
-		entryName string
+		//entryMap map[string]any
+		hash string
 	)
 
-	entryName, _, err = parseEntry(value)
-	if (err != nil) {
+	_, hash, err = parseAndVerifyEntry(value)
+	if err != nil {
 		return "", err
 	}
 
@@ -150,8 +183,10 @@ func (d PodDB) FetchByEntry(value any) (string, error) {
 	}
 	defer db.Close()
 
-	if doc, err = d.findDocByName(db, entryName); err != nil {
+	if doc, err = c.findDocByHash(db, hash); err != nil {
 		return "", fmt.Errorf("find doc error: %v", err)
+	} else if doc == nil {
+		return "", ErrorDoesNotExist{"doc is nil"}
 	}
 
 	if err = doc.Unmarshal(value); err != nil {
@@ -161,7 +196,7 @@ func (d PodDB) FetchByEntry(value any) (string, error) {
 }
 
 // --------------------------------------------------------------------------
-func (d PodDB) FetchById(id string, value any) (string, error) {
+func (c Collection) FetchById(id string, value any) (string, error) {
 	var (
 		db  *clover.DB
 		err error
@@ -173,11 +208,11 @@ func (d PodDB) FetchById(id string, value any) (string, error) {
 	}
 	defer db.Close()
 
-	doc, err = d.findDocById(db, id)
+	doc, err = c.findDocById(db, id)
 	if err != nil {
 		return "", fmt.Errorf("find doc error: %v", err)
 	} else if doc == nil {
-		return "", ErrorDoesNotExist{"doc returned is nil"}
+		return "", ErrorDoesNotExist{"doc is nil"}
 	}
 	// todo: more checks??
 
@@ -188,51 +223,100 @@ func (d PodDB) FetchById(id string, value any) (string, error) {
 	return doc.ObjectId(), nil
 }
 
+func (c Collection) FetchAll(fn GeneratorFunc) (entryList []DBEntry, err error) {
+
+	return c.FetchAllWithQuery(fn, clover.NewQuery(c.name))
+}
+
 // --------------------------------------------------------------------------
-func (d PodDB) findDocByName(db *clover.DB, name string) (*clover.Document, error) {
+func (c Collection) FetchAllWithQuery(fn GeneratorFunc, q *clover.Query) (entryList []DBEntry, err error) {
+	var (
+		db   *clover.DB
+		docs []*clover.Document
+	)
+	if db, err = clover.Open(dbpath); err != nil {
+		err = fmt.Errorf("failed opening db: %v", err)
+		return
+	}
+	defer db.Close()
+
+	docs, err = db.FindAll(q)
+	if err != nil {
+		err = fmt.Errorf("findall failed: %v", err)
+		return
+	}
+
+	for _, doc := range docs {
+		var newEntry = fn()
+		// does error continue outside??
+		if err = doc.Unmarshal(newEntry); err != nil {
+			log.Error("unmarshal failed: ", err)
+			continue
+		}
+		var entry = DBEntry{
+			ID:    doc.ObjectId(),
+			Entry: newEntry,
+		}
+		entryList = append(entryList, entry)
+	}
+
+	return
+}
+
+// --------------------------------------------------------------------------
+func (c Collection) findDocByHash(db *clover.DB, hash string) (*clover.Document, error) {
 	if db == nil {
 		return nil, errors.New("db is not open")
 	}
-	docs, err := db.FindAll(clover.NewQuery(d.collection).Where(clover.Field(name).Exists()))
+	doc, err := db.FindFirst(clover.NewQuery(c.name).Where(clover.Field("Hash").Eq(hash)))
 	if err != nil {
 		return nil, fmt.Errorf("error in query: %w", err)
-	} else if len(docs) == 0 {
-		return nil, ErrorDoesNotExist{"name not found"}
+	} else if doc == nil {
+		return nil, ErrorDoesNotExist{"hash not found"}
 	}
 
-	if len(docs) > 1 {
-		log.Warn("more than one document with given name found; len == ", len(docs))
-	}
-	return docs[0], nil
+	return doc, nil
 }
 
 // --------------------------------------------------------------------------
-func (d PodDB) findDocById(db *clover.DB, id string) (*clover.Document, error) {
+func (c Collection) findDocById(db *clover.DB, id string) (*clover.Document, error) {
 	if db == nil {
 		return nil, errors.New("db is not open")
 	}
 
-	return db.FindById(d.collection, id)
+	return db.FindById(c.name, id)
 }
 
-//--------------------------------------------------------------------------
-func parseEntry(entry any) (string, any, error) {
+// --------------------------------------------------------------------------
+func parseAndVerifyEntry(entry any) (entryMap map[string]any, hash string, err error) {
 	var (
-		entryName string
-		entryVal any
 		elem reflect.Value
+		succ bool
 	)
+	entryMap = make(map[string]any)
+
 	elem = reflect.Indirect(reflect.ValueOf(entry))
 	if elem.Kind() != reflect.Struct {
-		return "", nil, fmt.Errorf("expecting interface, got %v", elem.Kind())
-	} else if elem.NumField() != 1 {
-		return "", nil, fmt.Errorf("expecting one field in interface, got %v", elem.NumField())
+		err = fmt.Errorf("expecting struct, got %v", elem.Kind())
+		return
+	} else if elem.NumField() <= 1 {
+		err = fmt.Errorf("expecting at least two fields in interface, got %v", elem.NumField())
+		return
 	}
 
-	entryName = elem.Type().Field(0).Name
-	entryVal = elem.Field(0).Interface()
+	for i := 0; i < elem.NumField(); i++ {
+		entryMap[elem.Type().Field(i).Name] = elem.Field(i).Interface()
+	}
 
-	return entryName, entryVal, nil
+	if hashInterface, exists := entryMap["Hash"]; exists == false {
+		err = errors.New("entry missing hash field; must be included to insert")
+		return
+	} else if hash, succ = hashInterface.(string); succ == false {
+		err = errors.New("hash should be a string")
+		return
+	}
+
+	return entryMap, hash, nil
 }
 
 // --------------------------------------------------------------------------
