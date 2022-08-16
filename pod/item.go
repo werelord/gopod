@@ -8,26 +8,34 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/exp/slices"
 )
 
 // exported fields for database in feed list
-type ItemData struct {
+type Item struct {
 	// golang GC apparently doesn't have problems with circular references
 	parent *Feed
 
-	FeedItemEntry
+	Hash string
+
+	ItemData
 
 	xmlData *podutils.XItemData
 }
 
 // stuff exported with the feed database (item list)
-type FeedItemEntry struct {
-	Hash         string
+type ItemDataOld struct {
+	Hash string
+	ItemData
+}
+
+type ItemData struct {
 	Filename     string
 	Url          string
 	Downloaded   bool
@@ -35,38 +43,42 @@ type FeedItemEntry struct {
 	PubTimeStamp time.Time
 }
 
-// exported fields for each item
-type ItemExport struct {
+// exported fields for each item - scribble use
+type ItemExportScribble struct {
 	Hash        string
 	ItemXmlData podutils.XItemData
 }
 
+type ItemDataDBEntry_Clover struct {
+	Hash     string
+	ItemData ItemData
+}
+
 // todo: merge export into this
-type ItemDBEntry struct {
-	Hash        string
-	XmlItemData podutils.XItemData
+type ItemXmlDBEntry_Clover struct {
+	Hash    string
+	ItemXml podutils.XItemData
 }
 
 // --------------------------------------------------------------------------
-func (i ItemData) Format(fs fmt.State, c rune) {
+func (i Item) Format(fs fmt.State, c rune) {
 	str := fmt.Sprintf("Hash:'%v' Filename:'%v' Downloaded:%v PubTimeStamp:'%v'",
 		i.Hash, i.Filename, i.Downloaded, i.PubTimeStamp)
 	fs.Write([]byte(str))
 }
 
-func CreateNewItemEntry(f *Feed, hash string, xmlData *podutils.XItemData) (*ItemData, error) {
+func CreateNewItemEntry(f *Feed, hash string, xmlData *podutils.XItemData) (*Item, error) {
 	// new entry, xml coming from feed directly
 	// if this is loaded from the database, ItemExport should be nil
 
-	item := ItemData{
-		parent: f,
-		FeedItemEntry: FeedItemEntry{
-			Hash:         hash,
-			PubTimeStamp: xmlData.Pubdate,
-			// rest generated below
-		},
+	item := Item{
+		parent:  f,
+		Hash:    hash,
 		xmlData: xmlData,
+		// rest generated below
 	}
+
+	item.PubTimeStamp = xmlData.Pubdate
 
 	// parse url
 	if err := item.parseUrl(); err != nil {
@@ -84,7 +96,7 @@ func CreateNewItemEntry(f *Feed, hash string, xmlData *podutils.XItemData) (*Ite
 }
 
 // --------------------------------------------------------------------------
-func (i *ItemData) parseUrl() (err error) {
+func (i *Item) parseUrl() (err error) {
 
 	var urlstr = i.xmlData.Enclosure.Url
 
@@ -117,10 +129,13 @@ func (i *ItemData) parseUrl() (err error) {
 }
 
 // --------------------------------------------------------------------------
-func (i *ItemData) generateFilename() error {
+func (i *Item) generateFilename() error {
 	// check to see if we neeed to parse.. simple search/replace
 
 	// verify that export data is not null
+
+	// todo: need to check for filename collisions!! fucking shit
+
 	if i.xmlData == nil {
 		return errors.New("item xml data is nil")
 	}
@@ -162,6 +177,59 @@ func (i *ItemData) generateFilename() error {
 				if len(eps) == 2 {
 					rep = eps[1]
 				}
+			} else if config.Debug && feed.Shortname == "dfo" {
+				var catch = []string{"61", "60"}
+				if slices.Contains(catch, xmldata.EpisodeStr) {
+					r, _ := regexp.Compile("E[p|P]. ([0-9]*):.*")
+					eps := r.FindStringSubmatch(xmldata.Title)
+					if len(eps) == 2 {
+						rep = eps[1]
+						log.Warnf("mismatch, epstr:%v, using:%v, title:%v", xmldata.EpisodeStr, rep, xmldata.Title)
+					} else {
+						log.Warn("WTF")
+					}
+				}
+
+			} else if config.Debug && feed.Shortname == "jjgo" {
+				skipList := []string{"Maximum Fun Drive: May 15th-31st",
+					"Shootin' the Bries - Episode 2",
+					"Ashkon - Soldier Boy",
+					"T-Shirt Contest!",
+					"Bubble by Jordan Morris",
+					"JJGo Bonus: Stop Podcasting Yourself",
+					"The MaxFunStore is Open!", "Ashkon - Hey Keezy",
+					"MaxFunDrive 2010: May 13-28", "International Waters Ep. 3: Exploding Draculas"}
+				if xmldata.EpisodeStr == "194" {
+					rep = "184"
+					log.Warnf("manual override, ep:%v, used:%v, tit:%v", xmldata.EpisodeStr, rep, xmldata.Title)
+				} else if xmldata.EpisodeStr == "0" {
+					rep = "1"
+					log.Warnf("manual override, ep:%v, used:%v, tit:%v", xmldata.EpisodeStr, rep, xmldata.Title)
+				} else if slices.Contains(skipList, xmldata.Title) == false {
+					// grab the episode from the title, as the numbers don't match for these
+					intVar, err := strconv.Atoi(rep)
+					if err != nil {
+						log.Panic(err)
+					}
+					if intVar <= 636 {
+						// try using the value from title
+						r, _ := regexp.Compile("E[p|P]. ?([0-9]*[A|B]?) ?[:|-].*")
+						eps := r.FindStringSubmatch(xmldata.Title)
+						if len(eps) == 2 {
+							rep = eps[1]
+							//log.Warnf("found mismatch, ep:%v, used:%v, tit:%v", xmldata.EpisodeStr, rep, xmldata.Title)
+						} else {
+							log.Warnf("Unable to find episode string!! (%v)", xmldata.Title)
+						}
+
+					}
+				} else {
+					// skps should use blank
+					log.Warnf("skipping, setting to blank (%v)", xmldata.Title)
+					rep = ""
+
+				}
+
 			}
 			//------------------------------------- DEBUG -------------------------------------
 
@@ -180,7 +248,7 @@ func (i *ItemData) generateFilename() error {
 				//------------------------------------- DEBUG -------------------------------------
 				if rep == "" { // still
 					// use date as a stopgap
-					rep = xmldata.Pubdate.Format("20060102")
+					rep = xmldata.Pubdate.Format("20060102_150405")
 					//rep = strings.Repeat("X", padLen)
 				}
 
@@ -193,7 +261,7 @@ func (i *ItemData) generateFilename() error {
 
 		if strings.Contains(feed.FilenameParse, "#date#") {
 			// date format YYYYMMDD
-			newstr = strings.Replace(newstr, "#date#", xmldata.Pubdate.Format("20060102"), 1)
+			newstr = strings.Replace(newstr, "#date#", xmldata.Pubdate.Format("20060102_150405"), 1)
 		}
 
 		if strings.Contains(feed.FilenameParse, "#titleregex:") {
@@ -214,7 +282,16 @@ func (i *ItemData) generateFilename() error {
 			newstr = strings.Replace(newstr, "#urlfilename#", urlfilename, 1)
 		}
 
+		// hack bullshit
+		//------------------------------------- DEBUG -------------------------------------
+		if newstr == "russo.ep262.20200923.mp3" && xmldata.Guid == "433ca553-d9a8-43de-857c-b377098c4971" {
+
+			newstr = newstr[:len(newstr)-len(filepath.Ext(newstr))] + "_2" + filepath.Ext(newstr)
+		}
+		//------------------------------------- DEBUG -------------------------------------
+
 		i.Filename = newstr
+
 		log.Debug("using generated filename: ", i.Filename)
 
 		return nil
@@ -227,7 +304,7 @@ func (i *ItemData) generateFilename() error {
 }
 
 // --------------------------------------------------------------------------
-func (i *ItemData) saveItemXml() (err error) {
+func (i *Item) saveItemXml() (err error) {
 	log.Infof("saving xmldata for %v{%v}, (%v)", i.Filename, i.Hash, i.parent.Shortname)
 
 	if i.xmlData == nil {
@@ -244,7 +321,7 @@ func (i *ItemData) saveItemXml() (err error) {
 
 	jsonFile := strings.TrimSuffix(i.Filename, filepath.Ext(i.Filename))
 
-	var export ItemExport
+	var export ItemExportScribble
 	export.Hash = i.Hash
 	export.ItemXmlData = *i.xmlData
 

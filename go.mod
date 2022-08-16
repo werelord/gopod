@@ -48,5 +48,6 @@ require (
 	github.com/ostafen/clover/v2 v2.0.0-alpha.2
 	github.com/schollz/progressbar/v3 v3.8.7
 	github.com/wk8/go-ordered-map/v2 v2.0.0
+	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e
 	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
 )

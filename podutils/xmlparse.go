@@ -103,6 +103,8 @@ func ParseXml(xmldata []byte, fp FeedProcess) (feedData *XChannelData, newItems 
 	// fuck the ignore list
 	//ignoreList := []string{"atom:link", "lastBuildDate"}
 
+	// todo: error on empty body (xmldata)
+
 	feedData = &XChannelData{}
 	newItems = orderedmap.New[string, XItemData]()
 

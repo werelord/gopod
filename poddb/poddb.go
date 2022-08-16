@@ -22,8 +22,12 @@ func (e ErrorDoesNotExist) Error() string {
 
 // abstract away db structure
 type PodDB struct {
-	feedCollection Collection
-	itemCollection Collection
+	feedColl     Collection
+	itemDataColl Collection
+	itemXmlColl  Collection
+
+	// todo: dirty flag
+	// todo: backup on dump ??
 }
 
 type Collection struct {
@@ -38,10 +42,13 @@ type DBEntry struct {
 type GeneratorFunc func() any
 
 func (d PodDB) FeedCollection() Collection {
-	return d.feedCollection
+	return d.feedColl
 }
-func (d PodDB) ItemCollection() Collection {
-	return d.itemCollection
+func (d PodDB) ItemDataCollection() Collection {
+	return d.itemDataColl
+}
+func (d PodDB) ItemXmlCollection() Collection {
+	return d.itemXmlColl
 }
 
 func (c Collection) NewQuery() *clover.Query {
@@ -63,8 +70,9 @@ func NewDB(coll string) (*PodDB, error) {
 		return nil, errors.New("collection name cannot be empty")
 	}
 	var podDB = PodDB{}
-	podDB.feedCollection.name = coll
-	podDB.itemCollection.name = coll + "_items"
+	podDB.feedColl.name = coll
+	podDB.itemDataColl.name = coll + "_itemdata"
+	podDB.itemXmlColl.name = coll + "_itemxml"
 
 	db, err := clover.Open(dbpath)
 	if err != nil {
@@ -72,26 +80,28 @@ func NewDB(coll string) (*PodDB, error) {
 	}
 	defer db.Close()
 
-	// make sure collection exists
-	if exists, err := db.HasCollection(podDB.feedCollection.name); err != nil {
-		return nil, fmt.Errorf("failed checking collection exists, wtf: %w", err)
-	} else if exists == false {
-		if err := db.CreateCollection(podDB.feedCollection.name); err != nil {
-			return nil, err
-		}
-	}
-	if exists, err := db.HasCollection(podDB.itemCollection.name); err != nil {
-		return nil, fmt.Errorf("failed checking collection exists, wtf: %w", err)
-	} else if exists == false {
-		if err := db.CreateCollection(podDB.itemCollection.name); err != nil {
-			return nil, err
-		}
+	// make sure collections exists
+	err = createCollections(db, []Collection{podDB.feedColl, podDB.itemDataColl, podDB.itemXmlColl})
+	if err != nil {
+		return nil, err
 	}
 
-	// collection should exist at this point
+	// collections should exist at this point
 
 	return &podDB, nil
+}
 
+func createCollections(db *clover.DB, colllist []Collection) error {
+	for _, coll := range colllist {
+		if exists, err := db.HasCollection(coll.name); err != nil {
+			return fmt.Errorf("failed checking collection '%v' exists, wtf: %w", coll, err)
+		} else if exists == false {
+			if err := db.CreateCollection(coll.name); err != nil {
+				return fmt.Errorf("failed creating collection: %v", err)
+			}
+		}
+	}
+	return nil
 }
 
 // --------------------------------------------------------------------------

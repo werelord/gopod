@@ -8,8 +8,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-//--------------------------------------------------------------------------
-func (i ItemData) titleSubmatchRegex(regex, dststr, title string) (string, error) {
+// --------------------------------------------------------------------------
+func (i Item) titleSubmatchRegex(regex, dststr, title string) (string, error) {
 
 	var (
 		r   *regexp.Regexp
