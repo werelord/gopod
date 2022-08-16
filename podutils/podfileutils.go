@@ -118,3 +118,12 @@ func FileExists(filename string) bool {
 	return bo1 || bo2
 	//return (err == nil) || (errors.Is(err, os.ErrNotExist) == false)
 }
+
+// --------------------------------------------------------------------------
+func MkDirAll(path string) error {
+	err := os.MkdirAll(path, 0666)
+	if err != nil && os.IsExist(err) == false {
+		return err
+	}
+	return nil
+}

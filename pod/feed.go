@@ -1,10 +1,8 @@
 package pod
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,9 +10,9 @@ import (
 	"time"
 
 	"gopod/podconfig"
+	"gopod/poddb"
 	"gopod/podutils"
 
-	scribble "github.com/nanobox-io/golang-scribble"
 	log "github.com/sirupsen/logrus"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
@@ -35,62 +33,30 @@ type Feed struct {
 
 type feedInternal struct {
 	// local items, not exported to database
-	db      *scribble.Driver
+	db *poddb.PodDB
+
+	dbXmlId string // id referencing this feed's entry in the db
 	xmlfile string
 	mp3Path string
-	dbPath  string
+
+	numDups uint // number of dupiclates counted before skipping remaining items in xmlparse
+
 	// itemlist is not explicitly exported, but converted to array to be exported
-	itemlist *orderedmap.OrderedMap[string, *Item]
+	// used mostly for checking update, as to when to quit
+	itemlist map[string]*Item
 
 	dbinitialized bool
 }
 
-type FeedDBEntry struct {
+type FeedXmlDBEntry struct {
 	Hash        string
 	XmlFeedData podutils.XChannelData
 }
 
-// conversions
-func toSlice(omap *orderedmap.OrderedMap[string, *Item]) (entrySlice []*ItemDataOld) {
-	for pair := omap.Oldest(); pair != nil; pair = pair.Next() {
-
-		oldItemData := ItemDataOld{
-			Hash:     pair.Value.Hash,
-			ItemData: pair.Value.ItemData,
-		}
-
-		entrySlice = append(entrySlice, &oldItemData)
-	}
-
-	return
-}
-
-func toOrderedMap(f *Feed, entrySlice []*ItemDataOld) *orderedmap.OrderedMap[string, *Item] {
-
-	omap := orderedmap.New[string, *Item]()
-	// populate ordered map
-	for _, item := range entrySlice {
-		itemdata := Item{
-			parent:   f,
-			Hash:     item.Hash,
-			ItemData: item.ItemData,
-		}
-		omap.Set(item.Hash, &itemdata)
-	}
-
-	return omap
-}
-
-// exported fields for database serialization - Scribble
-type FeedDBExportScribble struct {
-	Feed *Feed
-	// using slice for json db output
-	ItemEntryList []*ItemDataOld
-}
+// todo: Feed data entry, if anything needs to be preserved
 
 var (
-	config  *podconfig.Config
-	numDups uint // number of dupiclates counted before skipping remaining items in xmlparse
+	config *podconfig.Config
 )
 
 // func (f Feed) Format(fs fmt.State, c rune) {
@@ -112,125 +78,148 @@ func (f *Feed) InitFeed(cfg *podconfig.Config) {
 	}
 
 	config = cfg
-
-	f.dbPath = filepath.Join(config.Workspace, f.Shortname, "db")
-	f.xmlfile = filepath.Join(f.dbPath, f.Shortname+"."+config.TimestampStr+".xml")
+	xmlFilePath := filepath.Join(config.Workspace, ".xml")
 	f.mp3Path = filepath.Join(config.Workspace, f.Shortname)
 
-	f.itemlist = orderedmap.New[string, *Item]()
+	// todo: error propegation
+
+	// attempt create the dirs
+	if err := podutils.MkDirAll(xmlFilePath); err != nil {
+		log.Error("error making xml directory: ", err)
+		return
+	}
+	if err := podutils.MkDirAll(f.mp3Path); err != nil {
+		log.Error("error making mp3 directory: ", err)
+		return
+	}
+
+	f.xmlfile = filepath.Join(xmlFilePath, f.Shortname+"."+config.TimestampStr+".xml")
+	f.itemlist = make(map[string]*Item)
+
+	// todo: error check on this
+	f.initDB()
 }
 
 // --------------------------------------------------------------------------
-func (f *Feed) initDB() {
-	// future: modify scribble to use 7zip archives?
-	if f.dbinitialized == false {
-		log.Infof("{%v} initializing feed db, path: %v", f.Shortname, f.dbPath)
-		var e error
-		f.db, e = scribble.New(f.dbPath, nil)
-		if e != nil {
-			log.Error("Error init db: ", e)
-			return
-		}
+func (f *Feed) initDB() error {
 
-		feedImport := FeedDBExportScribble{Feed: f}
+	/*
+		// todo: this
 
-		// load feed information
-		if e := f.db.Read("./", "feed", &feedImport); e != nil {
-			if errors.Is(e, fs.ErrNotExist) {
-				log.Info("file doesn't exist; likely new feed")
-			} else {
-				log.Warn("error reading feed info:", e)
+		if f.dbinitialized == false {
+			log.Infof("{%v} initializing feed db, path: %v", f.Shortname, f.dbPath)
+			var e error
+			f.db, e = scribble.New(f.dbPath, nil)
+			if e != nil {
+				log.Error("Error init db: ", e)
 				return
 			}
+
+			feedImport := FeedDBExportScribble{Feed: f}
+
+			// load feed information
+			if e := f.db.Read("./", "feed", &feedImport); e != nil {
+				if errors.Is(e, fs.ErrNotExist) {
+					log.Info("file doesn't exist; likely new feed")
+				} else {
+					log.Warn("error reading feed info:", e)
+					return
+				}
+			}
+
+			f.itemlist = toOrderedMap(f, feedImport.ItemEntryList)
+
+			f.dbinitialized = true
 		}
 
-		f.itemlist = toOrderedMap(f, feedImport.ItemEntryList)
+	*/
+	return errors.New("not Implemented")
 
-		f.dbinitialized = true
-	}
 }
 
 // for db conversion only
-func (f *Feed) CreateExport() *FeedDBEntry {
+// func (f *Feed) CreateExport() *FeedDBEntry {
 
-	f.initDB()
+// 	f.initDB()
 
-	feedStruct := FeedDBEntry{
-		Hash:        podutils.GenerateHash(f.Shortname),
-		XmlFeedData: f.XMLFeedData,
-	}
+// 	feedStruct := FeedDBEntry{
+// 		Hash:        podutils.GenerateHash(f.Shortname),
+// 		XmlFeedData: f.XMLFeedData,
+// 	}
 
-	return &feedStruct
-}
+// 	return &feedStruct
+// }
 
-func (f *Feed) CreateItemDataExport() []*ItemDataDBEntry_Clover {
+// func (f *Feed) CreateItemDataExport() []*ItemDataDBEntry {
 
-	f.initDB()
+// 	f.initDB()
 
-	var list = make([]*ItemDataDBEntry_Clover, 0, f.itemlist.Len())
+// 	var list = make([]*ItemDataDBEntry, 0, f.itemlist.Len())
 
-	for pair := f.itemlist.Oldest(); pair != nil; pair = pair.Next() {
-		entry := ItemDataDBEntry_Clover{
-			Hash:     pair.Value.Hash,
-			ItemData: pair.Value.ItemData,
-		}
-		list = append(list, &entry)
-	}
+// 	for pair := f.itemlist.Oldest(); pair != nil; pair = pair.Next() {
+// 		entry := ItemDataDBEntry{
+// 			Hash:     pair.Value.Hash,
+// 			ItemData: pair.Value.ItemData,
+// 		}
+// 		list = append(list, &entry)
+// 	}
 
-	return list
-}
+// 	return list
+// }
 
 // for db conversion only
-func (f *Feed) CreateItemXmlExport() []*ItemXmlDBEntry_Clover {
+// func (f *Feed) CreateItemXmlExport() []*ItemXmlDBEntry {
 
-	f.initDB()
+// 	f.initDB()
 
-	records, err := f.db.ReadAll("items")
-	if err != nil {
-		log.Error("error: ", err)
-	}
+// 	records, err := f.db.ReadAll("items")
+// 	if err != nil {
+// 		log.Error("error: ", err)
+// 	}
 
-	var list = make([]*ItemXmlDBEntry_Clover, 0, len(records))
+// 	var list = make([]*ItemXmlDBEntry, 0, len(records))
 
-	var scribbleEntryMap = make(map[string]string)
+// 	var scribbleEntryMap = make(map[string]string)
 
-	// put these in reverse order.. fuck it
-	for i := len(records) - 1; i >= 0; i-- {
-		var item = records[i]
-		var scribbleEntry = ItemExportScribble{}
+// 	// put these in reverse order.. fuck it
+// 	for i := len(records) - 1; i >= 0; i-- {
+// 		var item = records[i]
+// 		var scribbleEntry = ItemExportScribble{}
 
-		if err := json.Unmarshal([]byte(item), &scribbleEntry); err != nil {
-			log.Error("unmarshal error: ", err)
-		}
-		list = append(list, &ItemXmlDBEntry_Clover{
-			Hash:    scribbleEntry.Hash,
-			ItemXml: scribbleEntry.ItemXmlData,
-		})
+// 		if err := json.Unmarshal([]byte(item), &scribbleEntry); err != nil {
+// 			log.Error("unmarshal error: ", err)
+// 		}
+// 		list = append(list, &ItemXmlDBEntry{
+// 			Hash:    scribbleEntry.Hash,
+// 			ItemXml: scribbleEntry.ItemXmlData,
+// 		})
 
-		// we're running a check on shit here as well.. make sure this record exists in itemlist
-		if _, exists := f.itemlist.Get(scribbleEntry.Hash); exists == false {
-			log.Warnf("(%v) Itemlist missing scribble xml hash %v (item:%v)",
-				f.Shortname, scribbleEntry.Hash, scribbleEntry.ItemXmlData.Enclosure.Url)
-		}
-		// set a map to check items the opposite way; just need the hash
-		scribbleEntryMap[scribbleEntry.Hash] = scribbleEntry.Hash
-	}
+// 		// we're running a check on shit here as well.. make sure this record exists in itemlist
+// 		if _, exists := f.itemlist.Get(scribbleEntry.Hash); exists == false {
+// 			log.Warnf("(%v) Itemlist missing scribble xml hash %v (item:%v)",
+// 				f.Shortname, scribbleEntry.Hash, scribbleEntry.ItemXmlData.Enclosure.Url)
+// 		}
+// 		// set a map to check items the opposite way; just need the hash
+// 		scribbleEntryMap[scribbleEntry.Hash] = scribbleEntry.Hash
+// 	}
 
-	// check the other way around
-	for pair := f.itemlist.Oldest(); pair != nil; pair = pair.Next() {
-		if _, exists := scribbleEntryMap[pair.Value.Hash]; exists == false {
-			log.Warnf("(%v) scribble entries missing itemlist hash %v (item:%v)",
-				f.Shortname, pair.Value.Hash, pair.Value.Filename)
-		}
-	}
+// 	// check the other way around
+// 	for pair := f.itemlist.Oldest(); pair != nil; pair = pair.Next() {
+// 		if _, exists := scribbleEntryMap[pair.Value.Hash]; exists == false {
+// 			log.Warnf("(%v) scribble entries missing itemlist hash %v (item:%v)",
+// 				f.Shortname, pair.Value.Hash, pair.Value.Filename)
+// 		}
+// 	}
 
-	return list
-}
+// 	return list
+// }
 
 // --------------------------------------------------------------------------
 func (f Feed) saveDB() (err error) {
 
 	log.Info("Saving db for ", f.Shortname)
+
+	// todo: this
 
 	if config.Simulate {
 		log.Info("skipping saving database due to sim flag")
@@ -238,25 +227,25 @@ func (f Feed) saveDB() (err error) {
 	}
 
 	// make sure database is initialized
-	f.initDB()
-	var feedExport_scribble FeedDBExportScribble
+	// f.initDB()
+	// var feedExport_scribble FeedDBExportScribble
 
-	feedExport_scribble.Feed = &f
-	for pair := f.itemlist.Oldest(); pair != nil; pair = pair.Next() {
+	// feedExport_scribble.Feed = &f
+	// for pair := f.itemlist.Oldest(); pair != nil; pair = pair.Next() {
 
-		// convert to scribble format
-		entry := ItemDataOld{
-			Hash:     pair.Value.Hash,
-			ItemData: pair.Value.ItemData,
-		}
+	// 	// convert to scribble format
+	// 	entry := ItemDataOld{
+	// 		Hash:     pair.Value.Hash,
+	// 		ItemData: pair.Value.ItemData,
+	// 	}
 
-		feedExport_scribble.ItemEntryList = append(feedExport_scribble.ItemEntryList, &entry)
-	}
+	// 	feedExport_scribble.ItemEntryList = append(feedExport_scribble.ItemEntryList, &entry)
+	// }
 
-	if e := f.db.Write("./", "feed", feedExport_scribble); e != nil {
-		log.Error("failed to write database file: ", e)
-		return e
-	}
+	// if e := f.db.Write("./", "feed", feedExport_scribble); e != nil {
+	// 	log.Error("failed to write database file: ", e)
+	// 	return e
+	// }
 
 	return nil
 }
@@ -265,6 +254,7 @@ func (f Feed) saveDB() (err error) {
 func (f *Feed) Update() {
 
 	// make sure db is initialized
+	// todo: error check on this
 	f.initDB()
 
 	var (
@@ -318,7 +308,7 @@ func (f *Feed) Update() {
 			itemerror error
 		)
 
-		if _, exists := f.itemlist.Get(hash); exists {
+		if _, exists := f.itemlist[hash]; exists {
 			// if the old item exists, it will get replaced on setting this new item
 			// this should only happen when force == true; log warning if this is not the case
 			if config.ForceUpdate == false {
@@ -326,7 +316,7 @@ func (f *Feed) Update() {
 			}
 		}
 
-		if itemdata, itemerror = CreateNewItemEntry(f, hash, &xmldata); itemerror != nil {
+		if itemdata, itemerror = CreateNewItemEntry(f.FeedToml, f.db, hash, &xmldata); itemerror != nil {
 			// new entry, create it
 			log.Error("failed creating new item entry; skipping: ", itemerror)
 			continue
@@ -334,22 +324,24 @@ func (f *Feed) Update() {
 
 		log.Infof("adding new item: :%+v", itemdata)
 
-		f.itemlist.Set(hash, itemdata)
-		if e := f.itemlist.MoveToFront(hash); err != nil {
-			log.Error("failed to move to front: ", e)
+		// saving item xml
+		if err = itemdata.saveItemXml(); err != nil {
+			log.Error("saving xml daeta failed; skipping entry: ", err)
+			continue
 		}
 
-		// saving item xml; this
-		itemdata.saveItemXml()
+		f.itemlist[hash] = itemdata
 
-		// download these in order newest to last, to hijack initial population of downloaded items
-		newItems = append([]*Item{itemdata}, newItems...)
+		newItems = append(newItems, itemdata)
 
 	}
 
 	f.saveDB()
 
+	// todo: need to check filename collissions
+
 	// process new entries
+	// todo: move this outside update (likely on goroutine implementation)
 	f.processNew(newItems)
 
 }
@@ -366,7 +358,6 @@ func (f Feed) saveAndRotateXml(body []byte, shouldRotate bool) {
 			fmt.Sprintf("%v.([0-9]{8}_[0-9]{6})|(DEBUG).xml", f.Shortname),
 			uint(config.XmlFilesRetained))
 	}
-
 }
 
 //--------------------------------------------------------------------------
@@ -380,11 +371,13 @@ func (f Feed) SkipParsingItem(hash string) (skip bool, cancelRemaining bool) {
 		return false, false
 	}
 
-	_, skip = f.itemlist.Get(hash)
+	// assume itemlist has been populated with enough entries (if not all)
+	// todo: is this safe to assume?? any way we can check??
+	_, skip = f.itemlist[hash]
 
 	if (config.MaxDupChecks >= 0) && (skip == true) {
-		numDups++
-		cancelRemaining = (numDups >= uint(config.MaxDupChecks))
+		f.numDups++
+		cancelRemaining = (f.numDups >= uint(config.MaxDupChecks))
 	}
 	return
 }

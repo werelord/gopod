@@ -15,57 +15,57 @@ func migratedbs(flist map[string]*pod.Feed, dbpath string) {
 		dropCollections(dbpath)
 	}
 
-	for _, f := range flist {
+	// for _, f := range flist {
 
-		//f := flist["twit"]
+	//f := flist["twit"]
 
-		fexport := f.CreateExport()
-		itemDataExport := f.CreateItemDataExport()
-		itemXmlExport := f.CreateItemXmlExport()
+	// fexport := f.CreateExport()
+	// itemDataExport := f.CreateItemDataExport()
+	// itemXmlExport := f.CreateItemXmlExport()
 
-		db, err := poddb.NewDB(f.Shortname)
-		if err != nil {
-			log.Error("failed: ", err)
-			return
-		}
+	// db, err := poddb.NewDB(f.Shortname)
+	// if err != nil {
+	// 	log.Error("failed: ", err)
+	// 	return
+	// }
 
-		// todo: move these try methods into unit tests
-		//	tryFetch(db)
-		// tryItemFetch(db)
-		// tryItemFetchMulti(db)
-		//tryItemFetchMultiQuery(db)
+	// todo: move these try methods into unit tests
+	//	tryFetch(db)
+	// tryItemFetch(db)
+	// tryItemFetchMulti(db)
+	//tryItemFetchMultiQuery(db)
 
-		//return
+	//return
 
-		// log.Debugf("feedExport:%v\nitemDataExport:%+v\nitemXmlExport:%+v\n", *fexport, itemDataExport, itemXmlExport)
+	// log.Debugf("feedExport:%v\nitemDataExport:%+v\nitemXmlExport:%+v\n", *fexport, itemDataExport, itemXmlExport)
 
-		log.Debugf("Inserting entry: %+v", fexport.Hash)
-		id, err := db.FeedCollection().InsertyByEntry(fexport)
-		if err != nil {
-			log.Error("error: ", err)
-		}
-		log.Debugf("id returned: %v", id)
+	// log.Debugf("Inserting entry: %+v", fexport.Hash)
+	// id, err := db.FeedCollection().InsertyByEntry(fexport)
+	// if err != nil {
+	// 	log.Error("error: ", err)
+	// }
+	// log.Debugf("id returned: %v", id)
 
-		// todo: something to not make this fucker thrash
-		for _, entry := range itemDataExport {
-			log.Debugf("inserting entry: %+v", entry.Hash)
-			id, err := db.ItemDataCollection().InsertyByEntry(entry)
-			if err != nil {
-				log.Error("error: ", err)
-			}
-			log.Debugf("id returned: %v", id)
-		}
+	// // todo: something to not make this fucker thrash
+	// for _, entry := range itemDataExport {
+	// 	log.Debugf("inserting entry: %+v", entry.Hash)
+	// 	id, err := db.ItemDataCollection().InsertyByEntry(entry)
+	// 	if err != nil {
+	// 		log.Error("error: ", err)
+	// 	}
+	// 	log.Debugf("id returned: %v", id)
+	// }
 
-		for _, entry := range itemXmlExport {
-			log.Debugf("inserting entry: %+v", entry.Hash)
-			id, err := db.ItemXmlCollection().InsertyByEntry(entry)
-			if err != nil {
-				log.Error("error: ", err)
-			}
-			log.Debugf("id returned: %v", id)
-		}
+	// for _, entry := range itemXmlExport {
+	// 	log.Debugf("inserting entry: %+v", entry.Hash)
+	// 	id, err := db.ItemXmlCollection().InsertyByEntry(entry)
+	// 	if err != nil {
+	// 		log.Error("error: ", err)
+	// 	}
+	// 	log.Debugf("id returned: %v", id)
+	// }
 
-	}
+	// }
 
 	poddb.DumpCollections(filepath.Join(defaultworking, ".dbexport"))
 }
@@ -74,9 +74,9 @@ func tryFetch(db *poddb.PodDB) {
 	var (
 		err        error
 		id         string
-		emptyFeed  pod.FeedDBEntry
-		feedById   pod.FeedDBEntry
-		feedByHash pod.FeedDBEntry
+		emptyFeed  pod.FeedXmlDBEntry
+		feedById   pod.FeedXmlDBEntry
+		feedByHash pod.FeedXmlDBEntry
 		//itemlist  pod.ItemListDBEntry
 
 		arm = struct {
@@ -127,9 +127,9 @@ func tryItemFetch(db *poddb.PodDB) {
 	var (
 		err        error
 		id         string
-		emptyItem  pod.ItemXmlDBEntry_Clover
-		itemById   pod.ItemXmlDBEntry_Clover
-		itemByHash pod.ItemXmlDBEntry_Clover
+		emptyItem  pod.ItemXmlDBEntry
+		itemById   pod.ItemXmlDBEntry
+		itemByHash pod.ItemXmlDBEntry
 		//itemlist  pod.ItemListDBEntry
 
 		// allItems []*pod.ItemDBEntry
@@ -193,7 +193,7 @@ func tryItemFetchMulti(db *poddb.PodDB) {
 	)
 
 	fn := func() any {
-		return &pod.ItemXmlDBEntry_Clover{}
+		return &pod.ItemXmlDBEntry{}
 	}
 
 	entryList, err = db.ItemXmlCollection().FetchAll(fn)
@@ -203,7 +203,7 @@ func tryItemFetchMulti(db *poddb.PodDB) {
 	log.Debug("count: ", len(entryList))
 	for _, e := range entryList {
 
-		var newItem = e.Entry.(*pod.ItemXmlDBEntry_Clover)
+		var newItem = e.Entry.(*pod.ItemXmlDBEntry)
 
 		log.Debugf("\nid:'%v' entry:'%v'(%v)\n", e.ID, newItem.Hash, newItem.ItemXml.Pubdate)
 	}
@@ -223,7 +223,7 @@ func tryItemFetchMultiQuery(db *poddb.PodDB) {
 	)
 
 	fn := func() any {
-		return &pod.ItemXmlDBEntry_Clover{}
+		return &pod.ItemXmlDBEntry{}
 	}
 
 	var opt = clover.SortOption{Field: "XmlItemData.Pubdate", Direction: -1}
@@ -237,7 +237,7 @@ func tryItemFetchMultiQuery(db *poddb.PodDB) {
 	log.Debug("count: ", len(entryList))
 	for _, e := range entryList {
 
-		var newItem = e.Entry.(*pod.ItemXmlDBEntry_Clover)
+		var newItem = e.Entry.(*pod.ItemXmlDBEntry)
 
 		log.Debugf("\nid:'%v' entry:'%v'(%v)\n", e.ID, newItem.Hash, newItem.ItemXml.Pubdate)
 	}

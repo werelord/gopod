@@ -3,6 +3,8 @@ package pod
 import (
 	"errors"
 	"fmt"
+	"gopod/podconfig"
+	"gopod/poddb"
 	"gopod/podutils"
 	"net/url"
 	"path"
@@ -19,20 +21,18 @@ import (
 
 // exported fields for database in feed list
 type Item struct {
-	// golang GC apparently doesn't have problems with circular references
-	parent *Feed
-
 	Hash string
-
 	ItemData
-
+	itemInternal
 	xmlData *podutils.XItemData
 }
 
-// stuff exported with the feed database (item list)
-type ItemDataOld struct {
-	Hash string
-	ItemData
+type itemInternal struct {
+	parentShortname string // for logging purposes
+	db              *poddb.PodDB
+
+	dbDataId string // references the id for the data entry in the db
+	dbXmlId  string // references the id for the xml entry in the db
 }
 
 type ItemData struct {
@@ -43,19 +43,12 @@ type ItemData struct {
 	PubTimeStamp time.Time
 }
 
-// exported fields for each item - scribble use
-type ItemExportScribble struct {
-	Hash        string
-	ItemXmlData podutils.XItemData
-}
-
-type ItemDataDBEntry_Clover struct {
+type ItemDataDBEntry struct {
 	Hash     string
 	ItemData ItemData
 }
 
-// todo: merge export into this
-type ItemXmlDBEntry_Clover struct {
+type ItemXmlDBEntry struct {
 	Hash    string
 	ItemXml podutils.XItemData
 }
@@ -67,27 +60,31 @@ func (i Item) Format(fs fmt.State, c rune) {
 	fs.Write([]byte(str))
 }
 
-func CreateNewItemEntry(f *Feed, hash string, xmlData *podutils.XItemData) (*Item, error) {
+// --------------------------------------------------------------------------
+func CreateNewItemEntry(parentConfig podconfig.FeedToml,
+	db *poddb.PodDB,
+	hash string,
+	xmlData *podutils.XItemData) (*Item, error) {
 	// new entry, xml coming from feed directly
 	// if this is loaded from the database, ItemExport should be nil
 
 	item := Item{
-		parent:  f,
 		Hash:    hash,
 		xmlData: xmlData,
 		// rest generated below
 	}
 
+	item.db = db
 	item.PubTimeStamp = xmlData.Pubdate
 
 	// parse url
-	if err := item.parseUrl(); err != nil {
+	if err := item.parseUrl(parentConfig.UrlParse); err != nil {
 		log.Error("failed parsing url: ", err)
 		return nil, err
-	} else if err := item.generateFilename(); err != nil {
+	} else if err := item.generateFilename(parentConfig); err != nil {
 		log.Error("failed to generate filename:", err)
 		// to make sure we can continue, shortname.uuid.mp3
-		item.Filename = f.Shortname + "." + strings.ReplaceAll(uuid.NewString(), "-", "") + ".mp3"
+		item.Filename = parentConfig.Shortname + "." + strings.ReplaceAll(uuid.NewString(), "-", "") + ".mp3"
 	}
 
 	// everything should be set
@@ -96,8 +93,9 @@ func CreateNewItemEntry(f *Feed, hash string, xmlData *podutils.XItemData) (*Ite
 }
 
 // --------------------------------------------------------------------------
-func (i *Item) parseUrl() (err error) {
+func (i *Item) parseUrl(urlparse string) (err error) {
 
+	log.Trace("here")
 	var urlstr = i.xmlData.Enclosure.Url
 
 	u, err := url.ParseRequestURI(urlstr)
@@ -111,15 +109,15 @@ func (i *Item) parseUrl() (err error) {
 	u.Fragment = ""
 
 	// handle url parsing, if needed
-	if i.parent.UrlParse != "" {
+	if urlparse != "" {
 		// assuming host is direct domain..
-		trim := strings.SplitAfterN(u.Path, i.parent.UrlParse, 2)
+		trim := strings.SplitAfterN(u.Path, urlparse, 2)
 		if len(trim) == 2 {
-			u.Host = i.parent.UrlParse
+			u.Host = urlparse
 			u.Path = trim[1]
 		} else {
 			log.Warn("failed parsing url; split failed")
-			log.Warnf("url: '%v' UrlParse: '%v'", u.String(), i.parent.UrlParse)
+			log.Warnf("url: '%v' UrlParse: '%v'", u.String(), urlparse)
 		}
 	}
 
@@ -129,29 +127,30 @@ func (i *Item) parseUrl() (err error) {
 }
 
 // --------------------------------------------------------------------------
-func (i *Item) generateFilename() error {
+func (i *Item) generateFilename(cfg podconfig.FeedToml) error {
 	// check to see if we neeed to parse.. simple search/replace
 
 	// verify that export data is not null
 
 	// todo: need to check for filename collisions!! fucking shit
 
+	log.Trace("here")
+
 	if i.xmlData == nil {
 		return errors.New("item xml data is nil")
 	}
 
 	var (
-		feed    = i.parent
 		xmldata = i.xmlData
 	)
 
-	if feed.FilenameParse != "" {
-		newstr := feed.FilenameParse
+	if cfg.FilenameParse != "" {
+		newstr := cfg.FilenameParse
 
-		if strings.Contains(feed.FilenameParse, "#shortname#") {
-			newstr = strings.Replace(newstr, "#shortname#", feed.Shortname, 1)
+		if strings.Contains(newstr, "#shortname#") {
+			newstr = strings.Replace(newstr, "#shortname#", cfg.Shortname, 1)
 		}
-		if strings.Contains(feed.FilenameParse, "#linkfinalpath#") {
+		if strings.Contains(newstr, "#linkfinalpath#") {
 			// get the final path portion from the link url
 
 			if u, err := url.Parse(xmldata.Link); err == nil {
@@ -163,21 +162,22 @@ func (i *Item) generateFilename() error {
 			}
 		}
 
-		if strings.Contains(feed.FilenameParse, "#episode#") {
+		// todo: deprecate this; instead of using #episode#, maintain an episode count within the db
+		if strings.Contains(newstr, "#episode#") {
 			var padLen = 3
-			if feed.EpisodePad > 0 {
-				padLen = feed.EpisodePad
+			if cfg.EpisodePad > 0 {
+				padLen = cfg.EpisodePad
 			}
 			rep := xmldata.EpisodeStr
 			//------------------------------------- DEBUG -------------------------------------
-			if config.Debug && feed.Shortname == "russo" {
+			if config.Debug && cfg.Shortname == "russo" {
 				// grab the episode from the title, as the numbers don't match for these
 				r, _ := regexp.Compile("The Russo-Souhan Show ([0-9]*) - ")
 				eps := r.FindStringSubmatch(xmldata.Title)
 				if len(eps) == 2 {
 					rep = eps[1]
 				}
-			} else if config.Debug && feed.Shortname == "dfo" {
+			} else if config.Debug && cfg.Shortname == "dfo" {
 				var catch = []string{"61", "60"}
 				if slices.Contains(catch, xmldata.EpisodeStr) {
 					r, _ := regexp.Compile("E[p|P]. ([0-9]*):.*")
@@ -190,7 +190,7 @@ func (i *Item) generateFilename() error {
 					}
 				}
 
-			} else if config.Debug && feed.Shortname == "jjgo" {
+			} else if config.Debug && cfg.Shortname == "jjgo" {
 				skipList := []string{"Maximum Fun Drive: May 15th-31st",
 					"Shootin' the Bries - Episode 2",
 					"Ashkon - Soldier Boy",
@@ -236,7 +236,7 @@ func (i *Item) generateFilename() error {
 			if rep == "" {
 				//------------------------------------- DEBUG -------------------------------------
 				// hack.. don't like this specific, but fuck it
-				if feed.Shortname == "dfo" {
+				if cfg.Shortname == "dfo" {
 					if r, err := regexp.Compile("([0-9]+)"); err == nil {
 						matchslice := r.FindStringSubmatch(xmldata.Title)
 						if len(matchslice) > 0 && matchslice[len(matchslice)-1] != "" {
@@ -259,13 +259,13 @@ func (i *Item) generateFilename() error {
 			newstr = strings.Replace(newstr, "#episode#", podutils.CleanFilename(rep), 1)
 		}
 
-		if strings.Contains(feed.FilenameParse, "#date#") {
+		if strings.Contains(newstr, "#date#") {
 			// date format YYYYMMDD
 			newstr = strings.Replace(newstr, "#date#", xmldata.Pubdate.Format("20060102_150405"), 1)
 		}
 
-		if strings.Contains(feed.FilenameParse, "#titleregex:") {
-			if parsed, err := i.titleSubmatchRegex(feed.Regex, newstr, xmldata.Title); err != nil {
+		if strings.Contains(newstr, "#titleregex:") {
+			if parsed, err := i.titleSubmatchRegex(cfg.Regex, newstr, xmldata.Title); err != nil {
 				log.Error("failed parsing title:", err)
 				return err
 			} else {
@@ -273,10 +273,10 @@ func (i *Item) generateFilename() error {
 			}
 		}
 
-		if strings.Contains(feed.FilenameParse, "#urlfilename#") {
+		if strings.Contains(newstr, "#urlfilename#") {
 			// for now, only applies to urlfilename
 			var urlfilename = path.Base(i.Url)
-			if feed.SkipFileTrim == false {
+			if cfg.SkipFileTrim == false {
 				urlfilename = podutils.CleanFilename(urlfilename)
 			}
 			newstr = strings.Replace(newstr, "#urlfilename#", urlfilename, 1)
@@ -304,8 +304,14 @@ func (i *Item) generateFilename() error {
 }
 
 // --------------------------------------------------------------------------
-func (i *Item) saveItemXml() (err error) {
-	log.Infof("saving xmldata for %v{%v}, (%v)", i.Filename, i.Hash, i.parent.Shortname)
+func (i Item) saveItemData() error {
+	// todo: this
+	return errors.New("not implemented")
+}
+
+// --------------------------------------------------------------------------
+func (i Item) saveItemXml() (err error) {
+	log.Infof("saving xmldata for %v{%v}, (%v)", i.Filename, i.Hash, i.parentShortname)
 
 	if i.xmlData == nil {
 		return errors.New("xml data is nil, cannot save")
@@ -316,27 +322,23 @@ func (i *Item) saveItemXml() (err error) {
 		return nil
 	}
 
-	// make sure db is init
-	i.parent.initDB()
+	return errors.New("not implemented")
 
-	jsonFile := strings.TrimSuffix(i.Filename, filepath.Ext(i.Filename))
+	// todo: this
+	/*
+		// make sure db is init
+		i.parent.initDB()
 
-	var export ItemExportScribble
-	export.Hash = i.Hash
-	export.ItemXmlData = *i.xmlData
+		jsonFile := strings.TrimSuffix(i.Filename, filepath.Ext(i.Filename))
 
-	if e := i.parent.db.Write("items", jsonFile, export); e != nil {
-		log.Error("failed to write database file: ", e)
-		return e
-	}
+		var export ItemExportScribble
+		export.Hash = i.Hash
+		export.ItemXmlData = *i.xmlData
 
-	return nil
+		if e := i.parent.db.Write("items", jsonFile, export); e != nil {
+			log.Error("failed to write database file: ", e)
+			return e
+		}
+		return nil
+		*/
 }
-
-// todo: add loading item xml data, when needed
-// func (i ItemData) loadItemXml() error {
-
-// 	i.parent.initDB()
-
-// 	if e := i.parent.db.Read("items", )
-// }

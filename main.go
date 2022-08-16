@@ -80,7 +80,7 @@ func main() {
 	}
 
 	//	const RunTest = true
-	if true {
+	if false {
 		migratedbs(feedMap, filepath.Join(filepath.Dir(cmdline.ConfigFile), ".db"))
 		return
 	}
