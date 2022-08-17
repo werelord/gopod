@@ -82,7 +82,7 @@ func (f *Feed) initFeed(cfg *podconfig.Config) error {
 	}
 
 	config = cfg
-	xmlFilePath := filepath.Join(config.WorkspaceDir, ".xml")
+	xmlFilePath := filepath.Join(config.WorkspaceDir, f.Shortname, ".xml")
 	f.mp3Path = filepath.Join(config.WorkspaceDir, f.Shortname)
 
 	// todo: error propegation
@@ -120,7 +120,7 @@ func (f *Feed) initDB() error {
 
 		// load feed info
 		feedXml := FeedXmlDBEntry{
-			Hash: podutils.GenerateHash(f.Shortname),
+			Hash: f.generateHash(),
 		}
 
 		if id, err = f.db.FeedCollection().FetchByEntry(&feedXml); err != nil {
@@ -147,6 +147,11 @@ func (f *Feed) initDB() error {
 	}
 
 	return nil
+}
+
+// --------------------------------------------------------------------------
+func (f Feed) generateHash() string {
+	return podutils.GenerateHash(f.Shortname)
 }
 
 // --------------------------------------------------------------------------
@@ -190,7 +195,6 @@ func (f *Feed) loadItemEntries() error {
 		}
 		f.itemlist[item.Hash] = item
 	}
-
 
 	return nil
 
@@ -318,23 +322,31 @@ func (f *Feed) Update() error {
 		return err
 	}
 
-	return errors.New("todo: continue from here")
-
 	var (
 		body       []byte
 		err        error
 		newXmlData *podutils.XChannelData
 		newItems   []*Item
 	)
-	// download file
-	if body, err = podutils.Download(f.Url); err != nil {
-		log.Error("failed to download: ", err)
+
+	if config.UseMostRecentXml {
+		body, err = f.loadMostRecentXml()
+	} else {
+		body, err = f.downloadFeedXml()
+	}
+	if err != nil {
+		log.Error("error in download: ", err)
+		return err
+	} else if len(body) == 0 {
+		err = fmt.Errorf("body length is zero")
+		log.Error(err)
 		return err
 	}
 
+	// todo: break this up some more
+
 	var itemList *orderedmap.OrderedMap[string, podutils.XItemData]
 	newXmlData, itemList, err = podutils.ParseXml(body, f)
-
 	if err != nil {
 		if errors.Is(err, podutils.ParseCanceledError{}) {
 			log.Info("parse cancelled: ", err)
@@ -410,7 +422,27 @@ func (f *Feed) Update() error {
 	f.processNew(newItems)
 
 	return nil
+}
 
+// --------------------------------------------------------------------------
+func (f Feed) downloadFeedXml() (body []byte, err error) {
+	// download file
+	if body, err = podutils.Download(f.Url); err != nil {
+		log.Error("failed to download: ", err)
+	}
+	return
+}
+
+// --------------------------------------------------------------------------
+func (f Feed) loadMostRecentXml() (body []byte, err error) {
+	// find the most recent xml based on the glob pattern
+	filename, err := podutils.FindMostRecent(filepath.Dir(f.xmlfile), fmt.Sprintf("%v.*.xml", f.Shortname))
+	if err != nil {
+		return nil, err
+	}
+	log.Debug("loading xml file: ", filename)
+
+	return podutils.LoadFile(filename)
 }
 
 // --------------------------------------------------------------------------
@@ -422,7 +454,7 @@ func (f Feed) saveAndRotateXml(body []byte, shouldRotate bool) {
 	} else if shouldRotate && config.XmlFilesRetained > 0 {
 		log.Debug("rotating xml files..")
 		podutils.RotateFiles(filepath.Dir(f.xmlfile),
-			fmt.Sprintf("%v.([0-9]{8}_[0-9]{6})|(DEBUG).xml", f.Shortname),
+			fmt.Sprintf("%v.*.xml", f.Shortname),
 			uint(config.XmlFilesRetained))
 	}
 }

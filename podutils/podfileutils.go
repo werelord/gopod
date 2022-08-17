@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/flytam/filenamify"
 	log "github.com/sirupsen/logrus"
@@ -72,6 +74,9 @@ func RotateFiles(path, pattern string, numToKeep uint) error {
 
 	if filelist, err = filepath.Glob(fp); err != nil {
 		return err
+	} else if filelist == nil {
+		// todo: need to test this; does glob return an error if there are no files??
+		return errors.New("no files found")
 	}
 
 	// make sure we have any to remove
@@ -91,6 +96,40 @@ func RotateFiles(path, pattern string, numToKeep uint) error {
 	}
 
 	return nil
+}
+
+// --------------------------------------------------------------------------
+func FindMostRecent(path, pattern string) (string, error) {
+	// glob uses fstat, but just returns the filename.. walkdir is beter
+
+	latestFile := struct {
+		t        time.Time
+		filename string
+	}{}
+
+	if err := filepath.WalkDir(path,
+		func(path string, d fs.DirEntry, err error) error {
+			if d.IsDir() == false {
+				if fi, err := d.Info(); err != nil {
+					log.Warnf("info returned error: ", err)
+				} else if match, err := filepath.Match(pattern, fi.Name()); err != nil {
+					log.Warnf("match returned error: ", err)
+				} else if match == true {
+					// check timestamp
+					if fi.ModTime().After(latestFile.t) {
+						latestFile.t = fi.ModTime()
+						latestFile.filename = fi.Name()
+					}
+				}
+			}
+			return nil
+		},
+	); err != nil {
+		log.Warnf("walkdir returned error: ", err)
+	} else if latestFile.t.IsZero() || latestFile.filename == "" {
+		return "", errors.New("unable to find file")
+	}
+	return filepath.Join(path, latestFile.filename), nil
 }
 
 // --------------------------------------------------------------------------

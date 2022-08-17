@@ -28,7 +28,7 @@ func (cmd CommandType) Format(fs fmt.State, c rune) {
 	fs.Write([]byte(cmdMap[cmd]))
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 type CommandLine struct {
 	ConfigFile    string
 	Command       CommandType
@@ -39,12 +39,13 @@ type CommandLine struct {
 }
 
 type CommandLineOptions struct {
-	Debug       bool
-	Simulate    bool
-	ForceUpdate bool
+	Debug            bool
+	Simulate         bool
+	ForceUpdate      bool
+	UseMostRecentXml bool
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func InitCommandLine(defaultConfig string) (*CommandLine, error) {
 
 	var c CommandLine
@@ -86,7 +87,7 @@ func InitCommandLine(defaultConfig string) (*CommandLine, error) {
 	return &c, nil
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (c *CommandLine) buildOptions(defaultConfig string) *getoptions.GetOpt {
 	opt := getoptions.New()
 	opt.SetUnknownMode(getoptions.Pass)
@@ -110,6 +111,8 @@ func (c *CommandLine) buildOptions(defaultConfig string) *getoptions.GetOpt {
 		opt.Description("Simulate; will not download items or save database"))
 	updateCommand.BoolVar(&c.ForceUpdate, "force", false,
 		opt.Description("force update on xml and items (will process everything in feed"))
+	updateCommand.BoolVar(&c.UseMostRecentXml, "use-recent", false, opt.Alias("use-recent-xml"),
+		opt.Description("Use the most recent feed xml file fetched rather than checking for new; if recent doesn't exist, will still download.  Note: if there are no errors on previous run, will likely do nothing unless --force is specified"))
 	updateCommand.SetCommandFn(c.generateCmdFunc(Update))
 
 	checkcommand := opt.NewCommand("checkdownloads", "check downloads of files")
@@ -119,7 +122,7 @@ func (c *CommandLine) buildOptions(defaultConfig string) *getoptions.GetOpt {
 	return opt
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (c *CommandLine) generateCmdFunc(t CommandType) getoptions.CommandFn {
 	fn := func(context.Context, *getoptions.GetOpt, []string) error {
 		//fmt.Printf("setting command to %v\n", t)
