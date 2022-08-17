@@ -13,6 +13,7 @@ import (
 	"gopod/poddb"
 	"gopod/podutils"
 
+	"github.com/ostafen/clover/v2"
 	log "github.com/sirupsen/logrus"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
@@ -64,76 +65,134 @@ var (
 // }
 
 // --------------------------------------------------------------------------
-func NewFeed(config *podconfig.Config, feedToml podconfig.FeedToml) *Feed {
+func NewFeed(config *podconfig.Config, feedToml podconfig.FeedToml) (*Feed, error) {
 	feed := Feed{FeedToml: feedToml}
-	feed.InitFeed(config)
-	return &feed
+	if err := feed.initFeed(config); err != nil {
+		log.Error("Failed to init feed: ", err)
+		return nil, err
+	}
+	return &feed, nil
 }
 
 // --------------------------------------------------------------------------
-func (f *Feed) InitFeed(cfg *podconfig.Config) {
+func (f *Feed) initFeed(cfg *podconfig.Config) error {
 
 	if len(f.Shortname) == 0 {
 		f.Shortname = f.Name
 	}
 
 	config = cfg
-	xmlFilePath := filepath.Join(config.Workspace, ".xml")
-	f.mp3Path = filepath.Join(config.Workspace, f.Shortname)
+	xmlFilePath := filepath.Join(config.WorkspaceDir, ".xml")
+	f.mp3Path = filepath.Join(config.WorkspaceDir, f.Shortname)
 
 	// todo: error propegation
 
 	// attempt create the dirs
 	if err := podutils.MkDirAll(xmlFilePath); err != nil {
 		log.Error("error making xml directory: ", err)
-		return
+		return err
 	}
 	if err := podutils.MkDirAll(f.mp3Path); err != nil {
 		log.Error("error making mp3 directory: ", err)
-		return
+		return err
 	}
 
 	f.xmlfile = filepath.Join(xmlFilePath, f.Shortname+"."+config.TimestampStr+".xml")
 	f.itemlist = make(map[string]*Item)
 
-	// todo: error check on this
-	f.initDB()
+	return nil
 }
 
 // --------------------------------------------------------------------------
 func (f *Feed) initDB() error {
 
-	/*
-		// todo: this
+	if f.dbinitialized == false {
+		var (
+			err error
+			id  string
+		)
 
-		if f.dbinitialized == false {
-			log.Infof("{%v} initializing feed db, path: %v", f.Shortname, f.dbPath)
-			var e error
-			f.db, e = scribble.New(f.dbPath, nil)
-			if e != nil {
-				log.Error("Error init db: ", e)
-				return
-			}
-
-			feedImport := FeedDBExportScribble{Feed: f}
-
-			// load feed information
-			if e := f.db.Read("./", "feed", &feedImport); e != nil {
-				if errors.Is(e, fs.ErrNotExist) {
-					log.Info("file doesn't exist; likely new feed")
-				} else {
-					log.Warn("error reading feed info:", e)
-					return
-				}
-			}
-
-			f.itemlist = toOrderedMap(f, feedImport.ItemEntryList)
-
-			f.dbinitialized = true
+		log.Infof("{%v} initializing feed db", f.Shortname)
+		if f.db, err = poddb.NewDB(f.Shortname); err != nil {
+			log.Error("failed creating db: ", err)
+			return err
 		}
 
-	*/
-	return errors.New("not Implemented")
+		// load feed info
+		feedXml := FeedXmlDBEntry{
+			Hash: podutils.GenerateHash(f.Shortname),
+		}
+
+		if id, err = f.db.FeedCollection().FetchByEntry(&feedXml); err != nil {
+			log.Error("failed fetching feed xml: ", err)
+			return err
+			// data integrity checks
+		} else if id == "" {
+			return errors.New("feed id is missing")
+		} else if feedXml.XmlFeedData.Title == "" {
+			return fmt.Errorf("feed title missing, id: '%v'", id)
+		}
+
+		f.dbXmlId = id
+		f.XMLFeedData = feedXml.XmlFeedData
+
+		log.Debugf("feed info fetched: %v (%v) ", f.XMLFeedData.Title, f.dbXmlId)
+
+		if err = f.loadItemEntries(); err != nil {
+			log.Error("failed loading item entries: ", err)
+			return err
+		}
+
+		f.dbinitialized = true
+	}
+
+	return nil
+}
+
+// --------------------------------------------------------------------------
+func (f *Feed) loadItemEntries() error {
+
+	var (
+		err       error
+		dbEntries []poddb.DBEntry
+	)
+
+	// load itemlist.. if force is enabled, load everything..
+	// otherwise limit to numdupcheck * relative amount
+	if config.ForceUpdate {
+		// the list is not sorted, so don't worry about that
+		log.Debug("loading all items (force == true)")
+		dbEntries, err = f.db.ItemDataCollection().FetchAll(createItemDataDBEntry)
+	} else {
+		var limit = config.MaxDupChecks * 2
+		var opt = clover.SortOption{Field: "ItemData.PubTimeStamp", Direction: -1}
+		q := f.db.ItemDataCollection().NewQuery().Sort(opt).Limit(limit)
+		log.Debugf("loading %v items sorted by pubdated", limit)
+		dbEntries, err = f.db.ItemDataCollection().FetchAllWithQuery(createItemDataDBEntry, q)
+	}
+
+	if err != nil {
+		log.Error("Failed to get item data from db: ", err)
+		return err
+	} else if len(dbEntries) == 0 {
+		log.Warn("unable to get db entries; list is empty (new feed?)")
+	}
+
+	for _, entry := range dbEntries {
+		var item *Item
+		if item, err = loadFromDBEntry(entry); err != nil {
+			log.Error("failed to load item data: ", err)
+			// if this fails, something is wrong
+			return err
+		}
+		if _, exists := f.itemlist[item.Hash]; exists == true {
+			log.Warn("Duplicate item found; wtf")
+		}
+		f.itemlist[item.Hash] = item
+	}
+
+
+	return nil
 
 }
 
@@ -251,11 +310,15 @@ func (f Feed) saveDB() (err error) {
 }
 
 // --------------------------------------------------------------------------
-func (f *Feed) Update() {
+func (f *Feed) Update() error {
 
-	// make sure db is initialized
-	// todo: error check on this
-	f.initDB()
+	// make sure db is loaded
+	if err := f.initDB(); err != nil {
+		log.Error("failed to init db: ", err)
+		return err
+	}
+
+	return errors.New("todo: continue from here")
 
 	var (
 		body       []byte
@@ -266,7 +329,7 @@ func (f *Feed) Update() {
 	// download file
 	if body, err = podutils.Download(f.Url); err != nil {
 		log.Error("failed to download: ", err)
-		return
+		return err
 	}
 
 	var itemList *orderedmap.OrderedMap[string, podutils.XItemData]
@@ -275,13 +338,13 @@ func (f *Feed) Update() {
 	if err != nil {
 		if errors.Is(err, podutils.ParseCanceledError{}) {
 			log.Info("parse cancelled: ", err)
-			return
+			return nil // this is not an error, just a shortcut
 		} else {
 			// not canceled; some other error.. exit
 			log.Error("failed to parse xml: ", err)
 			// save the file (don't rotate) for future examination
 			f.saveAndRotateXml(body, false)
-			return
+			return err
 		}
 	}
 
@@ -316,7 +379,7 @@ func (f *Feed) Update() {
 			}
 		}
 
-		if itemdata, itemerror = CreateNewItemEntry(f.FeedToml, f.db, hash, &xmldata); itemerror != nil {
+		if itemdata, itemerror = createNewItemEntry(f.FeedToml, f.db, hash, &xmldata); itemerror != nil {
 			// new entry, create it
 			log.Error("failed creating new item entry; skipping: ", itemerror)
 			continue
@@ -336,6 +399,8 @@ func (f *Feed) Update() {
 
 	}
 
+	// todo: more error checking here
+
 	f.saveDB()
 
 	// todo: need to check filename collissions
@@ -343,6 +408,8 @@ func (f *Feed) Update() {
 	// process new entries
 	// todo: move this outside update (likely on goroutine implementation)
 	f.processNew(newItems)
+
+	return nil
 
 }
 
@@ -422,6 +489,7 @@ func (f Feed) CancelOnBuildDate(xmlBuildDate time.Time) (cont bool) {
 func (f *Feed) processNew(newItems []*Item) {
 
 	//------------------------------------- DEBUG -------------------------------------
+	// todo: skipRemaining can be removed when archived flag is set (downloaded == true && fileExists == false)
 	var skipRemaining = false
 	//------------------------------------- DEBUG -------------------------------------
 

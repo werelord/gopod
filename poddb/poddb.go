@@ -39,8 +39,6 @@ type DBEntry struct {
 	Entry any
 }
 
-type GeneratorFunc func() any
-
 func (d PodDB) FeedCollection() Collection {
 	return d.feedColl
 }
@@ -233,13 +231,13 @@ func (c Collection) FetchById(id string, value any) (string, error) {
 	return doc.ObjectId(), nil
 }
 
-func (c Collection) FetchAll(fn GeneratorFunc) (entryList []DBEntry, err error) {
+func (c Collection) FetchAll(fn func() any) (entryList []DBEntry, err error) {
 
 	return c.FetchAllWithQuery(fn, clover.NewQuery(c.name))
 }
 
 // --------------------------------------------------------------------------
-func (c Collection) FetchAllWithQuery(fn GeneratorFunc, q *clover.Query) (entryList []DBEntry, err error) {
+func (c Collection) FetchAllWithQuery(fn func() any, q *clover.Query) (entryList []DBEntry, err error) {
 	var (
 		db   *clover.DB
 		docs []*clover.Document

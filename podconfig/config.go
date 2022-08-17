@@ -11,18 +11,18 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 type Config struct {
 	MaxDupChecks     int `toml:"dupcheckmax"`
 	XmlFilesRetained int `toml:"xmlfilesretained"`
-	Workspace        string
+	WorkspaceDir     string
 	Timestamp        time.Time
 	TimestampStr     string
 	// add in commandline options explicitly
 	commandline.CommandLineOptions
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 type tomldocImport struct {
 	Config   Config     `toml:"config"`
 	Feedlist []FeedToml `toml:"feed"`
@@ -39,14 +39,14 @@ type FeedToml struct {
 	EpisodePad    int    `toml:"episodePad"`
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func LoadToml(filename string, timestamp time.Time) (*Config, *[]FeedToml, error) {
 
 	// todo: better handling of these objects (pointer?)
 	tomldoc := tomldocImport{}
 	tomldoc.Config.Timestamp = timestamp
 	tomldoc.Config.TimestampStr = timestamp.Format("20060102_150405")
-	tomldoc.Config.Workspace = filepath.Dir(filename)
+	tomldoc.Config.WorkspaceDir = filepath.Dir(filename)
 
 	// defaults, if not defined in config
 	tomldoc.Config.MaxDupChecks = 3

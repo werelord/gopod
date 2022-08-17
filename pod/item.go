@@ -23,14 +23,16 @@ import (
 type Item struct {
 	Hash string
 	ItemData
+
 	itemInternal
+
 	xmlData *podutils.XItemData
 }
 
 type itemInternal struct {
 	parentShortname string // for logging purposes
-	db              *poddb.PodDB
 
+	db       *poddb.PodDB
 	dbDataId string // references the id for the data entry in the db
 	dbXmlId  string // references the id for the xml entry in the db
 }
@@ -61,19 +63,17 @@ func (i Item) Format(fs fmt.State, c rune) {
 }
 
 // --------------------------------------------------------------------------
-func CreateNewItemEntry(parentConfig podconfig.FeedToml,
+func createNewItemEntry(parentConfig podconfig.FeedToml,
 	db *poddb.PodDB,
 	hash string,
 	xmlData *podutils.XItemData) (*Item, error) {
 	// new entry, xml coming from feed directly
 	// if this is loaded from the database, ItemExport should be nil
 
-	item := Item{
-		Hash:    hash,
-		xmlData: xmlData,
-		// rest generated below
-	}
+	item := Item{}
 
+	item.Hash = hash
+	item.xmlData = xmlData
 	item.db = db
 	item.PubTimeStamp = xmlData.Pubdate
 
@@ -88,6 +88,36 @@ func CreateNewItemEntry(parentConfig podconfig.FeedToml,
 	}
 
 	// everything should be set
+
+	return &item, nil
+}
+
+// --------------------------------------------------------------------------
+func createItemDataDBEntry() any {
+	// new db entry used for db queries
+	return &ItemDataDBEntry{}
+}
+
+// --------------------------------------------------------------------------
+func loadFromDBEntry(entry poddb.DBEntry) (*Item, error) {
+	item := Item{}
+
+	item.dbDataId = entry.ID
+	e, ok := entry.Entry.(*ItemDataDBEntry)
+	if ok == false {
+		return nil, errors.New("failed loading item; db entry is not *ItemDataDBEntry")
+	}
+	item.Hash = e.Hash
+	item.ItemData = e.ItemData
+
+	// sanity check
+	if item.Hash == "" {
+		return nil, errors.New("failed loading item; hash is empty")
+	} else if item.Filename == "" {
+		return nil, errors.New("failed loading item; filename is empty (db corrupt?)")
+	}
+
+	log.Debugf("Item Loaded: %v", item)
 
 	return &item, nil
 }
@@ -340,5 +370,5 @@ func (i Item) saveItemXml() (err error) {
 			return e
 		}
 		return nil
-		*/
+	*/
 }

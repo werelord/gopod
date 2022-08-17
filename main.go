@@ -75,7 +75,11 @@ func main() {
 	// move feedlist into shortname map
 	feedMap = make(map[string]*pod.Feed)
 	for _, feedtoml := range *feedList {
-		f := pod.NewFeed(config, feedtoml)
+		f, err := pod.NewFeed(config, feedtoml)
+		if err != nil {
+			log.Error("failed to create new feed: ", err)
+			continue
+		}
 		feedMap[f.Shortname] = f
 	}
 
