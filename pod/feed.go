@@ -185,7 +185,7 @@ func (f *Feed) loadItemEntries() error {
 
 	for _, entry := range dbEntries {
 		var item *Item
-		if item, err = loadFromDBEntry(entry); err != nil {
+		if item, err = loadFromDBEntry(f.FeedToml, f.db, entry); err != nil {
 			log.Error("failed to load item data: ", err)
 			// if this fails, something is wrong
 			return err
@@ -278,38 +278,33 @@ func (f *Feed) loadItemEntries() error {
 // }
 
 // --------------------------------------------------------------------------
-func (f Feed) saveDB() (err error) {
+func (f Feed) saveFeedDb() (err error) {
 
 	log.Info("Saving db for ", f.Shortname)
 
-	// todo: this
+	// make sure we have an ID
+	if f.dbXmlId == "" {
+		log.Warn("saving feed xml; but id is empty; this shouldn't happen")
+	}
 
 	if config.Simulate {
 		log.Info("skipping saving database due to sim flag")
 		return
 	}
 
-	// make sure database is initialized
-	// f.initDB()
-	// var feedExport_scribble FeedDBExportScribble
+	entry := FeedXmlDBEntry{
+		Hash:        f.generateHash(),
+		XmlFeedData: f.XMLFeedData,
+	}
 
-	// feedExport_scribble.Feed = &f
-	// for pair := f.itemlist.Oldest(); pair != nil; pair = pair.Next() {
-
-	// 	// convert to scribble format
-	// 	entry := ItemDataOld{
-	// 		Hash:     pair.Value.Hash,
-	// 		ItemData: pair.Value.ItemData,
-	// 	}
-
-	// 	feedExport_scribble.ItemEntryList = append(feedExport_scribble.ItemEntryList, &entry)
-	// }
-
-	// if e := f.db.Write("./", "feed", feedExport_scribble); e != nil {
-	// 	log.Error("failed to write database file: ", e)
-	// 	return e
-	// }
-
+	id, err := f.db.FeedCollection().InsertyById(f.dbXmlId, entry)
+	if err != nil {
+		return err
+	} else if id != f.dbXmlId {
+		err := errors.New("id returned from the db doesn't match previously stored")
+		log.Error("%v\nfid:'%v' != dbid:'%v'", err, f.dbXmlId, id)
+		return err
+	}
 	return nil
 }
 
@@ -361,9 +356,17 @@ func (f *Feed) Update() error {
 	}
 
 	// if we're at this point, save the new channel data (buildDate or PubDate has changed)
-	f.saveAndRotateXml(body, true)
+	// don't rotate on using most recent
+	if config.UseMostRecentXml == false {
+		f.saveAndRotateXml(body, true)
+	}
+
 	// future: comparison operations for feedData instead of direct insertion?
 	f.XMLFeedData = *newXmlData
+	if err = f.saveFeedDb(); err != nil {
+		log.Error("saving db failed: ", err)
+		// continue on..
+	}
 
 	// check url vs atom link & new feed url
 	// TODO: handle this
@@ -379,46 +382,55 @@ func (f *Feed) Update() error {
 		var (
 			hash      = pair.Key
 			xmldata   = pair.Value
-			itemdata  *Item
-			itemerror error
+			itemEntry *Item
+			exists    bool
 		)
 
-		if _, exists := f.itemlist[hash]; exists {
-			// if the old item exists, it will get replaced on setting this new item
+		if itemEntry, exists = f.itemlist[hash]; exists {
 			// this should only happen when force == true; log warning if this is not the case
 			if config.ForceUpdate == false {
 				log.Warn("hash for new item already exists and --force is not set; something is seriously wrong")
 			}
-		}
+			// we don't necessarily want to create and replace;
+			// just update the new data in the existing entry
 
-		if itemdata, itemerror = createNewItemEntry(f.FeedToml, f.db, hash, &xmldata); itemerror != nil {
+			// replace the existing xml data
+			// todo: deep copy comparison
+			itemEntry.updateXmlData(hash, &xmldata)
+
+		} else if itemEntry, err = createNewItemEntry(f.FeedToml, f.db, hash, &xmldata); err != nil {
 			// new entry, create it
-			log.Error("failed creating new item entry; skipping: ", itemerror)
+			log.Error("failed creating new item entry; skipping: ", err)
 			continue
 		}
 
-		log.Infof("adding new item: :%+v", itemdata)
-
-		// saving item xml
-		if err = itemdata.saveItemXml(); err != nil {
-			log.Error("saving xml daeta failed; skipping entry: ", err)
+		// saving item info.. only need to save data if this is a new item..
+		if exists == false {
+			if err = itemEntry.saveItemData(); err != nil {
+				log.Error("saving item data failed, skipping processing: ", err)
+				continue
+			}
+		}
+		if err = itemEntry.saveItemXml(); err != nil {
+			log.Error("saving item xml failed; skipping processing: ", err)
 			continue
 		}
 
-		f.itemlist[hash] = itemdata
+		log.Infof("item added: :%+v", itemEntry)
 
-		newItems = append(newItems, itemdata)
+		// add it to the entry list
+		f.itemlist[hash] = itemEntry
 
+		// add it to the new items needing processing
+		newItems = append(newItems, itemEntry)
 	}
 
 	// todo: more error checking here
-
-	f.saveDB()
-
 	// todo: need to check filename collissions
 
 	// process new entries
 	// todo: move this outside update (likely on goroutine implementation)
+
 	f.processNew(newItems)
 
 	return nil
@@ -587,9 +599,14 @@ func (f *Feed) processNew(newItems []*Item) {
 
 		log.Debug("finished downloading file: ", podfile)
 		item.Downloaded = true
+
+		// save the item data
+		if err := item.saveItemData(); err != nil {
+			log.Error("failed to save item data: ", err)
+		}
+
 	}
 
-	log.Info("all new downloads completed, saving db")
-	f.saveDB()
+	log.Info("all new downloads completed")
 
 }

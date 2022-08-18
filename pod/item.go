@@ -70,8 +70,11 @@ func createNewItemEntry(parentConfig podconfig.FeedToml,
 	// new entry, xml coming from feed directly
 	// if this is loaded from the database, ItemExport should be nil
 
+	// todo: nil checks
+
 	item := Item{}
 
+	item.parentShortname = parentConfig.Shortname
 	item.Hash = hash
 	item.xmlData = xmlData
 	item.db = db
@@ -99,8 +102,15 @@ func createItemDataDBEntry() any {
 }
 
 // --------------------------------------------------------------------------
-func loadFromDBEntry(entry poddb.DBEntry) (*Item, error) {
+func loadFromDBEntry(parentCfg podconfig.FeedToml, db *poddb.PodDB,
+	entry poddb.DBEntry) (*Item, error) {
+
 	item := Item{}
+
+	item.parentShortname = parentCfg.Shortname
+	item.db = db
+
+	// generate filename, parsedurl, etc loaded from db entry
 
 	item.dbDataId = entry.ID
 	e, ok := entry.Entry.(*ItemDataDBEntry)
@@ -333,18 +343,30 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml) error {
 	return nil
 }
 
-// --------------------------------------------------------------------------
-func (i Item) saveItemData() error {
-	// todo: this
-	return errors.New("not implemented")
+func (i *Item) updateXmlData(hash string, data *podutils.XItemData) {
+	
+	if i.Hash != hash {
+		log.Warn("Hashes do not match; something is wrong")
+		log.Warnf("itemhash:'%v' newhash:'%v'", i.Hash, hash)
+	}
+
+	// for now, just set the xml data
+	// todo : deep compare??
+	i.xmlData = data
+
+	// if the filename changes, this would be a new hash..
+	// if the guid changes it would be a new hash..
+	// no need to urlparse or regenerate filename
 }
 
 // --------------------------------------------------------------------------
-func (i Item) saveItemXml() (err error) {
-	log.Infof("saving xmldata for %v{%v}, (%v)", i.Filename, i.Hash, i.parentShortname)
+func (i *Item) saveItemData() error {
 
-	if i.xmlData == nil {
-		return errors.New("xml data is nil, cannot save")
+	log.Infof("saving item data for %v{%v}, (%v)", i.Filename, i.Hash, i.parentShortname)
+
+	// todo: sanity checks make sure data is loaded
+	if i.db == nil {
+		return errors.New("database is nil")
 	}
 
 	if config.Simulate {
@@ -352,23 +374,72 @@ func (i Item) saveItemXml() (err error) {
 		return nil
 	}
 
-	return errors.New("not implemented")
-
-	// todo: this
-	/*
-		// make sure db is init
-		i.parent.initDB()
-
-		jsonFile := strings.TrimSuffix(i.Filename, filepath.Ext(i.Filename))
-
-		var export ItemExportScribble
-		export.Hash = i.Hash
-		export.ItemXmlData = *i.xmlData
-
-		if e := i.parent.db.Write("items", jsonFile, export); e != nil {
-			log.Error("failed to write database file: ", e)
-			return e
+	var (
+		entry = ItemDataDBEntry{
+			Hash:     i.Hash,
+			ItemData: i.ItemData,
 		}
+		id  string
+		err error
+	)
+
+	if i.dbDataId == "" {
+		id, err = i.db.ItemDataCollection().InsertyByEntry(&entry)
+	} else {
+		id, err = i.db.ItemDataCollection().InsertyById(i.dbDataId, &entry)
+	}
+	if err != nil {
+		log.Error("db insert of item failed: ", err)
+		return err
+	} else if i.dbDataId != "" && i.dbDataId != id {
+		err = errors.New("id returned from the db doesn't match previously stored")
+		log.Error("%v\nIid:'%v' != dbid:'%v'", err, i.dbDataId, id)
+		return err
+	}
+
+	// make sure we set, in case previously stored id isn't set
+	i.dbDataId = id
+	return nil
+
+}
+
+// --------------------------------------------------------------------------
+func (i *Item) saveItemXml() error {
+	log.Infof("saving xml data for %v{%v}, (%v)", i.Filename, i.Hash, i.parentShortname)
+
+	if i.db == nil {
+		return errors.New("database is nil")
+	}
+
+	if config.Simulate {
+		log.Debug("skipping saving item database due to sim flag")
 		return nil
-	*/
+	}
+
+	var (
+		entry = ItemXmlDBEntry{
+			Hash:    i.Hash,
+			ItemXml: *i.xmlData,
+		}
+		id  string
+		err error
+	)
+
+	if i.dbXmlId == "" {
+		id, err = i.db.ItemXmlCollection().InsertyByEntry(&entry)
+	} else {
+		id, err = i.db.ItemXmlCollection().InsertyById(i.dbXmlId, &entry)
+	}
+	if err != nil {
+		log.Error("db insert of item failed: ", err)
+		return err
+	} else if i.dbXmlId != "" && i.dbXmlId != id {
+		err = errors.New("id returned from the db doesn't match previously stored")
+		log.Error("%v\nIid:'%v' != dbid:'%v'", err, i.dbXmlId, id)
+		return err
+	}
+
+	// make sure we set, in case previously stored id isn't set
+	i.dbXmlId = id
+	return nil
 }
