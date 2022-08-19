@@ -127,7 +127,7 @@ func loadFromDBEntry(parentCfg podconfig.FeedToml, db *poddb.PodDB,
 		return nil, errors.New("failed loading item; filename is empty (db corrupt?)")
 	}
 
-	log.Debugf("Item Loaded: %v", item)
+	//log.Debugf("Item Loaded: %v", item)
 
 	return &item, nil
 }
@@ -344,7 +344,7 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml) error {
 }
 
 func (i *Item) updateXmlData(hash string, data *podutils.XItemData) {
-	
+
 	if i.Hash != hash {
 		log.Warn("Hashes do not match; something is wrong")
 		log.Warnf("itemhash:'%v' newhash:'%v'", i.Hash, hash)

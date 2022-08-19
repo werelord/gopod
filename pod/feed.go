@@ -422,7 +422,9 @@ func (f *Feed) Update() error {
 		f.itemlist[hash] = itemEntry
 
 		// add it to the new items needing processing
-		newItems = append(newItems, itemEntry)
+		// warning; still add newest to oldest, due to skip remaining stuff..
+		// at least until archive flag is set
+		newItems = append([]*Item{itemEntry}, newItems...)
 	}
 
 	// todo: more error checking here
@@ -537,6 +539,7 @@ func (f *Feed) processNew(newItems []*Item) {
 	var skipRemaining = false
 	//------------------------------------- DEBUG -------------------------------------
 
+	// todo: move download handling within item
 	for _, item := range newItems {
 		log.Debugf("processing new item: {%v %v}", item.Filename, item.Hash)
 
@@ -599,14 +602,15 @@ func (f *Feed) processNew(newItems []*Item) {
 
 		log.Debug("finished downloading file: ", podfile)
 		item.Downloaded = true
+	}
 
-		// save the item data
+	// regardless of whether skipremaining was set, make sure we save all the new items
+	// can't do this in the above loop, as continue catching might skip (maybe)
+	for _, item := range newItems {
 		if err := item.saveItemData(); err != nil {
 			log.Error("failed to save item data: ", err)
 		}
-
 	}
 
 	log.Info("all new downloads completed")
-
 }

@@ -11,9 +11,9 @@ import (
 
 func migratedbs(flist map[string]*pod.Feed, dbpath string) {
 	// explicit drop collections
-	if true {
-		dropCollections(dbpath)
-	}
+	// if true {
+	// 	dropCollections(dbpath)
+	// }
 
 	// for _, f := range flist {
 
@@ -67,7 +67,7 @@ func migratedbs(flist map[string]*pod.Feed, dbpath string) {
 
 	// }
 
-	poddb.DumpCollections(filepath.Join(defaultworking, ".dbexport"))
+	poddb.ExportAllCollections(filepath.Join(defaultworking, ".dbexport"))
 }
 
 func tryFetch(db *poddb.PodDB) {
@@ -244,20 +244,91 @@ func tryItemFetchMultiQuery(db *poddb.PodDB) {
 	log.Debug("done")
 }
 
-func dropCollections(dbpath string) {
-	db, err := clover.Open(dbpath)
-	if err != nil {
-		log.Error("failed opening db: ", err)
-		return
-	}
-	defer db.Close()
+func migrateDownloads(f *pod.Feed, path string) {
 
-	collList, _ := db.ListCollections()
-	for _, coll := range collList {
-		db.DropCollection(coll)
-	}
-	colFinal, _ := db.ListCollections()
+	/*
+		db, err := poddb.NewDB(f.Shortname)
+		if err != nil {
+			log.Error("failed: ", err)
+			return
+		}
 
-	log.Debug("collection count: ", len(colFinal))
+		fn := func() any {
+			return &pod.ItemDataDBEntry{}
+		}
 
+		entries, err := db.ItemDataCollection().FetchAll(fn)
+		if err != nil {
+			log.Error("err fetch: ", err)
+			return
+		}
+
+		filenames := make([]string, 0)
+		for _, entry := range entries {
+
+			item, err := pod.LoadFromDBEntry(f.FeedToml, db, entry)
+			if err != nil {
+				log.Error("error loading: ", err)
+				continue
+			}
+			filenames = append(filenames, item.Filename)
+		}
+
+		// go thru files
+		assoc := make(map[string]string)
+
+		mp3files, err := filepath.Glob(filepath.Join(f.Mp3Path, f.Shortname+".*.mp3"))
+		if err != nil {
+			log.Error("glob err: ", err)
+		}
+
+		for _, mp3file := range mp3files {
+			// see if we can find a match on filenames
+			//fmt.Println("checking ", mp3file)
+			for _, dbname := range filenames {
+				checkstr := filepath.Base(mp3file)
+				//log.Debugf("dbname:%v mp3file:%v", dbname, checkstr[:len(checkstr)-4])
+				if strings.HasPrefix(dbname, checkstr[:len(checkstr)-4]) {
+					//fmt.Printf("prefix found, mp3file:'%v' dbname:'%v'\n", mp3file, dbname)
+
+					// check to see if this already exists
+					if _, exists := assoc[mp3file]; exists == true {
+						log.Warnf("association already found; mp3file:'%v' dbname:'%v'", mp3file, dbname)
+					} else {
+						assoc[mp3file] = dbname
+					}
+					//break // out of dbfilenames loop
+				}
+			}
+
+			if _, exists := assoc[mp3file]; exists == false {
+				log.Warn("unable to find association for ", mp3file)
+			}
+		}
+
+		for k, v := range assoc {
+			if filepath.Base(k) != v {
+				log.Warnf("mismatch; need a move: %v != %v", filepath.Base(k), v)
+			}
+		}
+		var xprstr string
+
+		var saveAssoc = false
+
+		// we should be done at this point
+		fmt.Printf("final associations:\n")
+		for k, v := range assoc {
+
+			if saveAssoc {
+				xprstr += fmt.Sprintf("mv \"%v\" \"%v\"\n", filepath.Base(k), v)
+			} else {
+				fmt.Printf("\t\"%v\": \"%v\"\n", filepath.Base(k), v)
+
+			}
+		}
+
+		if saveAssoc {
+			podutils.SaveToFile([]byte(xprstr), filepath.Join(f.Mp3Path, "foo.txt"))
+		}
+	*/
 }

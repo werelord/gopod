@@ -328,7 +328,7 @@ func parseAndVerifyEntry(entry any) (entryMap map[string]any, hash string, err e
 }
 
 // --------------------------------------------------------------------------
-func DumpCollections(path string) {
+func ExportAllCollections(path string) {
 
 	if podutils.FileExists(path) == false {
 		os.MkdirAll(path, os.ModePerm)
@@ -352,3 +352,18 @@ func DumpCollections(path string) {
 		}
 	}
 }
+
+// --------------------------------------------------------------------------
+func (c Collection) DropCollection() error {
+
+	db, err := clover.Open(dbpath)
+	if err != nil {
+		err = fmt.Errorf("failed opening db: %v", err)
+		return err
+	}
+	defer db.Close()
+
+	return db.DropCollection(c.name)
+}
+
+// todo: dump collection based on instance

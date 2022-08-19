@@ -83,11 +83,14 @@ func main() {
 		feedMap[f.Shortname] = f
 	}
 
+	//------------------------------------- DEBUG -------------------------------------
 	//	const RunTest = true
-	if false {
-		migratedbs(feedMap, filepath.Join(filepath.Dir(cmdline.ConfigFile), ".db"))
+	if config.Debug && false {
+		migrateDownloads(feedMap["russo"], filepath.Join(filepath.Dir(cmdline.ConfigFile), ".db"))
+		//migratedbs(feedMap, filepath.Join(filepath.Dir(cmdline.ConfigFile), ".db"))
 		return
 	}
+	//------------------------------------- DEBUG -------------------------------------
 
 	if len(cmdline.Proxy) > 0 {
 		setProxy(cmdline.Proxy)
@@ -117,6 +120,12 @@ func main() {
 
 			// future: parallel via channels??
 		}
+	}
+
+	if config.Debug {
+		exportpath := filepath.Join(defaultworking, ".dbexport")
+		log.Debug("dumping db to ", exportpath)
+		poddb.ExportAllCollections(exportpath)
 	}
 }
 
