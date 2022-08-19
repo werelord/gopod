@@ -409,18 +409,6 @@ func (f *Feed) Update() error {
 			continue
 		}
 
-		// saving item info.. only need to save data if this is a new item..
-		if exists == false {
-			if err = itemEntry.saveItemData(); err != nil {
-				log.Error("saving item data failed, skipping processing: ", err)
-				continue
-			}
-		}
-		// if err = itemEntry.saveItemXml(); err != nil {
-		// 	log.Error("saving item xml failed; skipping processing: ", err)
-		// 	continue
-		// }
-
 		log.Infof("item added: :%+v", itemEntry)
 
 		// add it to the entry list
@@ -430,6 +418,13 @@ func (f *Feed) Update() error {
 		// warning; still add newest to oldest, due to skip remaining stuff..
 		// at least until archive flag is set
 		newItems = append([]*Item{itemEntry}, newItems...)
+	}
+
+	// regardless of new or existing
+	// todo: need to have dirty flag handling
+	if err = f.batchSaveItemData(newItems); err != nil {
+		log.Error("failed to insert xml db entries: ", err)
+		return err
 	}
 
 	if err = f.batchSaveItemXml(newItems); err != nil {
@@ -488,7 +483,7 @@ func (f Feed) saveAndRotateXml(body []byte, shouldRotate bool) {
 //--------------------------------------------------------------------------
 
 // --------------------------------------------------------------------------
-func (f Feed) SkipParsingItem(hash string) (skip bool, cancelRemaining bool) {
+func (f *Feed) SkipParsingItem(hash string) (skip bool, cancelRemaining bool) {
 
 	if config.ForceUpdate {
 		return false, false

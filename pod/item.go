@@ -354,97 +354,10 @@ func (i *Item) updateXmlData(hash string, data *podutils.XItemData) {
 	// todo : deep compare??
 	i.xmlData = data
 
-	// if the filename changes, this would be a new hash..
+	// if the url changes, this would be a new hash..
 	// if the guid changes it would be a new hash..
 	// no need to urlparse or regenerate filename
 }
-
-// --------------------------------------------------------------------------
-func (i *Item) saveItemData() error {
-
-	log.Infof("saving item data for %v{%v}, (%v)", i.Filename, i.Hash, i.parentShortname)
-
-	// todo: sanity checks make sure data is loaded
-	if i.db == nil {
-		return errors.New("database is nil")
-	}
-
-	if config.Simulate {
-		log.Debug("skipping saving item database due to sim flag")
-		return nil
-	}
-
-	var (
-		entry = ItemDataDBEntry{
-			Hash:     i.Hash,
-			ItemData: i.ItemData,
-		}
-		id  string
-		err error
-	)
-
-	if i.dbDataId == "" {
-		id, err = i.db.ItemDataCollection().InsertyByEntry(&entry)
-	} else {
-		id, err = i.db.ItemDataCollection().InsertyById(i.dbDataId, &entry)
-	}
-	if err != nil {
-		log.Error("db insert of item failed: ", err)
-		return err
-	} else if i.dbDataId != "" && i.dbDataId != id {
-		err = errors.New("id returned from the db doesn't match previously stored")
-		log.Error("%v\nIid:'%v' != dbid:'%v'", err, i.dbDataId, id)
-		return err
-	}
-
-	// make sure we set, in case previously stored id isn't set
-	i.dbDataId = id
-	return nil
-
-}
-
-/*
-// --------------------------------------------------------------------------
-func (i *Item) saveItemXml() error {
-	log.Infof("saving xml data for %v{%v}, (%v)", i.Filename, i.Hash, i.parentShortname)
-
-	if i.db == nil {
-		return errors.New("database is nil")
-	}
-
-	if config.Simulate {
-		log.Debug("skipping saving item database due to sim flag")
-		return nil
-	}
-
-	var (
-		entry = ItemXmlDBEntry{
-			Hash:    i.Hash,
-			ItemXml: *i.xmlData,
-		}
-		id  string
-		err error
-	)
-
-	if i.dbXmlId == "" {
-		id, err = i.db.ItemXmlCollection().InsertyByEntry(&entry)
-	} else {
-		id, err = i.db.ItemXmlCollection().InsertyById(i.dbXmlId, &entry)
-	}
-	if err != nil {
-		log.Error("db insert of item failed: ", err)
-		return err
-	} else if i.dbXmlId != "" && i.dbXmlId != id {
-		err = errors.New("id returned from the db doesn't match previously stored")
-		log.Error("%v\nIid:'%v' != dbid:'%v'", err, i.dbXmlId, id)
-		return err
-	}
-
-	// make sure we set, in case previously stored id isn't set
-	i.dbXmlId = id
-	return nil
-}
-*/
 
 // --------------------------------------------------------------------------
 func (i *Item) getItemXmlDBEntry() *poddb.DBEntry {
