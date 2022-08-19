@@ -35,7 +35,7 @@ type Collection struct {
 }
 
 type DBEntry struct {
-	ID    string
+	ID    *string
 	Entry any
 }
 
@@ -107,21 +107,40 @@ func createCollections(db *clover.DB, colllist []Collection) error {
 // struct field value as the value to be inserted..
 // will take the first valid
 func (c Collection) InsertyByEntry(entry any) (string, error) {
-	return c.insert("", entry)
+
+	dbe := DBEntry{
+		ID: new(string),
+		Entry: entry,
+	}
+	err := c.insert([]*DBEntry{&dbe})
+	return *dbe.ID, err
 }
 
 // --------------------------------------------------------------------------
 // inserts by id, replacing the entry if ID is found
 // Will use struct field name as key; struct field value as the value
 func (c Collection) InsertyById(id string, entry any) (string, error) {
-	return c.insert(id, entry)
+	// make sure we're not referencing the caller's string.. although I don't think it does
+	// an extra allocation here won't hurt I guess
+	dbe := DBEntry{
+		ID:    new(string),
+		Entry: entry,
+	}
+	*dbe.ID = id
+	err := c.insert([]*DBEntry{&dbe})
+	return *dbe.ID, err
+}
+
+func (c Collection) InsertAll(entryList []*DBEntry) error {
+	return c.insert(entryList)
 }
 
 // --------------------------------------------------------------------------
 // inserts entry, replacing via key if it exists..
-// will use ID if exists, otherwise will try to find based on key
+// will use ID if exists, otherwise will try to find based on hash key
 // returns ID of inserted item if successful, error otherwise
-func (c Collection) insert(id string, entry any) (string, error) {
+func (c Collection) insert(dbEntryList []*DBEntry) error {
+	// todo: move this to array
 	var (
 		db  *clover.DB
 		err error
@@ -131,43 +150,52 @@ func (c Collection) insert(id string, entry any) (string, error) {
 
 		hash string
 	)
-
-	entryMap, hash, err = parseAndVerifyEntry(entry)
-	if err != nil {
-		return "", err
-	}
-
 	db, err = clover.Open(dbpath)
 	if err != nil {
-		return "", fmt.Errorf("failed opening db: %v", err)
+		return fmt.Errorf("failed opening db: %v", err)
 	}
 	defer db.Close()
 
-	// todo: move this if into InsertBy* methods
-	if id == "" {
-		// find doc by name based on entry
-		if doc, err = c.findDocByHash(db, hash); err != nil && errors.As(err, &ErrorDoesNotExist{}) == false {
-			log.Warnf("failed to find document: ", err)
+	// collect all the documents, set the values
+	// todo: can we run this loop concurrently??
+	for _, entry := range dbEntryList {
+		// todo: can we run the parse concurrently??
+		entryMap, hash, err = parseAndVerifyEntry(entry.Entry)
+		if err != nil {
+			return err
 		}
-	} else {
-		if doc, err = c.findDocById(db, id); err != nil {
-			log.Warn("failed to find document: ", err)
+
+		// todo: move this if into InsertBy* methods (???)
+		if entry.ID == nil || *entry.ID == "" {
+			// find doc by name based on entry
+			if doc, err = c.findDocByHash(db, hash); err != nil && errors.As(err, &ErrorDoesNotExist{}) == false {
+				log.Warnf("failed to find document: ", err)
+			}
+		} else {
+			if doc, err = c.findDocById(db, *entry.ID); err != nil {
+				log.Warn("failed to find document: ", err)
+			}
 		}
+
+		// if we didn't find a matching document, create a new one
+		if doc == nil {
+			doc = clover.NewDocument()
+		}
+
+		for k, v := range entryMap {
+			doc.Set(k, v)
+		}
+		if err = db.Save(c.name, doc); err != nil {
+			return err
+		}
+		//log.Debug("document saved, id: ", doc.ObjectId())
+		// make sure the id is saved in the entry
+		if (entry.ID == nil) {
+			entry.ID = new(string)
+		}
+		*entry.ID = doc.ObjectId()
 	}
-
-	// if we didn't find a matching document, create a new one
-	if doc == nil {
-		doc = clover.NewDocument()
-	}
-
-	for k, v := range entryMap {
-		doc.Set(k, v)
-	}
-
-	db.Save(c.name, doc)
-	log.Debug("document saved, id: ", doc.ObjectId())
-
-	return doc.ObjectId(), nil
+	return nil
 }
 
 // --------------------------------------------------------------------------
@@ -262,9 +290,10 @@ func (c Collection) FetchAllWithQuery(fn func() any, q *clover.Query) (entryList
 			continue
 		}
 		var entry = DBEntry{
-			ID:    doc.ObjectId(),
+			ID:    new(string),
 			Entry: newEntry,
 		}
+		*entry.ID = doc.ObjectId()
 		entryList = append(entryList, entry)
 	}
 

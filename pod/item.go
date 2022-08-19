@@ -112,7 +112,7 @@ func loadFromDBEntry(parentCfg podconfig.FeedToml, db *poddb.PodDB,
 
 	// generate filename, parsedurl, etc loaded from db entry
 
-	item.dbDataId = entry.ID
+	item.dbDataId = *entry.ID
 	e, ok := entry.Entry.(*ItemDataDBEntry)
 	if ok == false {
 		return nil, errors.New("failed loading item; db entry is not *ItemDataDBEntry")
@@ -403,6 +403,7 @@ func (i *Item) saveItemData() error {
 
 }
 
+/*
 // --------------------------------------------------------------------------
 func (i *Item) saveItemXml() error {
 	log.Infof("saving xml data for %v{%v}, (%v)", i.Filename, i.Hash, i.parentShortname)
@@ -442,4 +443,30 @@ func (i *Item) saveItemXml() error {
 	// make sure we set, in case previously stored id isn't set
 	i.dbXmlId = id
 	return nil
+}
+*/
+
+// --------------------------------------------------------------------------
+func (i *Item) getItemXmlDBEntry() *poddb.DBEntry {
+	// todo: can we pass id as reference, which would automatically update??
+	var entry = poddb.DBEntry{
+		ID: &i.dbXmlId,
+		Entry: &ItemXmlDBEntry{
+			Hash:    i.Hash,
+			ItemXml: *i.xmlData,
+		},
+	}
+	return &entry
+}
+
+// --------------------------------------------------------------------------
+func (i *Item) getItemDataDBEntry() *poddb.DBEntry {
+	var entry = poddb.DBEntry{
+		ID: &i.dbDataId,
+		Entry: &ItemDataDBEntry{
+			Hash:     i.Hash,
+			ItemData: i.ItemData,
+		},
+	}
+	return &entry
 }

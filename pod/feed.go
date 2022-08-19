@@ -376,6 +376,11 @@ func (f *Feed) Update() error {
 		log.Warnf("Feed url possibly changing: '%v':'%v'", f.Url, f.XMLFeedData.NewFeedUrl)
 	}
 
+	if itemList.Len() == 0 {
+		log.Info("no items found to process")
+		return nil
+	}
+
 	// maintain order on pairs; go from oldest to newest (each item moved to front)
 	for pair := itemList.Newest(); pair != nil; pair = pair.Prev() {
 
@@ -411,10 +416,10 @@ func (f *Feed) Update() error {
 				continue
 			}
 		}
-		if err = itemEntry.saveItemXml(); err != nil {
-			log.Error("saving item xml failed; skipping processing: ", err)
-			continue
-		}
+		// if err = itemEntry.saveItemXml(); err != nil {
+		// 	log.Error("saving item xml failed; skipping processing: ", err)
+		// 	continue
+		// }
 
 		log.Infof("item added: :%+v", itemEntry)
 
@@ -425,6 +430,11 @@ func (f *Feed) Update() error {
 		// warning; still add newest to oldest, due to skip remaining stuff..
 		// at least until archive flag is set
 		newItems = append([]*Item{itemEntry}, newItems...)
+	}
+
+	if err = f.batchSaveItemXml(newItems); err != nil {
+		log.Error("failed to insert xml db entries: ", err)
+		return err
 	}
 
 	// todo: more error checking here
@@ -534,11 +544,15 @@ func (f Feed) CancelOnBuildDate(xmlBuildDate time.Time) (cont bool) {
 // --------------------------------------------------------------------------
 func (f *Feed) processNew(newItems []*Item) {
 
+	if len(newItems) == 0 {
+		log.Info("no items to process; item list is empty")
+		return
+	}
+
 	//------------------------------------- DEBUG -------------------------------------
 	// todo: skipRemaining can be removed when archived flag is set (downloaded == true && fileExists == false)
 	var skipRemaining = false
 	//------------------------------------- DEBUG -------------------------------------
-
 	// todo: move download handling within item
 	for _, item := range newItems {
 		log.Debugf("processing new item: {%v %v}", item.Filename, item.Hash)
@@ -606,11 +620,52 @@ func (f *Feed) processNew(newItems []*Item) {
 
 	// regardless of whether skipremaining was set, make sure we save all the new items
 	// can't do this in the above loop, as continue catching might skip (maybe)
-	for _, item := range newItems {
-		if err := item.saveItemData(); err != nil {
-			log.Error("failed to save item data: ", err)
-		}
+
+	if err := f.batchSaveItemData(newItems); err != nil {
+		log.Error("failed to save item data: ", err)
 	}
 
 	log.Info("all new downloads completed")
+}
+
+// --------------------------------------------------------------------------
+func (f *Feed) batchSaveItemXml(itemList []*Item) error {
+	// loop thru new items, saving xml
+	if len(itemList) == 0 {
+		log.Info("nothing to insert into db; item list is empty")
+		return nil
+	}
+
+	dbEntries := make([]*poddb.DBEntry, 0, len(itemList))
+	for _, item := range itemList {
+		dbEntries = append(dbEntries, item.getItemXmlDBEntry())
+
+	}
+	if err := f.db.ItemXmlCollection().InsertAll(dbEntries); err != nil {
+		return err
+		// } else if config.Debug {
+		// 	// make sure xml id is set by ref
+		// 	for _, item := range newItems {
+		// 		log.Debugf("xml id: '%v'", item.dbXmlId)
+		// 	}
+	}
+	return nil
+}
+
+// --------------------------------------------------------------------------
+func (f *Feed) batchSaveItemData(itemList []*Item) error {
+
+	if len(itemList) == 0 {
+		log.Info("nothing to insert into db; item list is empty")
+		return nil
+	}
+
+	dbUpdates := make([]*poddb.DBEntry, 0, len(itemList))
+	for _, item := range itemList {
+		dbUpdates = append(dbUpdates, item.getItemDataDBEntry())
+	}
+	if err := f.db.ItemDataCollection().InsertAll(dbUpdates); err != nil {
+		return err
+	}
+	return nil
 }
