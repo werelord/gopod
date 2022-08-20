@@ -127,6 +127,9 @@ func main() {
 		log.Debug("dumping db to ", exportpath)
 		poddb.ExportAllCollections(exportpath)
 	}
+
+	// rotate the log files
+	logger.RotateLogFiles()
 }
 
 // --------------------------------------------------------------------------

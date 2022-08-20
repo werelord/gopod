@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"time"
 
 	"github.com/flytam/filenamify"
@@ -67,34 +66,64 @@ func RotateFiles(path, pattern string, numToKeep uint) error {
 
 	var (
 		err      error
-		filelist []string
+		filelist []fs.FileInfo
 	)
 
-	fp := filepath.Join(path, pattern)
-
-	if filelist, err = filepath.Glob(fp); err != nil {
+	// note: always keep latest, even if it is empty.. symlinks might be pointing to that
+	// anything older than latest that is empty (size == 0) straight up remove,
+	// don't include in the num to keep
+	if path == "" {
+		return errors.New("path cannot be empty")
+	} else if pattern == "" {
+		return errors.New("pattern cannot be empty")
+	} else if numToKeep == 0 {
+		log.Warn("numToKeep must be greater than 0; setting to 1")
+		numToKeep = 1
+	}
+	entries, err := os.ReadDir(path)
+	if err != nil {
 		return err
-	} else if filelist == nil {
-		// todo: need to test this; does glob return an error if there are no files??
-		return errors.New("no files found")
 	}
 
-	// make sure we have any to remove
-	if len(filelist) > int(numToKeep) {
-		sort.Sort(sort.Reverse(sort.StringSlice(filelist)))
-		// for i, f := range filelist {
-		// 	fmt.Printf("%v: %v\n", i, f)
-		// }
+	filelist = make([]fs.FileInfo, 0)
 
-		// remove the X number of files beyond the limit
-		for _, f := range filelist[numToKeep:] {
-			log.Debug("removing file: ", filepath.Base(f))
-			if err := os.Remove(f); err != nil {
-				log.Warnf("failed to remove '%v': %v", filepath.Base(f), err)
+	for _, entry := range entries {
+		if entry.IsDir() == false {
+			if match, _ := filepath.Match(pattern, entry.Name()); match {
+				if info, err := entry.Info(); err == nil {
+					//fmt.Printf("file: %v\n", info.Name())
+					filelist = append(filelist, info)
+				}
 			}
 		}
 	}
 
+	// remove the X number of files beyond the limit
+	// always keep the last entry in the list regardless of size,
+	// as that one likely has the most recent symlink attached
+	var keepCount uint = 0
+	var startIndex = len(filelist) - 1 // don't need to store this, just makes referencing it twice easier
+	for i := startIndex; i >= 0; i-- {
+		f := filelist[i]
+		var remove bool
+		if i < startIndex && f.Size() == 0 {
+			// auto-delete
+			//fmt.Printf("autodelete (size): %v\n", f.Name())
+			remove = true
+		} else if keepCount < numToKeep {
+			keepCount++
+			//fmt.Printf("        keep (%v): %v\n", keepCount, f.Name())
+		} else {
+			//fmt.Printf("           delete: %v\n", f.Name())
+			remove = true
+		}
+
+		if remove {
+			if err := os.Remove(filepath.Join(path, f.Name())); err != nil {
+				log.Warnf("failed to remove '%v': %v", f.Name(), err)
+			}
+		}
+	}
 	return nil
 }
 
