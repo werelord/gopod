@@ -12,3 +12,13 @@ func GenerateHash(str string) string {
 
 	return hash
 }
+
+// appends to a slice (array) without modifying the underlying array;
+// creates copy of the underlying array and adds the new entry to it
+func CopyAndAppend[T any](src []T, add ...T) []T {
+	// copy the underlying array directly
+	var dst = make([]T, len(src))
+	copy(dst, src)
+	dst = append(dst, add...)
+	return dst
+}

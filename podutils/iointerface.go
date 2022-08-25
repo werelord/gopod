@@ -4,12 +4,13 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 )
 
 // mocking interfaces and default implementations to os and related package calls
-type osFileSystem interface {
-	OpenFile(string, int, fs.FileMode) (file, error)
-	Open(string) (file, error)
+type osInterface interface {
+	OpenFile(string, int, fs.FileMode) (fileInterface, error)
+	Open(string) (fileInterface, error)
 	ReadDir(string) ([]fs.DirEntry, error)
 	Remove(string) error
 	Symlink(string, string) error
@@ -17,36 +18,43 @@ type osFileSystem interface {
 	MkdirAll(string, fs.FileMode) error
 }
 
-type file interface {
+type fileInterface interface {
 	io.ReadWriteCloser
-	Stat() (os.FileInfo, error)
+	//Stat() (os.FileInfo, error)
 }
 
-// osFS implements fileSystem using the local disk
-type osFS struct{}
+type filepathInterface interface {
+	WalkDir(root string, fn fs.WalkDirFunc) error
+}
 
-func (osFS) OpenFile(name string, flag int, perm fs.FileMode) (file, error) {
+type osImpl struct{}
+type filepathImpl struct{}
+
+func (osImpl) OpenFile(name string, flag int, perm fs.FileMode) (fileInterface, error) {
 	return os.OpenFile(name, flag, perm)
 }
-func (osFS) Open(name string) (file, error) {
+func (osImpl) Open(name string) (fileInterface, error) {
 	return os.Open(name)
 }
-func (osFS) ReadDir(name string) ([]fs.DirEntry, error) {
+func (osImpl) ReadDir(name string) ([]fs.DirEntry, error) {
 	return os.ReadDir(name)
 }
-func (osFS) Remove(name string) error {
+func (osImpl) Remove(name string) error {
 	return os.Remove(name)
 }
-func (osFS) Symlink(oldname, newname string) error {
+func (osImpl) Symlink(oldname, newname string) error {
 	return os.Symlink(oldname, newname)
 }
-func (osFS) Stat(name string) (fs.FileInfo, error) {
+func (osImpl) Stat(name string) (fs.FileInfo, error) {
 	return os.Stat(name)
 }
-func (osFS) MkdirAll(path string, perm fs.FileMode) error {
+func (osImpl) MkdirAll(path string, perm fs.FileMode) error {
 	return os.MkdirAll(path, perm)
 }
 
-var osfs osFileSystem = osFS{}
+func (filepathImpl) WalkDir(root string, fn fs.WalkDirFunc) error {
+	return filepath.WalkDir(root, fn)
+}
 
-
+var osimpl osInterface = osImpl{}
+var filepathimpl filepathInterface = filepathImpl{}
