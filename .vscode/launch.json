@@ -24,6 +24,15 @@
                 //"--force",
                 "--debug=true"
             ]
+        },
+        {
+            "name": "Test current file",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${relativeFileDirname}",
+            //"showLog": true,
+            "env": {}
         }
     ]
 }
