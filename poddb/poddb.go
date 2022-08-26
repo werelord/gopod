@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"gopod/podutils"
-	"os"
 	"path/filepath"
 	"reflect"
 
@@ -109,7 +108,7 @@ func createCollections(db *clover.DB, colllist []Collection) error {
 func (c Collection) InsertyByEntry(entry any) (string, error) {
 
 	dbe := DBEntry{
-		ID: new(string),
+		ID:    new(string),
 		Entry: entry,
 	}
 	err := c.insert([]*DBEntry{&dbe})
@@ -190,7 +189,7 @@ func (c Collection) insert(dbEntryList []*DBEntry) error {
 		}
 		//log.Debug("document saved, id: ", doc.ObjectId())
 		// make sure the id is saved in the entry
-		if (entry.ID == nil) {
+		if entry.ID == nil {
 			entry.ID = new(string)
 		}
 		*entry.ID = doc.ObjectId()
@@ -359,8 +358,10 @@ func parseAndVerifyEntry(entry any) (entryMap map[string]any, hash string, err e
 // --------------------------------------------------------------------------
 func ExportAllCollections(path string) {
 
-	if podutils.FileExists(path) == false {
-		os.MkdirAll(path, os.ModePerm)
+	// don't check if it exists; MkdirAll will skip if it already does
+	if err := podutils.MkdirAll(path); err != nil {
+		log.Error("MkdirAll failed: ", err)
+		return
 	}
 
 	db, err := clover.Open(dbpath)

@@ -88,11 +88,11 @@ func (f *Feed) initFeed(cfg *podconfig.Config) error {
 	// todo: error propegation
 
 	// attempt create the dirs
-	if err := podutils.MkDirAll(xmlFilePath); err != nil {
+	if err := podutils.MkdirAll(xmlFilePath); err != nil {
 		log.Error("error making xml directory: ", err)
 		return err
 	}
-	if err := podutils.MkDirAll(f.mp3Path); err != nil {
+	if err := podutils.MkdirAll(f.mp3Path); err != nil {
 		log.Error("error making mp3 directory: ", err)
 		return err
 	}

@@ -141,7 +141,7 @@ func FindMostRecent(path, pattern string) (string, error) {
 		filename string
 	}{}
 
-	filelist, err := osimpl.ReadDir(path);
+	filelist, err := osimpl.ReadDir(path)
 	if err != nil {
 		return "", err
 	}
@@ -170,7 +170,10 @@ func FindMostRecent(path, pattern string) (string, error) {
 
 // --------------------------------------------------------------------------
 func CreateSymlink(source, symDest string) error {
-	if FileExists(symDest) {
+	if exists, err := FileExists(symDest); err != nil {
+		log.Error("Failed checking symlink already exists: ", err)
+		return err
+	} else if exists {
 		// remove the symlink before recreating it..
 		if err := osimpl.Remove(symDest); err != nil {
 			log.Warn("failed to remove latest symlink: ", err)
@@ -186,19 +189,20 @@ func CreateSymlink(source, symDest string) error {
 }
 
 // --------------------------------------------------------------------------
-func FileExists(filename string) bool {
-	_, err := osimpl.Stat(filename)
-	bo1 := err == nil
-	bo2 := (errors.Is(err, os.ErrNotExist) == false)
-	return bo1 || bo2
-	//return (err == nil) || (errors.Is(err, os.ErrNotExist) == false)
+func FileExists(filename string) (bool, error) {
+	// corrected based on https://stackoverflow.com/questions/12518876/how-to-check-if-a-file-exists-in-go
+	if _, err := osimpl.Stat(filename); err == nil {
+		return true, nil
+	} else if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	} else {
+		// Schrodinger: file may or may not exist. See err for details.
+		return false, err
+	}
 }
 
 // --------------------------------------------------------------------------
-func MkDirAll(path string) error {
-	err := osimpl.MkdirAll(path, 0666)
-	if err != nil && errors.Is(err, fs.ErrExist) == false {
-		return err
-	}
-	return nil
+// simply a shortcut to os.MkdirAll with permissions
+func MkdirAll(path string) error {
+	return osimpl.MkdirAll(path, 0666)
 }

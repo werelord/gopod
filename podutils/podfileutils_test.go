@@ -6,6 +6,7 @@ import (
 	"gopod/testutils"
 	"io"
 	"io/fs"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -18,9 +19,14 @@ import (
 type mockedFileSystem struct {
 	osImpl // embed so we only need to override what is used
 
-	err     error
-	f       fileInterface
-	dirlist []fs.DirEntry
+	err error
+	// extra errors for single call
+	removeErr  error
+	symlinkErr error
+
+	f        fileInterface
+	dirlist  []fs.DirEntry
+	fileInfo fs.FileInfo
 
 	removeList []string
 }
@@ -39,23 +45,20 @@ type mockedDirEntry struct {
 type mockedFileInfo struct {
 	name string
 	size int64
+	time time.Time
 	err  error
 }
 
+// type mockedFilePath struct {
+// 	filepathImpl // only define what we need
+
+// 	walkFileList []fs.DirEntry
+// }
+
 func (mfs mockedFileSystem) OpenFile(name string, _ int, _ fs.FileMode) (fileInterface, error) {
-	if mfs.err != nil {
-		return nil, mfs.err
-	} else {
-		return mfs.f, nil
-	}
+	return mfs.f, mfs.err
 }
-func (mfs mockedFileSystem) Open(_ string) (fileInterface, error) {
-	if mfs.err != nil {
-		return nil, mfs.err
-	} else {
-		return mfs.f, nil
-	}
-}
+func (mfs mockedFileSystem) Open(_ string) (fileInterface, error) { return mfs.f, mfs.err }
 func (mfs mockedFileSystem) ReadDir(name string) ([]fs.DirEntry, error) {
 	if mfs.err != nil {
 		return nil, mfs.err
@@ -66,9 +69,15 @@ func (mfs mockedFileSystem) ReadDir(name string) ([]fs.DirEntry, error) {
 	}
 }
 func (mfs *mockedFileSystem) Remove(name string) error {
-	// since errors are just logged, just collect the removeal list
+	if mfs.removeErr != nil {
+		return mfs.removeErr
+	}
 	mfs.removeList = append(mfs.removeList, filepath.Base(name))
 	return nil
+}
+func (mfs mockedFileSystem) Stat(name string) (fs.FileInfo, error) { return mfs.fileInfo, mfs.err }
+func (mfs mockedFileSystem) Symlink(_, _ string) error {
+	return mfs.symlinkErr
 }
 
 func (mf mockedFile) Read(b []byte) (int, error) {
@@ -96,21 +105,18 @@ func (mde mockedDirEntry) IsDir() bool                { return mde.isDir }
 func (mfi mockedFileInfo) Name() string       { return mfi.name }
 func (mfi mockedFileInfo) Size() int64        { return mfi.size }
 func (mfi mockedFileInfo) Mode() fs.FileMode  { return 0000 }
-func (mfi mockedFileInfo) ModTime() time.Time { return time.Now() }
+func (mfi mockedFileInfo) ModTime() time.Time { return mfi.time }
 func (mfi mockedFileInfo) IsDir() bool        { return false }
 func (mfi mockedFileInfo) Sys() any           { return nil }
 
-func makeMockDirEntry(name string, err error, isDir bool, size int64) fs.DirEntry {
-	return mockedDirEntry{
-		name:  name,
-		isDir: isDir,
-		info: mockedFileInfo{
-			name: name,
-			size: size,
-			err:  err,
-		},
-	}
-}
+// func (mfp mockedFilePath) WalkDir(root string, fn fs.WalkDirFunc) error {
+
+// 	// for _, entry := range mfp.walkFileList {
+// 	// 	err := fn(root, entry, )
+// 	// }
+// 	// todo: this
+// 	return nil
+// }
 
 // end of mocks
 //--------------------------------------------------------------------------
@@ -216,27 +222,9 @@ func TestLoadFile(t *testing.T) {
 	}
 }
 
-func TestCleanFilename(t *testing.T) {
-	// not testing this, as its just a shortcut to filenamify.. fuck that
-
-	// type args struct {
-	// 	filename string
-	// }
-	// tests := []struct {
-	// 	name string
-	// 	args args
-	// 	want string
-	// }{
-	// 	// TODO: Add test cases.
-	// }
-	// for _, tt := range tests {
-	// 	t.Run(tt.name, func(t *testing.T) {
-	// 		if got := CleanFilename(tt.args.filename); got != tt.want {
-	// 			t.Errorf("CleanFilename() = %v, want %v", got, tt.want)
-	// 		}
-	// 	})
-	// }
-}
+// func TestCleanFilename(t *testing.T) {
+// 	// not testing this, as its just a shortcut to filenamify.. fuck that
+// }
 
 func TestRotateFiles(t *testing.T) {
 
@@ -252,14 +240,18 @@ func TestRotateFiles(t *testing.T) {
 	}
 	var defaultDirList = make([]fs.DirEntry, 0, len(filenames))
 
+	var makefn = func(name string, err error, isDir bool, size int64) fs.DirEntry {
+		return mockedDirEntry{name: name, isDir: isDir, info: mockedFileInfo{name: name, size: size, err: err}}
+	}
+
 	for _, f := range filenames {
-		defaultDirList = append(defaultDirList, makeMockDirEntry(f, nil, false, 1024))
+		defaultDirList = append(defaultDirList, makefn(f, nil, false, 1024))
 	}
 
 	// will insert into middle of the list
-	var infoErrEntry = makeMockDirEntry("test.all.20220803_150000_infoerr.log", errors.New("foobar"), false, 1024)
-	var dirEntry = makeMockDirEntry("test.all.20220803_150000_dir.log", nil, true, 1024)
-	var sizeZeroEntry = makeMockDirEntry("test.all.20220803_150000_zerosize.log", nil, false, 0)
+	var infoErrEntry = makefn("test.all.20220803_150000_infoerr.log", errors.New("foobar"), false, 1024)
+	var dirEntry = makefn("test.all.20220803_150000_dir.log", nil, true, 1024)
+	var sizeZeroEntry = makefn("test.all.20220803_150000_zerosize.log", nil, false, 0)
 
 	type args struct {
 		path      string
@@ -344,10 +336,6 @@ func TestRotateFiles(t *testing.T) {
 			filenames[:len(filenames)-2],
 			false,
 		},
-
-		// {
-		// 	"blank path"
-		// },
 	}
 	for _, tt := range tests {
 
@@ -379,28 +367,88 @@ func TestRotateFiles(t *testing.T) {
 }
 
 func TestFindMostRecent(t *testing.T) {
+
+	var makefn = func(name string, isDir bool, time time.Time) fs.DirEntry {
+		return mockedDirEntry{name: name, isDir: isDir, info: mockedFileInfo{name: name, time: time}}
+	}
+
+	var today = time.Now()
+
+	var filelist = []fs.DirEntry{
+		//makefn("today.txt", false, timestamp),
+		makefn("minusone.txt", false, today.AddDate(0, 0, -1)),
+		makefn("minustwo.txt", false, today.AddDate(0, 0, -2)),
+		makefn("minusthree.txt", false, today.AddDate(0, 0, -3)),
+		makefn("minusfour.txt", false, today.AddDate(0, 0, -4)),
+		makefn("minusfive.txt", false, today.AddDate(0, 0, -5)),
+	}
+
+	// randomize the filelist, for some entropy
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(filelist), func(i, j int) { filelist[i], filelist[j] = filelist[j], filelist[i] })
+
+	var dirEntry = makefn("directory", true, today)
+	var exeEntry = makefn("foo.exe", false, today)
+
 	type args struct {
 		path    string
 		pattern string
 	}
 	tests := []struct {
-		name    string
-		args    args
-		want    string
-		wantErr bool
+		name     string
+		args     args
+		mockedfs *mockedFileSystem
+		want     string
+		wantErr  bool
 	}{
-		// TODO: Add test cases.
+		{
+			"ReadDir() error",
+			args{"foobar", "*.txt"},
+			&mockedFileSystem{err: errors.New("foobar")},
+			"",
+			true,
+		},
+		{
+			"bad pattern",
+			args{"foobar", "*.[].txt"},
+			&mockedFileSystem{dirlist: filelist},
+			"",
+			true,
+		},
+		{
+			"nothing matches pattern",
+			args{"foobar", "*.exe"},
+			&mockedFileSystem{dirlist: filelist},
+			"",
+			true,
+		},
+		{
+			"ignore directory",
+			args{"foobar", "*.txt"},
+			&mockedFileSystem{dirlist: CopyAndAppend(filelist, dirEntry)},
+			filepath.Join("foobar", "minusone.txt"),
+			false,
+		},
+		{
+			"ignore not matched pattern",
+			args{"foobar", "*.txt"},
+			&mockedFileSystem{dirlist: CopyAndAppend(filelist, exeEntry)},
+			filepath.Join("foobar", "minusone.txt"),
+			false,
+		},
+
+		// not testing info returning error (file removed)
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			oldFS := osimpl
+			osimpl = tt.mockedfs
+			defer func() { osimpl = oldFS }()
+
 			got, err := FindMostRecent(tt.args.path, tt.args.pattern)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("FindMostRecent() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("FindMostRecent() = %v, want %v", got, tt.want)
-			}
+
+			testutils.AssertErr(t, tt.wantErr, err)
+			testutils.AssertEquals(t, tt.want, got)
 		})
 	}
 }
@@ -411,16 +459,64 @@ func TestCreateSymlink(t *testing.T) {
 		symDest string
 	}
 	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
+		name        string
+		args        args
+		mockedfs    *mockedFileSystem
+		fileRemoved string
+		wantErr     bool
 	}{
-		// TODO: Add test cases.
+		{
+			"file exists error",
+			args{"foobar\\foo", "foobar\\bar"},
+			&mockedFileSystem{err: errors.New("foobar")},
+			"",
+			true,
+		},
+		{
+			"remove dst error",
+			args{"foobar\\foo", "foobar\\bar"},
+			&mockedFileSystem{removeErr: errors.New("foobar")},
+			"", // no file removed
+			true,
+		},
+		{
+			"create symlink error",
+			args{"foobar\\foo", "foobar\\bar"},
+			&mockedFileSystem{symlinkErr: errors.New("foobar")},
+			"bar",
+			true,
+		},
+		{
+			"success + existing dst file doesn't exist",
+			args{"foobar\\foo", "foobar\\bar"},
+			&mockedFileSystem{err: os.ErrNotExist},
+			"", // no file removed
+			false,
+		},
+		{
+			"success + existing dst file exist",
+			args{"foobar\\foo", "foobar\\bar"},
+			&mockedFileSystem{},
+			"bar", 
+			false,
+		},
+
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := CreateSymlink(tt.args.source, tt.args.symDest); (err != nil) != tt.wantErr {
-				t.Errorf("CreateSymlink() error = %v, wantErr %v", err, tt.wantErr)
+			oldFS := osimpl
+			osimpl = tt.mockedfs
+			defer func() { osimpl = oldFS }()
+
+			err := CreateSymlink(tt.args.source, tt.args.symDest)
+
+			testutils.AssertErr(t, tt.wantErr, err)
+			var l = len(tt.mockedfs.removeList)
+			if tt.fileRemoved == "" {
+				testutils.Assert(t, l == 0, fmt.Sprint("remove list should be empty; len == ", l))
+			} else {
+				testutils.Assert(t, l == 1, fmt.Sprint("remove list should have one entry; len == ", l))
+				testutils.AssertEquals(t, tt.fileRemoved, tt.mockedfs.removeList[0])
 			}
 		})
 	}
@@ -431,17 +527,44 @@ func TestFileExists(t *testing.T) {
 		filename string
 	}
 	tests := []struct {
-		name string
-		args args
-		want bool
+		name     string
+		args     args
+		mockedfs *mockedFileSystem
+		want     bool
+		wantErr  bool
 	}{
-		// TODO: Add test cases.
+		{
+			"stat random error",
+			args{"foobar"},
+			&mockedFileSystem{err: errors.New("foobar")},
+			false,
+			true,
+		},
+		{
+			"os.ErrNotExist",
+			args{"foobar"},
+			&mockedFileSystem{err: os.ErrNotExist},
+			false,
+			false,
+		},
+		{
+			"file exists",
+			args{"foobar"},
+			&mockedFileSystem{fileInfo: mockedFileInfo{}},
+			true,
+			false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := FileExists(tt.args.filename); got != tt.want {
-				t.Errorf("FileExists() = %v, want %v", got, tt.want)
-			}
+			oldFS := osimpl
+			osimpl = tt.mockedfs
+			defer func() { osimpl = oldFS }()
+
+			got, err := FileExists(tt.args.filename)
+
+			testutils.AssertErr(t, tt.wantErr, err)
+			testutils.AssertEquals(t, tt.want, got)
 		})
 	}
 }
@@ -459,7 +582,7 @@ func TestMkDirAll(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := MkDirAll(tt.args.path); (err != nil) != tt.wantErr {
+			if err := MkdirAll(tt.args.path); (err != nil) != tt.wantErr {
 				t.Errorf("MkDirAll() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
