@@ -28,9 +28,9 @@ func SaveToFile(buf []byte, filename string) error {
 	_, err = file.Write(buf)
 	if err != nil {
 		return err
-	} else {
-		//log.Debug("bytes written to file: " + fmt.Sprint(count))
-	}
+	} /*else {
+		log.Debug("bytes written to file: " + fmt.Sprint(count))
+	}*/
 	return nil
 }
 
@@ -132,33 +132,37 @@ func RotateFiles(path, pattern string, numToKeep uint) error {
 
 // --------------------------------------------------------------------------
 func FindMostRecent(path, pattern string) (string, error) {
-	// glob uses fstat, but just returns the filename.. walkdir is beter
+	// glob uses fstat, but just returns the filename..
+	// walkdir does return fs.DirEntry, but is recursive on the tree
+	// instead, use os.ReadDir() just to search the given path directory
 
 	latestFile := struct {
 		t        time.Time
 		filename string
 	}{}
 
-	if err := filepathimpl.WalkDir(path,
-		func(path string, d fs.DirEntry, err error) error {
-			if d.IsDir() == false {
-				if fi, err := d.Info(); err != nil {
-					log.Warn("info returned error: ", err)
-				} else if match, err := filepath.Match(pattern, fi.Name()); err != nil {
-					log.Warn("match returned error: ", err)
-				} else if match == true {
-					// check timestamp
-					if fi.ModTime().After(latestFile.t) {
-						latestFile.t = fi.ModTime()
-						latestFile.filename = fi.Name()
-					}
+	filelist, err := osimpl.ReadDir(path);
+	if err != nil {
+		return "", err
+	}
+
+	for _, file := range filelist {
+		if file.IsDir() == false {
+			if fi, err := file.Info(); err != nil {
+				log.Warn("info returned error: ", err)
+			} else if match, err := filepath.Match(pattern, fi.Name()); err != nil {
+				log.Error("match returned error: ", err)
+				return "", err
+			} else if match == true {
+				// check timestamp
+				if fi.ModTime().After(latestFile.t) {
+					latestFile.t = fi.ModTime()
+					latestFile.filename = fi.Name()
 				}
 			}
-			return nil
-		},
-	); err != nil {
-		log.Warn("walkdir returned error: ", err)
-	} else if latestFile.t.IsZero() || latestFile.filename == "" {
+		}
+	}
+	if latestFile.t.IsZero() || latestFile.filename == "" {
 		return "", errors.New("unable to find file")
 	}
 	return filepath.Join(path, latestFile.filename), nil
