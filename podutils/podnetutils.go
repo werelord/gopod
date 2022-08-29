@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 
 	"github.com/schollz/progressbar/v3"
 	log "github.com/sirupsen/logrus"
 )
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 // download unbuffered
 func Download(url string) (body []byte, err error) {
 	log.Debug("downloading ", url)
@@ -30,17 +28,16 @@ func Download(url string) (body []byte, err error) {
 	}
 
 	resp, err = client.Do(req)
-
-	log.Debugf("response status: %v", resp.Status)
-	//log.Debugf("err: %+v", err)
-
 	if err != nil {
 		log.Error("failed to download: ", err)
 		return
 	}
 	defer resp.Body.Close()
-	// todo: check more error codes
-	if resp.StatusCode != 200 {
+
+	log.Debugf("response status: %v", resp.Status)
+
+	// assuming http handler automatically follows redirects; we're only checking for 200-ish status codes
+	if (resp.StatusCode < http.StatusOK) || (resp.StatusCode >= http.StatusMultipleChoices) {
 		err = fmt.Errorf("download failed; response status code: %v", resp.Status)
 		log.Error(err)
 		return
@@ -54,20 +51,13 @@ func Download(url string) (body []byte, err error) {
 
 }
 
-//--------------------------------------------------------------------------
-func DownloadBuffered(url, destfile string) (contentDisposition string, err error) {
+// --------------------------------------------------------------------------
+func DownloadBuffered(url string, writer io.Writer, pbar *progressbar.ProgressBar) (bytes int64, contentDisposition string, err error) {
 
 	var (
 		req  *http.Request
 		resp *http.Response
 	)
-
-	file, err := os.CreateTemp(filepath.Dir(destfile), filepath.Base(destfile)+"_temp*")
-	if err != nil {
-		log.Error("Failed creating temp file: ", err)
-		return
-	}
-	defer file.Close()
 
 	client := &http.Client{}
 
@@ -78,52 +68,45 @@ func DownloadBuffered(url, destfile string) (contentDisposition string, err erro
 
 	// todo: combine request/response stuff
 	resp, err = client.Do(req)
-
 	if err != nil {
 		log.Error("Failed to download: ", err)
 		return
 	}
 	defer resp.Body.Close()
 	log.Debugf("response status: %v", resp.Status)
-	// todo: check more error codes
-	if resp.StatusCode != 200 {
-		log.Errorf("failed to download; response status code: %v", resp.Status)
+	// assuming http handler automatically follows redirects; we're only checking for 200-ish status codes
+	if (resp.StatusCode < http.StatusOK) || (resp.StatusCode >= http.StatusMultipleChoices) {
+		err = fmt.Errorf("failed to download; response status code: %v", resp.Status)
 		return
 	}
 
 	// grab content disposition, if it exists
+	// future: if more headers are needed use a func param map for grabbing them
 	contentDisposition = resp.Header.Get("Content-Disposition")
 	//log.Debug("Content-Disposition: ", contentDisposition)
 
-	bar := progressbar.NewOptions64(resp.ContentLength,
-		progressbar.OptionSetDescription(filepath.Base(destfile)),
-		progressbar.OptionFullWidth(),
-		progressbar.OptionShowBytes(true),
-		progressbar.OptionShowCount(),
-		progressbar.OptionOnCompletion(func() { fmt.Fprint(os.Stderr, "\n") }),
-		progressbar.OptionSetTheme(progressbar.Theme{Saucer: "=", SaucerHead: ">", SaucerPadding: " ", BarStart: "[", BarEnd: "]"}))
+	podWriter := bufio.NewWriter(writer)
+	// because progress bar needs to have max from response, can't combine these into
+	// a multiwriter outside of this function.. do it here
+	var outWriter io.Writer
+	if pbar != nil {
+		pbar.ChangeMax64(resp.ContentLength)
+		outWriter = io.MultiWriter(podWriter, pbar)
+	} else {
+		outWriter = podWriter
+	}
 
-	podWriter := bufio.NewWriter(file)
-	b, err := io.Copy(io.MultiWriter(podWriter, bar), resp.Body)
+	bytes, err = io.Copy(outWriter, resp.Body)
 	podWriter.Flush()
 	if err != nil {
-		log.Error("error in writing file: ", err)
+		log.Error("error downloading: ", err)
 		return
-	} else {
-		log.Debugf("file written {%v} bytes: %.2fKB", filepath.Base(file.Name()), float64(b)/(1<<10))
 	}
-	// explicit close
-	file.Close()
 
-	// move tempfile to finished file
-	if err = os.Rename(file.Name(), destfile); err != nil {
-		log.Debug("error moving temp file: ", err)
-		return
-	}
 	return
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func createRequest(url string) (req *http.Request, err error) {
 
 	if req, err = http.NewRequest("GET", url, nil); err == nil {
