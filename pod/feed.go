@@ -3,10 +3,7 @@ package pod
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
 	"time"
 
 	"gopod/podconfig"
@@ -553,11 +550,11 @@ func (f *Feed) processNew(newItems []*Item) {
 		log.Debugf("processing new item: {%v %v}", item.Filename, item.Hash)
 
 		podfile := filepath.Join(f.mp3Path, item.Filename)
-		downloadTimestamp := time.Now()
 		var fileExists bool
 
-		if _, err := os.Stat(podfile); err == nil {
-			fileExists = true
+		fileExists, err := podutils.FileExists(podfile)
+		if err != nil {
+			log.Warn("error in FileExists: ", err)
 		}
 
 		//------------------------------------- DEBUG -------------------------------------
@@ -589,28 +586,10 @@ func (f *Feed) processNew(newItems []*Item) {
 			log.Info("skipping downloading file due to sim flag")
 			continue
 		}
-		if cd, err := podutils.DownloadBuffered(item.Url, podfile); err != nil {
-			log.Error("Failed downloading pod:", err)
-			continue
-		} else if strings.Contains(cd, "filename") {
-			// content disposition header, for the hell of it
-			if r, err := regexp.Compile("filename=\"(.*)\""); err == nil {
-				if matches := r.FindStringSubmatch(cd); len(matches) == 2 {
-					item.CDFilename = matches[1]
-				}
-			} else {
-				log.Warn("parsing content disposition had regex error: ", err)
-			}
-
+		if err = item.Download(f.mp3Path); err != nil {
+			log.Error("Error downloading file: ", err)
 		}
-
-		if err := os.Chtimes(podfile, downloadTimestamp, item.PubTimeStamp); err != nil {
-			log.Error("failed to change modified time: ", err)
-			// don't skip due to timestamp issue
-		}
-
-		log.Debug("finished downloading file: ", podfile)
-		item.Downloaded = true
+		log.Info("finished processing file: ", podfile)
 	}
 
 	// regardless of whether skipremaining was set, make sure we save all the new items

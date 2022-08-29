@@ -13,7 +13,7 @@ import (
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
-// separating out this to keep feed.go not as verbose
+// todo: move to either sax or xml tag parsing before writing tests.. 
 
 // --------------------------------------------------------------------------
 type XChannelData struct {

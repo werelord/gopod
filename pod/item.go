@@ -7,6 +7,7 @@ import (
 	"gopod/poddb"
 	"gopod/podutils"
 	"net/url"
+	"os"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/schollz/progressbar/v3"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/exp/slices"
 )
@@ -382,4 +384,66 @@ func (i *Item) getItemDataDBEntry() *poddb.DBEntry {
 		},
 	}
 	return &entry
+}
+
+func (i Item) createProgressBar() *progressbar.ProgressBar {
+	bar := progressbar.NewOptions64(0, //
+		progressbar.OptionSetDescription(i.Filename),
+		progressbar.OptionFullWidth(),
+		progressbar.OptionShowBytes(true),
+		progressbar.OptionShowCount(),
+		progressbar.OptionOnCompletion(func() { fmt.Fprint(os.Stderr, "\n") }),
+		progressbar.OptionSetTheme(progressbar.Theme{Saucer: "=", SaucerHead: ">", SaucerPadding: " ", BarStart: "[", BarEnd: "]"}))
+
+	return bar
+
+}
+
+func (i *Item) Download(mp3path string) error {
+
+	var (
+		downloadTimestamp = time.Now()
+		destfile          = filepath.Join(mp3path, i.Filename)
+	)
+
+	file, err := podutils.CreateTemp(filepath.Dir(destfile), filepath.Base(destfile)+"_temp*")
+	if err != nil {
+		log.Error("Failed creating temp file: ", err)
+		return err
+	}
+	defer file.Close()
+
+	if bw, cd, err := podutils.DownloadBuffered(i.Url, file, i.createProgressBar()); err != nil {
+		log.Error("Failed downloading pod:", err)
+		return err
+	} else {
+		log.Debugf("file written {%v} bytes: %.2fKB", filepath.Base(file.Name()), float64(bw)/(1<<10))
+
+		if strings.Contains(cd, "filename") {
+			// content disposition header, for the hell of it
+			if r, err := regexp.Compile("filename=\"(.*)\""); err == nil {
+				if matches := r.FindStringSubmatch(cd); len(matches) == 2 {
+					i.CDFilename = matches[1]
+				}
+			} else {
+				log.Warn("parsing content disposition had regex error: ", err)
+			}
+		}
+	}
+	// explicit close before rename
+	file.Close()
+
+	// move tempfile to finished file
+	if err = podutils.Rename(file.Name(), destfile); err != nil {
+		log.Debug("error moving temp file: ", err)
+		return err
+	}
+
+	if err := podutils.Chtimes(destfile, downloadTimestamp, i.PubTimeStamp); err != nil {
+		log.Error("failed to change modified time: ", err)
+		// don't skip due to timestamp issue
+	}
+
+	i.Downloaded = true
+	return nil
 }

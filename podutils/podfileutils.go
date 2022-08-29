@@ -206,3 +206,14 @@ func FileExists(filename string) (bool, error) {
 func MkdirAll(path string) error {
 	return osimpl.MkdirAll(path, 0666)
 }
+
+func CreateTemp(dir, pattern string) (*os.File, error) {
+	return osimpl.CreateTemp(dir, pattern)
+}
+func Rename(oldpath, newpath string) error {
+	return osimpl.Rename(oldpath, newpath)
+}
+func Chtimes(path string, access time.Time, modification time.Time) error {
+	return osimpl.Chtimes(path, access, modification)
+}
+

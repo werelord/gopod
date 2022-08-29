@@ -27,11 +27,8 @@ var (
 func NewLogrusFileHook(file string, levels []log.Level) (*LogrusFileHook, error) {
 
 	plainFormatter := &log.TextFormatter{DisableColors: true}
-	flag := os.O_CREATE | os.O_TRUNC | os.O_RDWR
-	var chmod os.FileMode = 0666
-
 	// gc will close the file handle; fuck the finalizer
-	logFile, err := os.OpenFile(file, flag, chmod)
+	logFile, err := os.OpenFile(file, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0666)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "unable to write file on filehook %v", err)
 		return nil, err

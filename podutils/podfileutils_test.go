@@ -497,10 +497,9 @@ func TestCreateSymlink(t *testing.T) {
 			"success + existing dst file exist",
 			args{"foobar\\foo", "foobar\\bar"},
 			&mockedFileSystem{},
-			"bar", 
+			"bar",
 			false,
 		},
-
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -565,26 +564,6 @@ func TestFileExists(t *testing.T) {
 
 			testutils.AssertErr(t, tt.wantErr, err)
 			testutils.AssertEquals(t, tt.want, got)
-		})
-	}
-}
-
-func TestMkDirAll(t *testing.T) {
-	type args struct {
-		path string
-	}
-	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := MkdirAll(tt.args.path); (err != nil) != tt.wantErr {
-				t.Errorf("MkDirAll() error = %v, wantErr %v", err, tt.wantErr)
-			}
 		})
 	}
 }
