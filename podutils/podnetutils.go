@@ -2,6 +2,7 @@ package podutils
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,44 +16,21 @@ import (
 func Download(url string) (body []byte, err error) {
 	log.Debug("downloading ", url)
 
-	var (
-		req  *http.Request
-		resp *http.Response
-	)
+	// we're going to store the entire thing into buffer regardless
+	// make sure result is at least empty string
+	var result = bytes.NewBufferString("")
 
-	client := &http.Client{}
+	_, _, err = dload(url, result, nil)
 
-	if req, err = createRequest(url); err != nil {
-		log.Error("failed creating request: ", err)
-		return
-	}
+	return result.Bytes(), err
+}
 
-	resp, err = client.Do(req)
-	if err != nil {
-		log.Error("failed to download: ", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	log.Debugf("response status: %v", resp.Status)
-
-	// assuming http handler automatically follows redirects; we're only checking for 200-ish status codes
-	if (resp.StatusCode < http.StatusOK) || (resp.StatusCode >= http.StatusMultipleChoices) {
-		err = fmt.Errorf("download failed; response status code: %v", resp.Status)
-		log.Error(err)
-		return
-	}
-
-	if body, err = io.ReadAll(resp.Body); err != nil {
-		log.Error("failed to read response body: ", err)
-		return
-	}
-	return
-
+func DownloadBuffered(url string, writer io.Writer, pbar *progressbar.ProgressBar) (int64, string, error) {
+	return dload(url, writer, pbar)
 }
 
 // --------------------------------------------------------------------------
-func DownloadBuffered(url string, writer io.Writer, pbar *progressbar.ProgressBar) (bytes int64, contentDisposition string, err error) {
+func dload(url string, writer io.Writer, pbar *progressbar.ProgressBar) (bytes int64, contentDisposition string, err error) {
 
 	var (
 		req  *http.Request
@@ -66,7 +44,6 @@ func DownloadBuffered(url string, writer io.Writer, pbar *progressbar.ProgressBa
 		return
 	}
 
-	// todo: combine request/response stuff
 	resp, err = client.Do(req)
 	if err != nil {
 		log.Error("Failed to download: ", err)
