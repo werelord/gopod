@@ -50,32 +50,44 @@ func createCollections(db *clover.DB, colllist []Collection) error {
 }
 
 // --------------------------------------------------------------------------
-func parseAndVerifyEntry(entry any) (entryMap map[string]any, hash string, err error) {
+func parseAndVerifyEntry(entry any) (map[string]any, string, error) {
 	var (
 		elem reflect.Value
 		succ bool
+
+		entryMap = make(map[string]any)
+		hash     string
+		err      error
 	)
-	entryMap = make(map[string]any)
 
 	elem = reflect.Indirect(reflect.ValueOf(entry))
 	if elem.Kind() != reflect.Struct {
 		err = fmt.Errorf("expecting struct, got %v", elem.Kind())
-		return
-	} else if elem.NumField() <= 1 {
-		err = fmt.Errorf("expecting at least two fields in interface, got %v", elem.NumField())
-		return
+		return nil, "", err
 	}
 
+	// need to check exported fields, not just the number of fields
 	for i := 0; i < elem.NumField(); i++ {
-		entryMap[elem.Type().Field(i).Name] = elem.Field(i).Interface()
+		// fmt.Printf("name:'%#v' pkgpath:'%#v' isexported:%v\n",
+		// 	elem.Type().Field(i).Name, elem.Type().Field(i).PkgPath,
+		// 	elem.Type().Field(i).IsExported())
+		if elem.Type().Field(i).IsExported() {
+			entryMap[elem.Type().Field(i).Name] = elem.Field(i).Interface()
+		}
 	}
 
-	if hashInterface, exists := entryMap["Hash"]; exists == false {
+	if len(entryMap) <= 1 {
+		err = fmt.Errorf("minimum two exported fields needed, got %v", len(entryMap))
+		return nil, "", err
+	} else if hashInterface, exists := entryMap["Hash"]; exists == false {
 		err = errors.New("entry missing hash field; must be included to insert")
-		return
+		return nil, "", err
 	} else if hash, succ = hashInterface.(string); succ == false {
 		err = errors.New("hash should be a string")
-		return
+		return nil, "", err
+	} else if hash == "" {
+		err = errors.New("hash cannot be empty")
+		return nil, "", err
 	}
 
 	return entryMap, hash, nil

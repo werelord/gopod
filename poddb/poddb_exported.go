@@ -34,6 +34,7 @@ type Collection struct {
 
 type DBEntry struct {
 	ID    *string
+	// todo: move hash to explicit entry; must be included (do after tests)
 	Entry any
 }
 

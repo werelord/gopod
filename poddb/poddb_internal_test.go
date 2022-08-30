@@ -71,37 +71,54 @@ func Test_createCollections(t *testing.T) {
 	}
 }
 
-/*
 func Test_parseAndVerifyEntry(t *testing.T) {
-	type args struct {
+	type params struct {
 		entry any
 	}
+	type expected struct {
+		entryMap map[string]any
+		hash     string
+		errorStr string
+	}
+
 	tests := []struct {
-		name         string
-		args         args
-		wantEntryMap map[string]any
-		wantHash     string
-		wantErr      bool
+		name string
+		p    params
+		e    expected
 	}{
-		// TODO: Add test cases.
+		{"not a struct", params{entry: "foobar"},
+			expected{errorStr: "expecting struct"}},
+		{"no exported fields", params{entry: struct{ foo, bar, meh string }{"bar", "arm", "leg"}},
+			expected{errorStr: "minimum two exported fields needed"}},
+		{"only one exported field", params{entry: struct{ Foo, bar string }{"bar", "foo"}},
+			expected{errorStr: "minimum two exported fields needed"}},
+		{"no hash field exported", params{entry: struct{ Foo, Bar, Meh string }{"bar", "foo", "meh"}},
+			expected{errorStr: "entry missing hash field"}},
+		{"hash not string", params{entry: struct {
+			Foo  string
+			Hash int
+		}{"bar", 42}},
+			expected{errorStr: "hash should be a string"}},
+		{"hash empty", params{entry: struct{ Foo, Hash string }{Foo: "bar"}},
+			expected{errorStr: "hash cannot be empty"}},
+		{"success", params{entry: struct{ Foo, Hash string }{Foo: "bar", Hash: "meh"}},
+			expected{entryMap: map[string]any{"Foo": "bar", "Hash": "meh"}, hash: "meh"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotEntryMap, gotHash, err := parseAndVerifyEntry(tt.args.entry)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("parseAndVerifyEntry() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(gotEntryMap, tt.wantEntryMap) {
-				t.Errorf("parseAndVerifyEntry() gotEntryMap = %v, want %v", gotEntryMap, tt.wantEntryMap)
-			}
-			if gotHash != tt.wantHash {
-				t.Errorf("parseAndVerifyEntry() gotHash = %v, want %v", gotHash, tt.wantHash)
-			}
+			// no db setup for this
+
+			gotEntryMap, gotHash, err := parseAndVerifyEntry(tt.p.entry)
+
+			testutils.AssertErrContains(t, tt.e.errorStr, err)
+			testutils.AssertEquals(t, tt.e.entryMap, gotEntryMap)
+			testutils.AssertEquals(t, tt.e.hash, gotHash)
+
 		})
 	}
 }
 
+/*
 func TestCollection_findDocByHash(t *testing.T) {
 	type args struct {
 		db   *clover.DB

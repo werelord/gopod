@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -13,14 +14,6 @@ func Assert(tb testing.TB, condition bool, msg string) {
 		tb.Errorf("\033[31m %s \033[39m\n\n", msg)
 	}
 }
-
-// ok fails the test if an err is not nil.
-// func ok(tb testing.TB, err error) {
-// 	if err != nil {
-// 		fmt.Printf("\033[31m unexpected error: %s\033[39m\n\n", err.Error())
-// 		tb.FailNow()
-// 	}
-// }
 
 // equals fails the test if exp is not equal to act.
 func AssertEquals(tb testing.TB, exp, act interface{}) {
@@ -38,5 +31,14 @@ func AssertErr(tb testing.TB, wantErr bool, e error) {
 
 	} else if wantErr == false && e != nil {
 		tb.Errorf("\033[31m exp:nil got: %s \033[39m", e)
+	}
+}
+
+// check if error is nil via error string
+func AssertErrContains(tb testing.TB, contains string, e error) {
+	tb.Helper()
+	AssertErr(tb, contains != "", e)
+	if (contains != "") && (strings.Contains(e.Error(), contains) == false) {
+		tb.Errorf("\033[31m expected contains '%s' got: '%s' \033[39m", contains, e)
 	}
 }
