@@ -11,6 +11,27 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type cloverInterface interface {
+	Open(string, ...clover.Option) (*clover.DB, error)
+	Close() error
+}
+
+type cloverImpl struct {
+	db *clover.DB
+}
+
+func (c cloverImpl) Open(p string, o ...clover.Option) (*clover.DB, error) {
+	var err error
+	c.db, err = clover.Open(p, o...)
+	return c.db, err
+}
+
+func (c cloverImpl) Close() error {
+	return c.db.Close()
+}
+
+var cimpl cloverInterface = cloverImpl{}
+
 type ErrorDoesNotExist struct {
 	msg string
 }
@@ -54,7 +75,8 @@ func (c Collection) NewQuery() *clover.Query {
 
 // common to all instances
 var (
-	dbpath string
+	dbpath  string
+	options = clover.InMemoryMode(false)
 )
 
 func SetDBPath(path string) {
@@ -63,6 +85,9 @@ func SetDBPath(path string) {
 
 // --------------------------------------------------------------------------
 func NewDB(coll string) (*PodDB, error) {
+	if dbpath == "" {
+		return nil, errors.New("db path is empty; set the db path via SetDBPath first")
+	}
 	if coll == "" {
 		return nil, errors.New("collection name cannot be empty")
 	}
@@ -71,11 +96,11 @@ func NewDB(coll string) (*PodDB, error) {
 	podDB.itemDataColl.name = coll + "_itemdata"
 	podDB.itemXmlColl.name = coll + "_itemxml"
 
-	db, err := clover.Open(dbpath)
+	db, err := cimpl.Open(dbpath, options)
 	if err != nil {
 		return nil, fmt.Errorf("failed opening db: %v", err)
 	}
-	defer db.Close()
+	defer cimpl.Close()
 
 	// make sure collections exists
 	err = createCollections(db, []Collection{podDB.feedColl, podDB.itemDataColl, podDB.itemXmlColl})
@@ -149,7 +174,7 @@ func (c Collection) insert(dbEntryList []*DBEntry) error {
 
 		hash string
 	)
-	db, err = clover.Open(dbpath)
+	db, err = clover.Open(dbpath, options)
 	if err != nil {
 		return fmt.Errorf("failed opening db: %v", err)
 	}
@@ -168,7 +193,7 @@ func (c Collection) insert(dbEntryList []*DBEntry) error {
 		if entry.ID == nil || *entry.ID == "" {
 			// find doc by name based on entry
 			if doc, err = c.findDocByHash(db, hash); err != nil && errors.As(err, &ErrorDoesNotExist{}) == false {
-				log.Warnf("failed to find document: ", err)
+				log.Warn("failed to find document: ", err)
 			}
 		} else {
 			if doc, err = c.findDocById(db, *entry.ID); err != nil {
@@ -213,7 +238,7 @@ func (c Collection) FetchByEntry(value any) (string, error) {
 		return "", err
 	}
 
-	if db, err = clover.Open(dbpath); err != nil {
+	if db, err = clover.Open(dbpath, options); err != nil {
 		return "", fmt.Errorf("failed opening db: %v", err)
 	}
 	defer db.Close()
@@ -238,7 +263,7 @@ func (c Collection) FetchById(id string, value any) (string, error) {
 		doc *clover.Document
 	)
 
-	if db, err = clover.Open(dbpath); err != nil {
+	if db, err = clover.Open(dbpath, options); err != nil {
 		return "", fmt.Errorf("failed opening db: %v", err)
 	}
 	defer db.Close()
@@ -269,7 +294,7 @@ func (c Collection) FetchAllWithQuery(fn func() any, q *clover.Query) (entryList
 		db   *clover.DB
 		docs []*clover.Document
 	)
-	if db, err = clover.Open(dbpath); err != nil {
+	if db, err = clover.Open(dbpath, options); err != nil {
 		err = fmt.Errorf("failed opening db: %v", err)
 		return
 	}
@@ -364,7 +389,7 @@ func ExportAllCollections(path string) {
 		return
 	}
 
-	db, err := clover.Open(dbpath)
+	db, err := clover.Open(dbpath, options)
 	if err != nil {
 		log.Error("failed opening db: ", err)
 		return
@@ -386,7 +411,7 @@ func ExportAllCollections(path string) {
 // --------------------------------------------------------------------------
 func (c Collection) DropCollection() error {
 
-	db, err := clover.Open(dbpath)
+	db, err := clover.Open(dbpath, options)
 	if err != nil {
 		err = fmt.Errorf("failed opening db: %v", err)
 		return err
