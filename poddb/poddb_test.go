@@ -43,7 +43,7 @@ func (mc mockClover) FinalClose(t *testing.T) {
 
 }
 
-func setupTest(t *testing.T, openDB bool, openError bool) (mockClover, func(*testing.T, *mockClover)) {
+func setupTest(t *testing.T, openDB bool, openError bool) (*mockClover, func(*testing.T, *mockClover)) {
 	var (
 		mock = mockClover{openError: openError}
 		err  error
@@ -61,7 +61,7 @@ func setupTest(t *testing.T, openDB bool, openError bool) (mockClover, func(*tes
 	}
 	fmt.Print("\n")
 
-	return mock, func(t *testing.T, m *mockClover) {
+	return &mock, func(t *testing.T, m *mockClover) {
 		fmt.Print("Teardown()")
 		if m.db != nil {
 			fmt.Print(", closing db")
@@ -119,12 +119,12 @@ func TestNewDB(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			clmock, teardown := setupTest(t, false, tt.p.openError)
-			
+
 			// mock is ready for use; do insertions, etc
 			SetDBPath(tt.p.dbpath)
 			got, err := NewDB(tt.p.collname)
 			// defer after we've opened the db, not on setup
-			defer teardown(t, &clmock)
+			defer teardown(t, clmock)
 
 			// check result
 			testutils.AssertErr(t, tt.wantErr, err)
@@ -161,71 +161,93 @@ func TestNewDB(t *testing.T) {
 	}
 }
 
-/*
 func Test_createCollections(t *testing.T) {
-	type args struct {
-		db       *clover.DB
-		colllist []Collection
-	}
-	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := createCollections(tt.args.db, tt.args.colllist); (err != nil) != tt.wantErr {
-				t.Errorf("createCollections() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
 
-func TestPodDB_Collections(t *testing.T) {
+	type params struct {
+		preinsert []string
+		collList  []string
+		endCount  int
+	}
+
 	tests := []struct {
 		name string
-		d    PodDB
-		want Collection
+		p    params
 	}{
-		// TODO: Add test cases.
+		// error is hard to test; the badger transaction would have to be discarded
+		// but I don't care about that; just care about the cases I want to handle
+		// already existing collection
+		{
+			"existing collection",
+			params{
+				preinsert: []string{"foo"},
+				collList: []string{"foo", "bar", "arm"},
+				endCount: 3,
+			},
+		},
+		{
+			"all new collection #1",
+			params{
+				collList: []string{"foo", "bar", "arm"},
+				endCount: 3,
+			},
+		},
+		{
+			"all new collection #2",
+			params{
+				preinsert: []string{"fee","fie","foe","fum"},
+				collList: []string{"foo", "bar", "arm"},
+				endCount: 7,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.d.FeedCollection(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("PodDB.FeedCollection() = %v, want %v", got, tt.want)
+
+			clmock, teardown := setupTest(t, true, false)
+			defer teardown(t, clmock)
+
+			// preinsert collections
+			for _, name := range tt.p.preinsert {
+				if err := clmock.db.CreateCollection(name); err != nil {
+					t.Fatal("failed to create preinsert collection: ", err)
+				}
+			}
+
+			// collection insert
+			var list = make([]Collection, 0, len(tt.p.collList))
+			for _, c := range tt.p.collList {
+				list = append(list, Collection{name: c})
+			}
+			var err = createCollections(clmock.db, list)
+
+			testutils.AssertErr(t, false, err)
+
+			// make sure collections exist
+			if err == nil {
+				colllist, err := clmock.db.ListCollections()
+				testutils.AssertErr(t, false, err)
+				testutils.Assert(t, len(colllist) == tt.p.endCount,
+					fmt.Sprintf("Collection list should be %v; got %#v", tt.p.endCount, colllist))
+				for _, c := range tt.p.collList {
+					exists, err := clmock.db.HasCollection(c)
+					testutils.Assert(t, exists, "Missing collection "+c)
+					testutils.AssertErr(t, false, err)
+				}
 			}
 		})
 	}
 }
 
-func TestCollection_NewQuery(t *testing.T) {
-	tests := []struct {
-		name string
-		c    Collection
-		want *clover.Query
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.c.NewQuery(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Collection.NewQuery() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
+// before doing inserts/fetches, verify the helper functions
 
+/*
 func TestCollection_InsertyByEntry(t *testing.T) {
-	type args struct {
-		entry any
+	type params struct {
+		
 	}
 	tests := []struct {
 		name    string
-		c       Collection
-		args    args
-		want    string
+		p params
 		wantErr bool
 	}{
 		// TODO: Add test cases.
@@ -244,6 +266,7 @@ func TestCollection_InsertyByEntry(t *testing.T) {
 	}
 }
 
+/*
 func TestCollection_InsertyById(t *testing.T) {
 	type args struct {
 		id    string
