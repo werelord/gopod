@@ -1,76 +1,14 @@
 package poddb
 
 import (
-	"errors"
 	"fmt"
 	"gopod/testutils"
 	"testing"
-
-	"github.com/ostafen/clover/v2"
 )
 
 // more integration tests than unit tests here; however we're replacing the cloverInterface
 // definition for testing purposes (stopping deferred close); as each test will run clover in
-// memory mode we don't want to close until we
-
-type mockClover struct {
-	db        *clover.DB
-	openError bool
-}
-
-func (mc mockClover) Open(p string, _ ...clover.Option) (*clover.DB, error) {
-	fmt.Print("MockClover.Open()")
-	var err error
-	// db might have been opened by setupTest()
-	if mc.openError {
-		fmt.Println(", returning open error")
-		return nil, errors.New("foobar")
-	} else if mc.db == nil {
-		fmt.Println(", opening db (inMemoryMode)")
-		mc.db, err = clover.Open(p, clover.InMemoryMode(true))
-	} else {
-		fmt.Println(", reusing already open connection")
-	}
-	return mc.db, err
-}
-
-func (mc mockClover) Close() error {
-	fmt.Println("MockClover.Close(), faking closing db")
-	return nil // need to explicitly close in teardown function
-}
-
-func (mc mockClover) FinalClose(t *testing.T) {
-
-}
-
-func setupTest(t *testing.T, openDB bool, openError bool) (*mockClover, func(*testing.T, *mockClover)) {
-	var (
-		mock = mockClover{openError: openError}
-		err  error
-	)
-	var oldclover = cimpl
-	cimpl = mock
-	fmt.Print("SetupTest()")
-
-	if openDB {
-		fmt.Print(", opening db (inMemoryMode)")
-		mock.db, err = clover.Open(t.Name(), clover.InMemoryMode(true))
-		if err != nil {
-			t.Fatalf("create db failed: %v", err)
-		}
-	}
-	fmt.Print("\n")
-
-	return &mock, func(t *testing.T, m *mockClover) {
-		fmt.Print("Teardown()")
-		if m.db != nil {
-			fmt.Print(", closing db")
-			m.db.Close()
-		}
-		fmt.Print("\n")
-		cimpl = oldclover
-	}
-}
+// memory mode we don't want to close until the test is complete
 
 func TestNewDB(t *testing.T) {
 
@@ -85,35 +23,10 @@ func TestNewDB(t *testing.T) {
 		p       params
 		wantErr bool
 	}{
-		{
-			"empty db path",
-			params{},
-			true,
-		},
-		{
-			"empty collection",
-			params{
-				dbpath: "foo",
-			},
-			true,
-		},
-		{
-			"db open error",
-			params{
-				dbpath:    "foo",
-				collname:  "bar",
-				openError: true,
-			},
-			true,
-		},
-		{
-			"success",
-			params{
-				dbpath:   "foo",
-				collname: "bar",
-			},
-			false,
-		},
+		{"empty db path", params{}, true},
+		{"empty collection", params{dbpath: "foo"}, true},
+		{"db open error", params{dbpath: "foo", collname: "bar", openError: true}, true},
+		{"success", params{dbpath: "foo", collname: "bar"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -128,12 +41,6 @@ func TestNewDB(t *testing.T) {
 
 			// check result
 			testutils.AssertErr(t, tt.wantErr, err)
-
-			// if tt.wantErr && got != nil {
-			// // error
-			// } else if tt.wantErr == false && got == nil {
-			// 	// error
-			// }
 
 			testutils.Assert(t, tt.wantErr == (got == nil), fmt.Sprintf("expected (%T == nil) == %v), got %v", got, tt.wantErr, got))
 
@@ -161,89 +68,11 @@ func TestNewDB(t *testing.T) {
 	}
 }
 
-func Test_createCollections(t *testing.T) {
-
-	type params struct {
-		preinsert []string
-		collList  []string
-		endCount  int
-	}
-
-	tests := []struct {
-		name string
-		p    params
-	}{
-		// error is hard to test; the badger transaction would have to be discarded
-		// but I don't care about that; just care about the cases I want to handle
-		// already existing collection
-		{
-			"existing collection",
-			params{
-				preinsert: []string{"foo"},
-				collList: []string{"foo", "bar", "arm"},
-				endCount: 3,
-			},
-		},
-		{
-			"all new collection #1",
-			params{
-				collList: []string{"foo", "bar", "arm"},
-				endCount: 3,
-			},
-		},
-		{
-			"all new collection #2",
-			params{
-				preinsert: []string{"fee","fie","foe","fum"},
-				collList: []string{"foo", "bar", "arm"},
-				endCount: 7,
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-
-			clmock, teardown := setupTest(t, true, false)
-			defer teardown(t, clmock)
-
-			// preinsert collections
-			for _, name := range tt.p.preinsert {
-				if err := clmock.db.CreateCollection(name); err != nil {
-					t.Fatal("failed to create preinsert collection: ", err)
-				}
-			}
-
-			// collection insert
-			var list = make([]Collection, 0, len(tt.p.collList))
-			for _, c := range tt.p.collList {
-				list = append(list, Collection{name: c})
-			}
-			var err = createCollections(clmock.db, list)
-
-			testutils.AssertErr(t, false, err)
-
-			// make sure collections exist
-			if err == nil {
-				colllist, err := clmock.db.ListCollections()
-				testutils.AssertErr(t, false, err)
-				testutils.Assert(t, len(colllist) == tt.p.endCount,
-					fmt.Sprintf("Collection list should be %v; got %#v", tt.p.endCount, colllist))
-				for _, c := range tt.p.collList {
-					exists, err := clmock.db.HasCollection(c)
-					testutils.Assert(t, exists, "Missing collection "+c)
-					testutils.AssertErr(t, false, err)
-				}
-			}
-		})
-	}
-}
-
-// before doing inserts/fetches, verify the helper functions
 
 /*
 func TestCollection_InsertyByEntry(t *testing.T) {
 	type params struct {
-		
+
 	}
 	tests := []struct {
 		name    string
