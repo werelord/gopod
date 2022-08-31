@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"gopod/testutils"
 	"testing"
+
+	"github.com/ostafen/clover/v2"
 )
 
 func Test_createCollections(t *testing.T) {
@@ -118,63 +120,138 @@ func Test_parseAndVerifyEntry(t *testing.T) {
 	}
 }
 
-/*
 func TestCollection_findDocByHash(t *testing.T) {
-	type args struct {
-		db   *clover.DB
-		hash string
+
+	clmock, teardown := setupTest(t, true, false)
+	defer teardown(t, clmock)
+
+	// insert stuff for test
+	var coll = "foo"
+	if err := clmock.db.CreateCollection(coll); err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	type itemType struct{ Hash, Val string }
+
+	var items = itemType{"foobar", "testMe"}
+
+	insdoc := clover.NewDocumentOf(items)
+
+	docid, err := clmock.db.InsertOne(coll, insdoc)
+	if err != nil {
+		t.Fatalf("insert error: %v", err)
+	}
+
+	type params struct {
+		db       *clover.DB
+		collName string
+		hash     string
+	}
+	type expected struct {
+		id     string
+		errStr string
+		items  itemType
 	}
 	tests := []struct {
-		name    string
-		c       Collection
-		args    args
-		want    *clover.Document
-		wantErr bool
+		name string
+		p    params
+		e    expected
 	}{
-		// TODO: Add test cases.
+		{"db is nil", params{},
+			expected{errStr: "db is not open"}},
+		{"collection doesn't exist", params{db: clmock.db, collName: "bar", hash: "foobar"},
+			expected{errStr: "error in query"}},
+		{"hash not found", params{db: clmock.db, collName: coll, hash: "barfoo"},
+			expected{errStr: "hash not found"}},
+		{"success", params{db: clmock.db, collName: coll, hash: "foobar"},
+			expected{id: docid, items: items}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.c.findDocByHash(tt.args.db, tt.args.hash)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Collection.findDocByHash() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Collection.findDocByHash() = %v, want %v", got, tt.want)
+			var coll = Collection{name: tt.p.collName}
+			doc, err := coll.findDocByHash(tt.p.db, tt.p.hash)
+
+			testutils.AssertErrContains(t, tt.e.errStr, err)
+			testutils.Assert(t, (doc == nil) == (tt.e.errStr != ""),
+				fmt.Sprintf("expected nil doc == %v, got %v", (tt.e.errStr != ""), doc))
+			if doc != nil {
+				testutils.AssertEquals(t, tt.e.id, doc.ObjectId())
+				var res = itemType{}
+				err := doc.Unmarshal(&res)
+				testutils.AssertErr(t, false, err)
+				testutils.AssertEquals(t, tt.e.items, res)
 			}
 		})
 	}
 }
 
 func TestCollection_findDocById(t *testing.T) {
-	type args struct {
-		db *clover.DB
-		id string
+
+	clmock, teardown := setupTest(t, true, false)
+	defer teardown(t, clmock)
+
+	// insert stuff for test
+	var coll = "foo"
+	if err := clmock.db.CreateCollection(coll); err != nil {
+		t.Fatalf("error: %v", err)
 	}
+
+	type itemType struct{ Hash, Val string }
+
+	var items = itemType{"foobar", "testMe"}
+
+	insdoc := clover.NewDocumentOf(items)
+
+	docid, err := clmock.db.InsertOne(coll, insdoc)
+	if err != nil {
+		t.Fatalf("insert error: %v", err)
+	}
+
+	type params struct {
+		db       *clover.DB
+		collName string
+		id       string
+	}
+	type expected struct {
+		id     string
+		errStr string
+		items  itemType
+	}
+
 	tests := []struct {
-		name    string
-		c       Collection
-		args    args
-		want    *clover.Document
-		wantErr bool
+		name string
+		p    params
+		e    expected
 	}{
-		// TODO: Add test cases.
+		{"db is nil", params{},
+			expected{errStr: "db is not open"}},
+		{"collection doesn't exist", params{db: clmock.db, collName: "bar", id: "foobar"},
+			expected{errStr: "error in query"}},
+		{"id not found", params{db: clmock.db, collName: coll, id: "barfoo"},
+			expected{errStr: "id not found"}},
+		{"success", params{db: clmock.db, collName: coll, id: docid},
+			expected{id: docid, items: items}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.c.findDocById(tt.args.db, tt.args.id)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Collection.findDocById() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Collection.findDocById() = %v, want %v", got, tt.want)
+			var coll = Collection{name: tt.p.collName}
+			doc, err := coll.findDocById(tt.p.db, tt.p.id)
+
+			testutils.AssertErrContains(t, tt.e.errStr, err)
+			testutils.Assert(t, (doc == nil) == (tt.e.errStr != ""),
+				fmt.Sprintf("expected nil doc == %v, got %v", (tt.e.errStr != ""), doc))
+			if doc != nil {
+				testutils.AssertEquals(t, tt.e.id, doc.ObjectId())
+				var res = itemType{}
+				err := doc.Unmarshal(&res)
+				testutils.AssertErr(t, false, err)
+				testutils.AssertEquals(t, tt.e.items, res)
 			}
 		})
 	}
 }
 
+/*
 func TestCollection_insert(t *testing.T) {
 	type args struct {
 		dbEntryList []*DBEntry

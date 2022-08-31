@@ -113,8 +113,14 @@ func (c Collection) findDocById(db *clover.DB, id string) (*clover.Document, err
 	if db == nil {
 		return nil, errors.New("db is not open")
 	}
+	doc, err := db.FindById(c.name, id)
+	if err != nil {
+		return nil, fmt.Errorf("error in query: %w", err)
+	} else if doc == nil {
+		return nil, ErrorDoesNotExist{"id not found"}
+	}
 
-	return db.FindById(c.name, id)
+	return doc, nil
 }
 
 // --------------------------------------------------------------------------
