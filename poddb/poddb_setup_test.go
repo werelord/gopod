@@ -15,7 +15,7 @@ type mockClover struct {
 	openError bool
 }
 
-func (mc mockClover) Open(p string, _ ...clover.Option) (*clover.DB, error) {
+func (mc *mockClover) Open(p string, _ ...clover.Option) (*clover.DB, error) {
 	fmt.Print("MockClover.Open()")
 	var err error
 	// db might have been opened by setupTest()
@@ -31,13 +31,9 @@ func (mc mockClover) Open(p string, _ ...clover.Option) (*clover.DB, error) {
 	return mc.db, err
 }
 
-func (mc mockClover) Close() error {
+func (mc *mockClover) Close() error {
 	fmt.Println("MockClover.Close(), faking closing db")
 	return nil // need to explicitly close in teardown function
-}
-
-func (mc mockClover) FinalClose(t *testing.T) {
-
 }
 
 func setupTest(t *testing.T, openDB bool, openError bool) (*mockClover, func(*testing.T, *mockClover)) {
@@ -46,8 +42,8 @@ func setupTest(t *testing.T, openDB bool, openError bool) (*mockClover, func(*te
 		err  error
 	)
 	var oldclover = cimpl
-	cimpl = mock
-	fmt.Print("SetupTest()")
+	cimpl = &mock
+	fmt.Printf("SetupTest(%v)", t.Name())
 
 	if openDB {
 		fmt.Print(", opening db (inMemoryMode)")
@@ -59,7 +55,7 @@ func setupTest(t *testing.T, openDB bool, openError bool) (*mockClover, func(*te
 	fmt.Print("\n")
 
 	return &mock, func(t *testing.T, m *mockClover) {
-		fmt.Print("Teardown()")
+		fmt.Printf("\nTeardown(%v)", t.Name())
 		if m.db != nil {
 			fmt.Print(", closing db")
 			m.db.Close()

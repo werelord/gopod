@@ -55,10 +55,8 @@ func Test_createCollections(t *testing.T) {
 			}
 			var err = createCollections(clmock.db, list)
 
-			testutils.AssertErr(t, false, err)
-
-			// make sure collections exist
-			if err == nil {
+			if testutils.AssertErr(t, false, err) {
+				// make sure collections exist
 				colllist, err := clmock.db.ListCollections()
 				testutils.AssertErr(t, false, err)
 				testutils.Assert(t, len(colllist) == tt.p.endCount,
@@ -251,25 +249,161 @@ func TestCollection_findDocById(t *testing.T) {
 	}
 }
 
-/*
 func TestCollection_insert(t *testing.T) {
-	type args struct {
-		dbEntryList []*DBEntry
+	//setupTest(t, true, false)
+
+	type validEntry struct {
+		Hash string
+		Foo  string
+	}
+
+	type preinsert struct {
+		replaceId bool
+		entry     validEntry
+	}
+
+	var cp = func(entry DBEntry) *DBEntry {
+		// allocate new, return reference to new
+		var cpy = entry
+		return &cpy
+	}
+
+	var (
+		foobar = "foobar"
+		// error entries
+		emptyEntry  = DBEntry{}
+		noHashEntry = DBEntry{Entry: struct{ Foo, Bar string }{Foo: "bar", Bar: "foo"}}
+		entryWithId = DBEntry{ID: &foobar, Entry: validEntry{Hash: "foobar", Foo: "meh"}}
+
+		// valid entries
+		entryOne   = DBEntry{Entry: validEntry{Hash: "foobar", Foo: "meh"}}
+		entryTwo   = DBEntry{Entry: validEntry{Hash: "armleg", Foo: "bar"}}
+		entryThree = DBEntry{Entry: validEntry{Hash: "barfoo", Foo: "armleg"}}
+
+		// preinsert entries
+		entryOneModified = validEntry{Hash: "foobar", Foo: "bah"}
+		entryTwoModified = validEntry{Hash: "armleg", Foo: "legarm"}
+	)
+
+	//var oneEntry = []*DBEntry{&emptyEntry}
+
+	type params struct {
+		collNameErr string
+		openErr     bool
+		entries     []*DBEntry
+	}
+	type expected struct {
+		preInsert      []preinsert
+		totalItemCount int
+		errStr         string
 	}
 	tests := []struct {
-		name    string
-		c       Collection
-		args    args
-		wantErr bool
+		name string
+		p    params
+		e    expected
 	}{
-		// TODO: Add test cases.
+		{"no entries,", params{},
+			expected{errStr: "insert list is empty"}},
+		{"open error", params{openErr: true, entries: []*DBEntry{cp(entryOne)}},
+			expected{errStr: "failed opening db"}},
+		{"bad entry", params{entries: []*DBEntry{cp(emptyEntry)}},
+			expected{errStr: "expecting struct, got"}},
+		{"no hash entry", params{entries: []*DBEntry{cp(noHashEntry)}},
+			expected{errStr: "entry missing hash field"}},
+		{"collection doesn't exist", params{collNameErr: "bar", entries: []*DBEntry{cp(entryOne)}},
+			expected{errStr: "collection doesn't exist"}},
+		{"insert by id, doesn't exist", params{entries: []*DBEntry{cp(entryWithId)}},
+			expected{errStr: "ID set, but failed to find document"}},
+
+		{"insert by hash, new entry", params{entries: []*DBEntry{cp(entryOne)}},
+			expected{totalItemCount: 1}},
+		{"insert by hash, replace existing", params{entries: []*DBEntry{cp(entryOne)}},
+			expected{totalItemCount: 1, preInsert: []preinsert{{entry: entryOneModified}}}},
+
+		{"insert by id, replace existing", params{entries: []*DBEntry{cp(entryOne)}},
+			expected{totalItemCount: 1, preInsert: []preinsert{{replaceId: true,
+				entry: entryOneModified}}}},
+
+		{"insert all (mix and match)", params{entries: []*DBEntry{cp(entryOne), cp(entryTwo), cp(entryThree)}},
+			expected{totalItemCount: 3, preInsert: []preinsert{
+				{replaceId: true, entry: entryOneModified}, // replace by id
+				{entry: entryTwoModified},	// replace by hash
+			}},
+		},
+
+		// multiple entries, mix & match
+
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.c.insert(tt.args.dbEntryList); (err != nil) != tt.wantErr {
-				t.Errorf("Collection.insert() error = %v, wantErr %v", err, tt.wantErr)
+
+			// var copyOrig = make([]DBEntry, 0, len(tt.p.entries))
+			// for _, e := range tt.p.entries {
+			// 	copyOrig = append(copyOrig, *e)
+			// }
+			var collname = "foo"
+
+			clmock, teardown := setupTest(t, true, tt.p.openErr)
+			defer teardown(t, clmock)
+
+			// make sure collection exists
+			if err := clmock.db.CreateCollection(collname + tt.p.collNameErr); err != nil {
+				t.Fatalf("error: %v", err)
+			}
+			var coll = Collection{name: collname}
+
+			// preinsert; populate the preinsert map
+			var preInserMap = make(map[string]preinsert, len(tt.e.preInsert))
+			if len(tt.e.preInsert) > 0 {
+				for i, e := range tt.e.preInsert {
+					if id, err := clmock.db.InsertOne(collname, clover.NewDocumentOf(e.entry)); err != nil {
+						t.Fatalf("error: %v", err)
+					} else {
+						preInserMap[id] = e
+						if e.replaceId {
+							// assume the index of preinsert matches entries
+							tt.p.entries[i].ID = &id
+						}
+
+					}
+				}
+			}
+
+			// finally all the pre-shit is done; do the insert and check results
+
+			inserterr := coll.insert(tt.p.entries)
+			if testutils.AssertErrContains(t, tt.e.errStr, inserterr) {
+
+				// make sure entry count matches
+				count, err := clmock.db.Count(clover.NewQuery(collname))
+				testutils.AssertErr(t, false, err)
+				testutils.Assert(t, count == tt.e.totalItemCount,
+					fmt.Sprintf("expecting count %v, got %v entries", tt.e.totalItemCount, count))
+
+				for _, e := range tt.p.entries {
+					// make sure entries have IDs set
+					testutils.Assert(t, (e.ID != nil) && (*e.ID != ""),
+						fmt.Sprintf("id should not be empty: %#v", e))
+
+					if e.ID != nil {
+						// able to find the entry in the db
+
+						doc, err := clmock.db.FindById(collname, *e.ID)
+						if testutils.AssertErr(t, false, err) {
+							// make sure entry matches original
+							var insertedEntry validEntry
+							doc.Unmarshal(&insertedEntry)
+							testutils.AssertEquals(t, e.Entry, insertedEntry)
+						}
+
+						// make sure if preinsert changed, that the result doesn't match the original
+						if preEntry, exists := preInserMap[*e.ID]; exists {
+							// by default, for testing purposes we're assuming the insert modifies the orig entry
+							testutils.AssertNotEquals(t, preEntry.entry, e.Entry)
+						}
+					}
+				}
 			}
 		})
 	}
 }
-*/

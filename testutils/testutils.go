@@ -16,15 +16,23 @@ func Assert(tb testing.TB, condition bool, msg string) {
 }
 
 // equals fails the test if exp is not equal to act.
-func AssertEquals(tb testing.TB, exp, act interface{}) {
+func AssertEquals(tb testing.TB, exp, act any) {
 	tb.Helper()
 	if !reflect.DeepEqual(exp, act) {
 		tb.Errorf("\033[31m \nexp: %#v \ngot: %#v \033[39m", exp, act)
 	}
 }
 
-// checks if error is nil
-func AssertErr(tb testing.TB, wantErr bool, e error) {
+func AssertNotEquals(tb testing.TB, exp, act any) {
+	tb.Helper()
+	if reflect.DeepEqual(exp, act) {
+		tb.Errorf("\033[31m \nexp: %#v \ngot: %#v \033[39m", exp, act)
+	}
+}
+
+// checks if error is nil based on wantErr
+// returns whether err == nil, for continuation checks
+func AssertErr(tb testing.TB, wantErr bool, e error) bool {
 	tb.Helper()
 	if wantErr && e == nil {
 		tb.Error("\033[31m exp:NotNil nil got:nil \033[39m")
@@ -32,13 +40,16 @@ func AssertErr(tb testing.TB, wantErr bool, e error) {
 	} else if wantErr == false && e != nil {
 		tb.Errorf("\033[31m exp:nil got: %s \033[39m", e)
 	}
+	return e == nil
 }
 
 // check if error is nil via error string
-func AssertErrContains(tb testing.TB, contains string, e error) {
+// returns whether err == nil, for continuation checks
+func AssertErrContains(tb testing.TB, contains string, e error) bool {
 	tb.Helper()
 	AssertErr(tb, contains != "", e)
 	if (contains != "") && (strings.Contains(e.Error(), contains) == false) {
-		tb.Errorf("\033[31m expected contains '%s' got: '%s' \033[39m", contains, e)
+		tb.Errorf("\033[31m wanted error '%s' got: '%s' \033[39m", contains, e)
 	}
+	return e == nil
 }

@@ -18,17 +18,20 @@ type cloverImpl struct {
 	db *clover.DB
 }
 
-func (c cloverImpl) Open(p string, o ...clover.Option) (*clover.DB, error) {
+func (c *cloverImpl) Open(p string, o ...clover.Option) (*clover.DB, error) {
 	var err error
 	c.db, err = clover.Open(p, o...)
 	return c.db, err
 }
 
-func (c cloverImpl) Close() error {
-	return c.db.Close()
+func (c *cloverImpl) Close() error {
+	if c.db != nil {
+		return c.db.Close()
+	}
+	return nil
 }
 
-var cimpl cloverInterface = cloverImpl{}
+var cimpl cloverInterface = &cloverImpl{}
 
 // common to all instances
 var (
@@ -138,11 +141,21 @@ func (c Collection) insert(dbEntryList []*DBEntry) error {
 
 		hash string
 	)
-	db, err = clover.Open(dbpath, options)
-	if err != nil {
-		return fmt.Errorf("failed opening db: %v", err)
+	if len(dbEntryList) <= 0 {
+		return errors.New("insert list is empty")
 	}
-	defer db.Close()
+
+	// todo: move opening database outside of this?
+	db, err = cimpl.Open(dbpath, options)
+	if err != nil {
+		return fmt.Errorf("failed opening db: %w", err)
+	}
+	defer cimpl.Close()
+	if exists, err := db.HasCollection(c.name); err != nil {
+		return fmt.Errorf("error checking collection: %w", err)
+	} else if exists == false {
+		return errors.New("collection doesn't exist")
+	}
 
 	// collect all the documents, set the values
 	// todo: can we run this loop concurrently??
@@ -155,13 +168,13 @@ func (c Collection) insert(dbEntryList []*DBEntry) error {
 
 		// todo: move this if into InsertBy* methods (???)
 		if entry.ID == nil || *entry.ID == "" {
-			// find doc by name based on entry
+			// find doc by hash based on entry
 			if doc, err = c.findDocByHash(db, hash); err != nil && errors.As(err, &ErrorDoesNotExist{}) == false {
 				log.Warn("failed to find document: ", err)
 			}
 		} else {
 			if doc, err = c.findDocById(db, *entry.ID); err != nil {
-				log.Warn("failed to find document: ", err)
+				return fmt.Errorf("ID set, but failed to find document: %w", err)
 			}
 		}
 
