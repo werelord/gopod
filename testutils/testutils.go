@@ -53,3 +53,11 @@ func AssertErrContains(tb testing.TB, contains string, e error) bool {
 	}
 	return e == nil
 }
+
+// copies an entry (usually struct) by value, returns pointer to new copy
+func Cp[T any](orig T) *T {
+	// allocate new, copy entry values, return reference to new
+	var cpy = new(T)
+	*cpy = orig
+	return cpy
+}

@@ -248,11 +248,7 @@ func TestCollection_insert(t *testing.T) {
 		entry     validEntry
 	}
 
-	var cp = func(entry DBEntry) *DBEntry {
-		// allocate new, copy entry values, return reference to new
-		var cpy = entry
-		return &cpy
-	}
+	var cp = testutils.Cp[DBEntry]
 
 	var (
 		foobar = "foobar"

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"gopod/testutils"
 	"testing"
+
+	"github.com/ostafen/clover/v2"
 )
 
 // more integration tests than unit tests here; however we're replacing the cloverInterface
@@ -31,7 +33,7 @@ func TestNewDB(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			clmock, teardown := setupTest(t, false, tt.p.openError)
+			clmock, teardown := setupTest(t, false, "", tt.p.openError)
 
 			// mock is ready for use; do insertions, etc
 			SetDBPath(tt.p.dbpath)
@@ -68,104 +70,202 @@ func TestNewDB(t *testing.T) {
 	}
 }
 
-
-/*
 func TestCollection_InsertyByEntry(t *testing.T) {
-	type params struct {
 
+	type entry struct {
+		Hash string
+		Foo  string
+	}
+
+	type params struct {
+		entry any
+	}
+	type expected struct {
+		idEmpty bool
+		wantErr bool
 	}
 	tests := []struct {
-		name    string
-		p params
-		wantErr bool
+		name string
+		p    params
+		e    expected
 	}{
-		// TODO: Add test cases.
+		// simple checks; majority of checks (replace, db errors, etc) on internal function
+		{"missing hash field", params{entry: struct{ Foo string }{Foo: "bar"}},
+			expected{idEmpty: true, wantErr: true}},
+		{"hash empty", params{entry: entry{Foo: "bar"}},
+			expected{idEmpty: true, wantErr: true}},
+		{"success", params{entry: entry{Hash: "barfoo", Foo: "bar"}},
+			expected{idEmpty: false, wantErr: false}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.c.InsertyByEntry(tt.args.entry)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Collection.InsertyByEntry() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("Collection.InsertyByEntry() = %v, want %v", got, tt.want)
+
+			var collname = "foo"
+
+			clmock, teardown := setupTest(t, true, collname, false)
+			defer teardown(t, clmock)
+
+			id, err := clmock.coll.InsertyByEntry(tt.p.entry)
+
+			testutils.Assert(t, (id == "") == tt.e.idEmpty,
+				fmt.Sprintf("expecting ID empty == %v, got %v", tt.e.idEmpty, id))
+			if testutils.AssertErr(t, tt.e.wantErr, err) {
+				// make sure entry exists and matches
+				doc, err := clmock.db.FindById(clmock.coll.name, id)
+				if testutils.AssertErr(t, false, err) {
+					var dbentry entry
+					err = doc.Unmarshal(&dbentry)
+					testutils.AssertErr(t, false, err)
+					testutils.AssertEquals(t, tt.p.entry, dbentry)
+				}
 			}
 		})
 	}
 }
 
-/*
 func TestCollection_InsertyById(t *testing.T) {
-	type args struct {
-		id    string
-		entry any
+	type entry struct {
+		Hash string
+		Foo  string
+	}
+
+	clmock, teardown := setupTest(t, true, "foo", false)
+	defer teardown(t, clmock)
+
+	// insert existing
+	var existing = entry{"foobar", "existing"}
+	var newentry = entry{"barfoo", "newentry"}
+	doc := clover.NewDocumentOf(existing)
+	dbid, err := clmock.db.InsertOne(clmock.coll.name, doc)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	type params struct {
+		clmock *mockClover
+		id     string
+		entry  any
+	}
+	type expected struct {
+		origId    string
+		origEntry entry
+		wantErr   bool
 	}
 	tests := []struct {
-		name    string
-		c       Collection
-		args    args
-		want    string
-		wantErr bool
+		name string
+		p    params
+		e    expected
 	}{
-		// TODO: Add test cases.
+		// simple checks; majority of checks (replace, db errors, etc) on internal function
+		{"id empty", params{clmock: clmock, entry: newentry},
+			expected{origId: dbid, origEntry: existing, wantErr: true}},
+		{"id not found", params{clmock: clmock, id: "foobar", entry: newentry},
+			expected{origId: dbid, origEntry: existing, wantErr: true}},
+		{"hash empty", params{clmock: clmock, id: dbid, entry: entry{Foo: "bar"}},
+			expected{origId: dbid, origEntry: existing, wantErr: true}},
+		{"success", params{clmock: clmock, id: dbid, entry: newentry},
+			expected{origId: dbid, origEntry: existing, wantErr: false}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.c.InsertyById(tt.args.id, tt.args.entry)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Collection.InsertyById() error = %v, wantErr %v", err, tt.wantErr)
-				return
+
+			id, err := tt.p.clmock.coll.InsertyById(tt.p.id, tt.p.entry)
+
+			testutils.AssertEquals(t, tt.p.id, id)
+			insertErr := testutils.AssertErr(t, tt.e.wantErr, err) == false
+
+			// get the original entry
+			doc, err := clmock.db.FindById(tt.p.clmock.coll.name, tt.e.origId)
+			if err != nil {
+				t.Fatalf("error: %v", err)
 			}
-			if got != tt.want {
-				t.Errorf("Collection.InsertyById() = %v, want %v", got, tt.want)
+			var dbentry entry
+			if err := doc.Unmarshal(&dbentry); err != nil {
+				t.Fatalf("error: %v", err)
+			}
+
+			if insertErr {
+				// make sure db matches the original
+				testutils.AssertEquals(t, tt.e.origEntry, dbentry)
+				testutils.AssertNotEquals(t, tt.p.entry, dbentry)
+			} else {
+				// make sure db matches new entry
+				testutils.AssertEquals(t, tt.p.entry, dbentry)
+				testutils.AssertNotEquals(t, tt.e.origEntry, dbentry)
 			}
 		})
 	}
 }
 
 func TestCollection_InsertAll(t *testing.T) {
-	type args struct {
+	// not doing error checks; alot of that handled by test on internal method
+
+	type entry struct {
+		Hash string
+		Foo  string
+	}
+
+	clmock, teardown := setupTest(t, true, "foo", false)
+	defer teardown(t, clmock)
+
+	var (
+		entryOne         = entry{"foo", "entryone"}
+		entryOneModified = entry{"foo", "entryonemodified"}
+		entryTwo         = entry{"bar", "entryTwo"}
+		entryThree       = entry{"meh", "entryThree"}
+	)
+
+	// insert pre-existing entries, just one pre-populated
+	doc := clover.NewDocumentOf(entryOne)
+	id, err := clmock.db.InsertOne(clmock.coll.name, doc)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	type params struct {
+		clmock    *mockClover
 		entryList []*DBEntry
 	}
-	tests := []struct {
-		name    string
-		c       Collection
-		args    args
+	type expected struct {
 		wantErr bool
+	}
+	tests := []struct {
+		name string
+		p    params
+		e    expected
 	}{
-		// TODO: Add test cases.
+		{"multi insert", params{clmock: clmock,
+			entryList: []*DBEntry{
+				{ID: &id, Entry: entryOneModified},
+				{Entry: entryTwo},
+				{Entry: entryThree}}},
+			expected{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.c.InsertAll(tt.args.entryList); (err != nil) != tt.wantErr {
-				t.Errorf("Collection.InsertAll() error = %v, wantErr %v", err, tt.wantErr)
+			err := tt.p.clmock.coll.InsertAll(tt.p.entryList)
+
+			if testutils.AssertErr(t, tt.e.wantErr, err) {
+				// make sure all ids are set
+				for _, origEntry := range tt.p.entryList {
+					testutils.Assert(t, origEntry.ID != nil, "ID should not be nil")
+					testutils.Assert(t, *(origEntry.ID) != "", "ID should not be empty")
+
+					// make sure db entry matches
+					doc, err := clmock.db.FindById(clmock.coll.name, *origEntry.ID)
+					testutils.AssertErr(t, false, err)
+					var dbentry entry
+					err = doc.Unmarshal(&dbentry)
+					testutils.AssertErr(t, false, err)
+					testutils.AssertEquals(t, origEntry.Entry, dbentry)
+				}
 			}
+
 		})
 	}
 }
 
-func TestCollection_insert(t *testing.T) {
-	type args struct {
-		dbEntryList []*DBEntry
-	}
-	tests := []struct {
-		name    string
-		c       Collection
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.c.insert(tt.args.dbEntryList); (err != nil) != tt.wantErr {
-				t.Errorf("Collection.insert() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
+/*
 func TestCollection_FetchByEntry(t *testing.T) {
 	type args struct {
 		value any
@@ -193,6 +293,7 @@ func TestCollection_FetchByEntry(t *testing.T) {
 	}
 }
 
+/*
 func TestCollection_FetchById(t *testing.T) {
 	type args struct {
 		id    string
@@ -221,6 +322,7 @@ func TestCollection_FetchById(t *testing.T) {
 	}
 }
 
+/*
 func TestCollection_FetchAll(t *testing.T) {
 	type args struct {
 		fn func() any
@@ -248,6 +350,7 @@ func TestCollection_FetchAll(t *testing.T) {
 	}
 }
 
+/*
 func TestCollection_FetchAllWithQuery(t *testing.T) {
 	type args struct {
 		fn func() any
@@ -276,92 +379,8 @@ func TestCollection_FetchAllWithQuery(t *testing.T) {
 	}
 }
 
-func TestCollection_findDocByHash(t *testing.T) {
-	type args struct {
-		db   *clover.DB
-		hash string
-	}
-	tests := []struct {
-		name    string
-		c       Collection
-		args    args
-		want    *clover.Document
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.c.findDocByHash(tt.args.db, tt.args.hash)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Collection.findDocByHash() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Collection.findDocByHash() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 
-func TestCollection_findDocById(t *testing.T) {
-	type args struct {
-		db *clover.DB
-		id string
-	}
-	tests := []struct {
-		name    string
-		c       Collection
-		args    args
-		want    *clover.Document
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.c.findDocById(tt.args.db, tt.args.id)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Collection.findDocById() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Collection.findDocById() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func Test_parseAndVerifyEntry(t *testing.T) {
-	type args struct {
-		entry any
-	}
-	tests := []struct {
-		name         string
-		args         args
-		wantEntryMap map[string]any
-		wantHash     string
-		wantErr      bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotEntryMap, gotHash, err := parseAndVerifyEntry(tt.args.entry)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("parseAndVerifyEntry() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(gotEntryMap, tt.wantEntryMap) {
-				t.Errorf("parseAndVerifyEntry() gotEntryMap = %v, want %v", gotEntryMap, tt.wantEntryMap)
-			}
-			if gotHash != tt.wantHash {
-				t.Errorf("parseAndVerifyEntry() gotHash = %v, want %v", gotHash, tt.wantHash)
-			}
-		})
-	}
-}
-
+/*
 func TestExportAllCollections(t *testing.T) {
 	type args struct {
 		path string
@@ -379,6 +398,7 @@ func TestExportAllCollections(t *testing.T) {
 	}
 }
 
+/*
 func TestCollection_DropCollection(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -33,7 +33,7 @@ type Collection struct {
 }
 
 type DBEntry struct {
-	ID    *string
+	ID *string
 	// todo: move hash to explicit entry; must be included (do after tests)
 	Entry any
 }
@@ -106,6 +106,11 @@ func (c Collection) InsertyByEntry(entry any) (string, error) {
 func (c Collection) InsertyById(id string, entry any) (string, error) {
 	// make sure we're not referencing the caller's string.. although I don't think it does
 	// an extra allocation here won't hurt I guess
+
+	if id == "" {
+		return "", errors.New("id cannot be empty")
+	}
+
 	dbe := DBEntry{
 		ID:    new(string),
 		Entry: entry,
@@ -180,7 +185,7 @@ func (c Collection) FetchById(id string, value any) (string, error) {
 	return doc.ObjectId(), nil
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (c Collection) FetchAll(fn func() any) (entryList []DBEntry, err error) {
 
 	return c.FetchAllWithQuery(fn, clover.NewQuery(c.name))
