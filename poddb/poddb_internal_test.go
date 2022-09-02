@@ -38,7 +38,7 @@ func Test_createCollections(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			clmock, teardown := setupTest(t, true, false)
+			clmock, teardown := setupTest(t, true, "", false)
 			defer teardown(t, clmock)
 
 			// preinsert collections
@@ -120,14 +120,8 @@ func Test_parseAndVerifyEntry(t *testing.T) {
 
 func TestCollection_findDocByHash(t *testing.T) {
 
-	clmock, teardown := setupTest(t, true, false)
+	clmock, teardown := setupTest(t, true, "foo", false)
 	defer teardown(t, clmock)
-
-	// insert stuff for test
-	var coll = "foo"
-	if err := clmock.db.CreateCollection(coll); err != nil {
-		t.Fatalf("error: %v", err)
-	}
 
 	type itemType struct{ Hash, Val string }
 
@@ -135,15 +129,15 @@ func TestCollection_findDocByHash(t *testing.T) {
 
 	insdoc := clover.NewDocumentOf(items)
 
-	docid, err := clmock.db.InsertOne(coll, insdoc)
+	docid, err := clmock.db.InsertOne(clmock.coll.name, insdoc)
 	if err != nil {
 		t.Fatalf("insert error: %v", err)
 	}
 
 	type params struct {
-		db       *clover.DB
-		collName string
-		hash     string
+		db   *clover.DB
+		coll Collection
+		hash string
 	}
 	type expected struct {
 		id     string
@@ -155,19 +149,18 @@ func TestCollection_findDocByHash(t *testing.T) {
 		p    params
 		e    expected
 	}{
-		{"db is nil", params{},
+		{"db is nil", params{coll: clmock.coll},
 			expected{errStr: "db is not open"}},
-		{"collection doesn't exist", params{db: clmock.db, collName: "bar", hash: "foobar"},
+		{"collection doesn't exist", params{db: clmock.db, coll: Collection{"bar"}, hash: "foobar"},
 			expected{errStr: "error in query"}},
-		{"hash not found", params{db: clmock.db, collName: coll, hash: "barfoo"},
+		{"hash not found", params{db: clmock.db, coll: clmock.coll, hash: "barfoo"},
 			expected{errStr: "hash not found"}},
-		{"success", params{db: clmock.db, collName: coll, hash: "foobar"},
+		{"success", params{db: clmock.db, coll: clmock.coll, hash: "foobar"},
 			expected{id: docid, items: items}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var coll = Collection{name: tt.p.collName}
-			doc, err := coll.findDocByHash(tt.p.db, tt.p.hash)
+			doc, err := tt.p.coll.findDocByHash(tt.p.db, tt.p.hash)
 
 			testutils.AssertErrContains(t, tt.e.errStr, err)
 			testutils.Assert(t, (doc == nil) == (tt.e.errStr != ""),
@@ -185,14 +178,8 @@ func TestCollection_findDocByHash(t *testing.T) {
 
 func TestCollection_findDocById(t *testing.T) {
 
-	clmock, teardown := setupTest(t, true, false)
+	clmock, teardown := setupTest(t, true, "foo", false)
 	defer teardown(t, clmock)
-
-	// insert stuff for test
-	var coll = "foo"
-	if err := clmock.db.CreateCollection(coll); err != nil {
-		t.Fatalf("error: %v", err)
-	}
 
 	type itemType struct{ Hash, Val string }
 
@@ -200,15 +187,15 @@ func TestCollection_findDocById(t *testing.T) {
 
 	insdoc := clover.NewDocumentOf(items)
 
-	docid, err := clmock.db.InsertOne(coll, insdoc)
+	docid, err := clmock.db.InsertOne(clmock.coll.name, insdoc)
 	if err != nil {
 		t.Fatalf("insert error: %v", err)
 	}
 
 	type params struct {
-		db       *clover.DB
-		collName string
-		id       string
+		db   *clover.DB
+		coll Collection
+		id   string
 	}
 	type expected struct {
 		id     string
@@ -221,19 +208,18 @@ func TestCollection_findDocById(t *testing.T) {
 		p    params
 		e    expected
 	}{
-		{"db is nil", params{},
+		{"db is nil", params{coll: clmock.coll},
 			expected{errStr: "db is not open"}},
-		{"collection doesn't exist", params{db: clmock.db, collName: "bar", id: "foobar"},
+		{"collection doesn't exist", params{db: clmock.db, coll: Collection{"bar"}, id: "foobar"},
 			expected{errStr: "error in query"}},
-		{"id not found", params{db: clmock.db, collName: coll, id: "barfoo"},
+		{"id not found", params{db: clmock.db, coll: clmock.coll, id: "barfoo"},
 			expected{errStr: "id not found"}},
-		{"success", params{db: clmock.db, collName: coll, id: docid},
+		{"success", params{db: clmock.db, coll: clmock.coll, id: docid},
 			expected{id: docid, items: items}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var coll = Collection{name: tt.p.collName}
-			doc, err := coll.findDocById(tt.p.db, tt.p.id)
+			doc, err := tt.p.coll.findDocById(tt.p.db, tt.p.id)
 
 			testutils.AssertErrContains(t, tt.e.errStr, err)
 			testutils.Assert(t, (doc == nil) == (tt.e.errStr != ""),
@@ -263,7 +249,7 @@ func TestCollection_insert(t *testing.T) {
 	}
 
 	var cp = func(entry DBEntry) *DBEntry {
-		// allocate new, return reference to new
+		// allocate new, copy entry values, return reference to new
 		var cpy = entry
 		return &cpy
 	}
@@ -288,9 +274,9 @@ func TestCollection_insert(t *testing.T) {
 	//var oneEntry = []*DBEntry{&emptyEntry}
 
 	type params struct {
-		collNameErr string
-		openErr     bool
-		entries     []*DBEntry
+		coll    Collection
+		openErr bool
+		entries []*DBEntry
 	}
 	type expected struct {
 		preInsert      []preinsert
@@ -310,7 +296,7 @@ func TestCollection_insert(t *testing.T) {
 			expected{errStr: "expecting struct, got"}},
 		{"no hash entry", params{entries: []*DBEntry{cp(noHashEntry)}},
 			expected{errStr: "entry missing hash field"}},
-		{"collection doesn't exist", params{collNameErr: "bar", entries: []*DBEntry{cp(entryOne)}},
+		{"collection doesn't exist", params{coll: Collection{"bar"}, entries: []*DBEntry{cp(entryOne)}},
 			expected{errStr: "collection doesn't exist"}},
 		{"insert by id, doesn't exist", params{entries: []*DBEntry{cp(entryWithId)}},
 			expected{errStr: "ID set, but failed to find document"}},
@@ -327,7 +313,7 @@ func TestCollection_insert(t *testing.T) {
 		{"insert all (mix and match)", params{entries: []*DBEntry{cp(entryOne), cp(entryTwo), cp(entryThree)}},
 			expected{totalItemCount: 3, preInsert: []preinsert{
 				{replaceId: true, entry: entryOneModified}, // replace by id
-				{entry: entryTwoModified},	// replace by hash
+				{entry: entryTwoModified},                  // replace by hash
 			}},
 		},
 
@@ -337,26 +323,19 @@ func TestCollection_insert(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			// var copyOrig = make([]DBEntry, 0, len(tt.p.entries))
-			// for _, e := range tt.p.entries {
-			// 	copyOrig = append(copyOrig, *e)
-			// }
-			var collname = "foo"
-
-			clmock, teardown := setupTest(t, true, tt.p.openErr)
+			clmock, teardown := setupTest(t, true, "foo", tt.p.openErr)
 			defer teardown(t, clmock)
 
-			// make sure collection exists
-			if err := clmock.db.CreateCollection(collname + tt.p.collNameErr); err != nil {
-				t.Fatalf("error: %v", err)
+			var coll = clmock.coll
+			if tt.p.coll.name != "" {
+				coll = tt.p.coll
 			}
-			var coll = Collection{name: collname}
 
 			// preinsert; populate the preinsert map
 			var preInserMap = make(map[string]preinsert, len(tt.e.preInsert))
 			if len(tt.e.preInsert) > 0 {
 				for i, e := range tt.e.preInsert {
-					if id, err := clmock.db.InsertOne(collname, clover.NewDocumentOf(e.entry)); err != nil {
+					if id, err := clmock.db.InsertOne(clmock.coll.name, clover.NewDocumentOf(e.entry)); err != nil {
 						t.Fatalf("error: %v", err)
 					} else {
 						preInserMap[id] = e
@@ -370,12 +349,12 @@ func TestCollection_insert(t *testing.T) {
 			}
 
 			// finally all the pre-shit is done; do the insert and check results
-
+			// use local coll in case of coll not exist test
 			inserterr := coll.insert(tt.p.entries)
 			if testutils.AssertErrContains(t, tt.e.errStr, inserterr) {
 
 				// make sure entry count matches
-				count, err := clmock.db.Count(clover.NewQuery(collname))
+				count, err := clmock.db.Count(clover.NewQuery(clmock.coll.name))
 				testutils.AssertErr(t, false, err)
 				testutils.Assert(t, count == tt.e.totalItemCount,
 					fmt.Sprintf("expecting count %v, got %v entries", tt.e.totalItemCount, count))
@@ -388,7 +367,7 @@ func TestCollection_insert(t *testing.T) {
 					if e.ID != nil {
 						// able to find the entry in the db
 
-						doc, err := clmock.db.FindById(collname, *e.ID)
+						doc, err := clmock.db.FindById(clmock.coll.name, *e.ID)
 						if testutils.AssertErr(t, false, err) {
 							// make sure entry matches original
 							var insertedEntry validEntry

@@ -12,6 +12,7 @@ import (
 
 type mockClover struct {
 	db        *clover.DB
+	coll      Collection
 	openError bool
 }
 
@@ -36,7 +37,7 @@ func (mc *mockClover) Close() error {
 	return nil // need to explicitly close in teardown function
 }
 
-func setupTest(t *testing.T, openDB bool, openError bool) (*mockClover, func(*testing.T, *mockClover)) {
+func setupTest(t *testing.T, openDB bool, collname string, openError bool) (*mockClover, func(*testing.T, *mockClover)) {
 	var (
 		mock = mockClover{openError: openError}
 		err  error
@@ -51,6 +52,15 @@ func setupTest(t *testing.T, openDB bool, openError bool) (*mockClover, func(*te
 		if err != nil {
 			t.Fatalf("create db failed: %v", err)
 		}
+
+		if collname != "" {
+			fmt.Printf(", creating Collection (%v)", collname)
+			if err := mock.db.CreateCollection(collname); err != nil {
+				t.Fatalf("error: %v", err)
+			}
+			mock.coll = Collection{name: collname}
+		}
+
 	}
 	fmt.Print("\n")
 
