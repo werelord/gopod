@@ -38,6 +38,7 @@ func TestNewDB(t *testing.T) {
 			// mock is ready for use; do insertions, etc
 			SetDBPath(tt.p.dbpath)
 			got, err := NewDB(tt.p.collname)
+			clmock.checkAndResetClose(t)
 			// defer after we've opened the db, not on setup
 			defer teardown(t, clmock)
 
@@ -106,6 +107,7 @@ func TestCollection_InsertyByEntry(t *testing.T) {
 			defer teardown(t, clmock)
 
 			id, err := clmock.coll.InsertyByEntry(tt.p.entry)
+			clmock.checkAndResetClose(t)
 
 			testutils.Assert(t, (id == "") == tt.e.idEmpty,
 				fmt.Sprintf("expecting ID empty == %v, got %v", tt.e.idEmpty, id))
@@ -170,6 +172,7 @@ func TestCollection_InsertyById(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			id, err := tt.p.clmock.coll.InsertyById(tt.p.id, tt.p.entry)
+			clmock.checkAndResetClose(t)
 
 			testutils.AssertEquals(t, tt.p.id, id)
 			insertErr := testutils.AssertErr(t, tt.e.wantErr, err) == false
@@ -244,6 +247,7 @@ func TestCollection_InsertAll(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.p.clmock.coll.InsertAll(tt.p.entryList)
+			clmock.checkAndResetClose(t)
 
 			if testutils.AssertErr(t, tt.e.wantErr, err) {
 				// make sure all ids are set
@@ -265,30 +269,78 @@ func TestCollection_InsertAll(t *testing.T) {
 	}
 }
 
-/*
 func TestCollection_FetchByEntry(t *testing.T) {
-	type args struct {
-		value any
+
+	clmock, teardown := setupTest(t, true, "foo", false)
+	defer teardown(t, clmock)
+
+	type entrytype struct {
+		Hash string
+		Foo  string
+	}
+
+	var existingEntry = entrytype{Hash: "foo", Foo: "bar"}
+
+	var doc = clover.NewDocumentOf(existingEntry)
+
+	existingId, err := clmock.db.InsertOne(clmock.coll.name, doc)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	type params struct {
+		clmock       *mockClover
+		throwOpenErr bool
+		entry        any
+	}
+	type expected struct {
+		id      string
+		entry   entrytype
+		errStr  string
+		wantErr bool
 	}
 	tests := []struct {
-		name    string
-		c       Collection
-		args    args
-		want    string
-		wantErr bool
+		name string
+		p    params
+		e    expected
 	}{
-		// TODO: Add test cases.
+		{"no hash error", params{clmock: clmock, entry: struct{ Foo, Bar string }{"meh", "bah"}},
+			expected{wantErr: true}},
+		{"db open error", params{clmock: clmock, throwOpenErr: true, entry: entrytype{Hash: "foo"}},
+			expected{errStr: "failed opening db", wantErr: true}},
+		{"doesn't exist", params{clmock: clmock, entry: entrytype{Hash: "bar"}},
+			expected{errStr: "hash not found", wantErr: true}},
+		{"success", params{clmock: clmock, entry: entrytype{Hash: "foo"}},
+			expected{id: existingId, entry: existingEntry}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.c.FetchByEntry(tt.args.value)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Collection.FetchByEntry() error = %v, wantErr %v", err, tt.wantErr)
-				return
+
+			var id string
+			var err error
+			// should reset every timne
+			tt.p.clmock.SetOpenError(tt.p.throwOpenErr)
+
+			// because using interface fucks with type erasure, which then fucks with unmarshalling,
+			// need to hard cast the success from failure entries.. bullshit
+			res, ok := tt.p.entry.(entrytype)
+			if ok {
+				id, err = tt.p.clmock.coll.FetchByEntry(&res)
+			} else {
+				id, err = tt.p.clmock.coll.FetchByEntry(&tt.p.entry)
 			}
-			if got != tt.want {
-				t.Errorf("Collection.FetchByEntry() = %v, want %v", got, tt.want)
+			clmock.checkAndResetClose(t)
+
+			testutils.AssertErr(t, tt.e.wantErr, err)
+			if tt.e.errStr != "" {
+				testutils.AssertErrContains(t, tt.e.errStr, err)
 			}
+			testutils.AssertEquals(t, tt.e.id, id)
+			if err == nil {
+				//testutils.Assert(t, ok == true, "type returned not entry; wtf")
+				testutils.AssertEquals(t, tt.e.entry, res)
+			}
+
 		})
 	}
 }

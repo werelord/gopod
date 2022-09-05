@@ -103,6 +103,9 @@ func Test_parseAndVerifyEntry(t *testing.T) {
 			expected{errorStr: "hash cannot be empty"}},
 		{"success", params{entry: struct{ Foo, Hash string }{Foo: "bar", Hash: "meh"}},
 			expected{entryMap: map[string]any{"Foo": "bar", "Hash": "meh"}, hash: "meh"}},
+		{"success (ptr)", params{entry: &struct{ Foo, Hash string }{Foo: "bar", Hash: "meh"}},
+			expected{entryMap: map[string]any{"Foo": "bar", "Hash": "meh"}, hash: "meh"}},
+
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -347,6 +350,7 @@ func TestCollection_insert(t *testing.T) {
 			// finally all the pre-shit is done; do the insert and check results
 			// use local coll in case of coll not exist test
 			inserterr := coll.insert(tt.p.entries)
+			clmock.checkAndResetClose(t)
 			if testutils.AssertErrContains(t, tt.e.errStr, inserterr) {
 
 				// make sure entry count matches

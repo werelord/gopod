@@ -140,15 +140,15 @@ func (c Collection) FetchByEntry(value any) (string, error) {
 		return "", err
 	}
 
-	if db, err = clover.Open(dbpath, options); err != nil {
+	if db, err = cimpl.Open(dbpath, options); err != nil {
 		return "", fmt.Errorf("failed opening db: %v", err)
 	}
-	defer db.Close()
+	defer cimpl.Close()
 
 	if doc, err = c.findDocByHash(db, hash); err != nil {
 		return "", fmt.Errorf("find doc error: %v", err)
 	} else if doc == nil {
-		return "", ErrorDoesNotExist{"doc is nil"}
+		return "", ErrorDoesNotExist{"entry not found"}
 	}
 
 	if err = doc.Unmarshal(value); err != nil {
@@ -165,10 +165,10 @@ func (c Collection) FetchById(id string, value any) (string, error) {
 		doc *clover.Document
 	)
 
-	if db, err = clover.Open(dbpath, options); err != nil {
+	if db, err = cimpl.Open(dbpath, options); err != nil {
 		return "", fmt.Errorf("failed opening db: %v", err)
 	}
-	defer db.Close()
+	defer cimpl.Close()
 
 	doc, err = c.findDocById(db, id)
 	if err != nil {
@@ -197,11 +197,11 @@ func (c Collection) FetchAllWithQuery(fn func() any, q *clover.Query) (entryList
 		db   *clover.DB
 		docs []*clover.Document
 	)
-	if db, err = clover.Open(dbpath, options); err != nil {
+	if db, err = cimpl.Open(dbpath, options); err != nil {
 		err = fmt.Errorf("failed opening db: %v", err)
 		return
 	}
-	defer db.Close()
+	defer cimpl.Close()
 
 	docs, err = db.FindAll(q)
 	if err != nil {
@@ -236,12 +236,12 @@ func ExportAllCollections(path string) {
 		return
 	}
 
-	db, err := clover.Open(dbpath, options)
+	db, err := cimpl.Open(dbpath, options)
 	if err != nil {
 		log.Error("failed opening db: ", err)
 		return
 	}
-	defer db.Close()
+	defer cimpl.Close()
 
 	list, err := db.ListCollections()
 	if err != nil {
@@ -258,12 +258,12 @@ func ExportAllCollections(path string) {
 // --------------------------------------------------------------------------
 func (c Collection) DropCollection() error {
 
-	db, err := clover.Open(dbpath, options)
+	db, err := cimpl.Open(dbpath, options)
 	if err != nil {
 		err = fmt.Errorf("failed opening db: %v", err)
 		return err
 	}
-	defer db.Close()
+	defer cimpl.Close()
 
 	return db.DropCollection(c.name)
 }

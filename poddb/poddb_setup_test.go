@@ -3,6 +3,7 @@ package poddb
 import (
 	"errors"
 	"fmt"
+	"gopod/testutils"
 	"testing"
 
 	"github.com/ostafen/clover/v2"
@@ -11,10 +12,14 @@ import (
 // common functions used for all tests
 
 type mockClover struct {
-	db        *clover.DB
-	coll      Collection
-	openError bool
+	db          *clover.DB
+	coll        Collection
+	openError   bool
+	openCalled  bool
+	closeCalled bool
 }
+
+func (mc *mockClover) SetOpenError(throwErr bool) { mc.openError = throwErr }
 
 func (mc *mockClover) Open(p string, _ ...clover.Option) (*clover.DB, error) {
 	fmt.Print("MockClover.Open()")
@@ -29,12 +34,25 @@ func (mc *mockClover) Open(p string, _ ...clover.Option) (*clover.DB, error) {
 	} else {
 		fmt.Println(", reusing already open connection")
 	}
+	// make sure reset closeCalled for future checks
+	mc.openCalled = true
+	mc.closeCalled = false
 	return mc.db, err
 }
 
 func (mc *mockClover) Close() error {
 	fmt.Println("MockClover.Close(), faking closing db")
+	mc.closeCalled = true
 	return nil // need to explicitly close in teardown function
+}
+
+func (mc *mockClover) checkAndResetClose(tb testing.TB) {
+	tb.Helper()
+	testutils.Assert(tb, mc.closeCalled == mc.openCalled, "DB close not called")
+
+	// explicit reset
+	mc.openCalled = false
+	mc.closeCalled = false
 }
 
 func setupTest(t *testing.T, openDB bool, collname string, openError bool) (*mockClover, func(*testing.T, *mockClover)) {
