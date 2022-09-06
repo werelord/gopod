@@ -19,7 +19,6 @@ func TestNewDB(t *testing.T) {
 		collname  string
 		openError bool
 	}
-
 	tests := []struct {
 		name    string
 		p       params
@@ -50,8 +49,11 @@ func TestNewDB(t *testing.T) {
 			// check poddb entries
 			if got != nil {
 				testutils.AssertEquals(t, got.feedColl.name, tt.p.collname)
+				testutils.AssertEquals(t, got.FeedCollection().name, tt.p.collname)
 				testutils.AssertEquals(t, got.itemDataColl.name, tt.p.collname+"_itemdata")
+				testutils.AssertEquals(t, got.ItemDataCollection().name, tt.p.collname+"_itemdata")
 				testutils.AssertEquals(t, got.itemXmlColl.name, tt.p.collname+"_itemxml")
+				testutils.AssertEquals(t, got.ItemXmlCollection().name, tt.p.collname+"_itemxml")
 			}
 
 			// check clover entries
@@ -280,7 +282,6 @@ func TestCollection_FetchByEntry(t *testing.T) {
 	}
 
 	var existingEntry = entrytype{Hash: "foo", Foo: "bar"}
-
 	var doc = clover.NewDocumentOf(existingEntry)
 
 	existingId, err := clmock.db.InsertOne(clmock.coll.name, doc)
@@ -345,126 +346,247 @@ func TestCollection_FetchByEntry(t *testing.T) {
 	}
 }
 
-/*
 func TestCollection_FetchById(t *testing.T) {
-	type args struct {
-		id    string
-		value any
-	}
-	tests := []struct {
-		name    string
-		c       Collection
-		args    args
-		want    string
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.c.FetchById(tt.args.id, tt.args.value)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Collection.FetchById() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("Collection.FetchById() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 
-/*
-func TestCollection_FetchAll(t *testing.T) {
-	type args struct {
-		fn func() any
-	}
-	tests := []struct {
-		name          string
-		c             Collection
-		args          args
-		wantEntryList []DBEntry
-		wantErr       bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotEntryList, err := tt.c.FetchAll(tt.args.fn)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Collection.FetchAll() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(gotEntryList, tt.wantEntryList) {
-				t.Errorf("Collection.FetchAll() = %v, want %v", gotEntryList, tt.wantEntryList)
-			}
-		})
-	}
-}
+	clmock, teardown := setupTest(t, true, "foo", false)
+	defer teardown(t, clmock)
 
-/*
-func TestCollection_FetchAllWithQuery(t *testing.T) {
-	type args struct {
-		fn func() any
-		q  *clover.Query
-	}
-	tests := []struct {
-		name          string
-		c             Collection
-		args          args
-		wantEntryList []DBEntry
-		wantErr       bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotEntryList, err := tt.c.FetchAllWithQuery(tt.args.fn, tt.args.q)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Collection.FetchAllWithQuery() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(gotEntryList, tt.wantEntryList) {
-				t.Errorf("Collection.FetchAllWithQuery() = %v, want %v", gotEntryList, tt.wantEntryList)
-			}
-		})
-	}
-}
+	type entrytype struct{ Hash, Foo string }
 
+	var existingEntry = entrytype{Hash: "foo", Foo: "bar"}
+	var doc = clover.NewDocumentOf(existingEntry)
 
-/*
-func TestExportAllCollections(t *testing.T) {
-	type args struct {
-		path string
+	existingId, err := clmock.db.InsertOne(clmock.coll.name, doc)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	type params struct {
+		clmock       *mockClover
+		id           string
+		throwOpenErr bool
+	}
+	type expected struct {
+		id     string
+		entry  entrytype
+		errStr string
 	}
 	tests := []struct {
 		name string
-		args args
+		p    params
+		e    expected
 	}{
-		// TODO: Add test cases.
+		{"db open error", params{clmock: clmock, throwOpenErr: true},
+			expected{errStr: "failed opening db"}},
+		{"doesn't exist", params{clmock: clmock, id: "foobar"},
+			expected{errStr: "id not found"}},
+		{"success", params{clmock: clmock, id: existingId},
+			expected{id: existingId, entry: existingEntry}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ExportAllCollections(tt.args.path)
-		})
-	}
-}
 
-/*
-func TestCollection_DropCollection(t *testing.T) {
-	tests := []struct {
-		name    string
-		c       Collection
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.c.DropCollection(); (err != nil) != tt.wantErr {
-				t.Errorf("Collection.DropCollection() error = %v, wantErr %v", err, tt.wantErr)
+			var outEntry entrytype
+
+			// should reset every timne
+			tt.p.clmock.SetOpenError(tt.p.throwOpenErr)
+			tt.p.clmock.checkAndResetClose(t)
+
+			id, err := tt.p.clmock.coll.FetchById(tt.p.id, &outEntry)
+
+			testutils.AssertEquals(t, tt.e.id, id)
+			if testutils.AssertErrContains(t, tt.e.errStr, err) {
+				testutils.AssertEquals(t, tt.e.entry, outEntry)
 			}
 		})
 	}
 }
-*/
+
+func TestCollection_FetchAll(t *testing.T) {
+	clmock, teardown := setupTest(t, true, "foo", false)
+	defer teardown(t, clmock)
+
+	type entrytype struct{ Hash, Foo string }
+
+	var entrymap = make(map[string]entrytype)
+	for _, entry := range []entrytype{
+		{Hash: "foo", Foo: "one"},
+		{Hash: "bar", Foo: "two"},
+		{Hash: "arm", Foo: "three"},
+		{Hash: "meh", Foo: "four"},
+	} {
+		var doc = clover.NewDocumentOf(entry)
+		id, err := clmock.db.InsertOne(clmock.coll.name, doc)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		entrymap[id] = entry
+	}
+
+	type params struct {
+		clmock       *mockClover
+		throwOpenErr bool
+	}
+	type expected struct {
+		entryMap map[string]entrytype
+		errStr   string
+	}
+	tests := []struct {
+		name string
+		p    params
+		e    expected
+	}{
+		{"db open error", params{clmock: clmock, throwOpenErr: true},
+			expected{errStr: "failed opening db"}},
+		{"all items", params{clmock: clmock},
+			expected{entryMap: entrymap}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			tt.p.clmock.SetOpenError(tt.p.throwOpenErr)
+			var fn = func() any { var entry entrytype; return &entry }
+
+			resultList, err := tt.p.clmock.coll.FetchAll(fn)
+			clmock.checkAndResetClose(t)
+
+			testutils.AssertErrContains(t, tt.e.errStr, err)
+			testutils.Assert(t, len(tt.e.entryMap) == len(resultList),
+				fmt.Sprintf("expected length = %v, got %v", len(tt.e.entryMap), len(resultList)))
+
+			// for the next loop, quick reference
+			var resultmap = make(map[string]DBEntry, len(resultList))
+
+			for _, dbentry := range resultList {
+				item, exists := tt.e.entryMap[*dbentry.ID]
+				testutils.Assert(t, exists == true, fmt.Sprintf("missing %v in entryMap", dbentry.ID))
+				if exists {
+					e, ok := dbentry.Entry.(*entrytype)
+					testutils.Assert(t, ok == true, fmt.Sprintf("entry is incorrect type: %v", dbentry.Entry))
+					if ok {
+						testutils.AssertEquals(t, item, *e)
+					}
+				}
+
+				resultmap[*dbentry.ID] = dbentry
+			}
+
+			for id, item := range tt.e.entryMap {
+				dbentry, exists := resultmap[id]
+				testutils.Assert(t, exists == true, fmt.Sprintf("missing %v in result", id))
+				if exists {
+					e, ok := dbentry.Entry.(*entrytype)
+					testutils.Assert(t, ok == true, fmt.Sprintf("entry is incorrect type: %v", dbentry.Entry))
+					if ok {
+						testutils.AssertEquals(t, item, *e)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestCollection_FetchAllWithQuery(t *testing.T) {
+	clmock, teardown := setupTest(t, true, "foo", false)
+	defer teardown(t, clmock)
+
+	type entrytype struct {
+		Hash, Foo string
+		Flag      bool
+	}
+
+	var entrymapAll = make(map[string]entrytype)
+	var entrymapTrue = make(map[string]entrytype)
+	var entryMapFalse = make(map[string]entrytype)
+
+	for _, entry := range []entrytype{
+		{Hash: "foo", Foo: "one", Flag: true},
+		{Hash: "bar", Foo: "two", Flag: true},
+		{Hash: "arm", Foo: "three", Flag: false},
+		{Hash: "meh", Foo: "four", Flag: true},
+		{Hash: "bah", Foo: "five", Flag: false},
+	} {
+		var doc = clover.NewDocumentOf(entry)
+		id, err := clmock.db.InsertOne(clmock.coll.name, doc)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		entrymapAll[id] = entry
+		if entry.Flag {
+			entrymapTrue[id] = entry
+		} else {
+			entryMapFalse[id] = entry
+		}
+	}
+
+	var allQuery = clmock.coll.NewQuery()
+	var trueQuery = clmock.coll.NewQuery().Where(clover.Field("Flag").IsTrue())
+	var falseQuery = clmock.coll.NewQuery().Where(clover.Field("Flag").IsFalse())
+
+	type params struct {
+		clmock       *mockClover
+		query        *clover.Query
+		throwOpenErr bool
+	}
+	type expected struct {
+		entryMap map[string]entrytype
+		errStr   string
+	}
+	tests := []struct {
+		name string
+		p    params
+		e    expected
+	}{
+		{"db open error", params{clmock: clmock, throwOpenErr: true},
+			expected{errStr: "failed opening db"}},
+		{"all items", params{clmock: clmock, query: allQuery},
+			expected{entryMap: entrymapAll}},
+		{"false items", params{clmock: clmock, query: falseQuery},
+			expected{entryMap: entryMapFalse}},
+		{"true items", params{clmock: clmock, query: trueQuery},
+			expected{entryMap: entrymapTrue}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.p.clmock.SetOpenError(tt.p.throwOpenErr)
+			var fn = func() any { var entry entrytype; return &entry }
+
+			resultList, err := tt.p.clmock.coll.FetchAllWithQuery(fn, tt.p.query)
+			clmock.checkAndResetClose(t)
+
+			testutils.AssertErrContains(t, tt.e.errStr, err)
+			testutils.Assert(t, len(tt.e.entryMap) == len(resultList),
+				fmt.Sprintf("expected length = %v, got %v", len(tt.e.entryMap), len(resultList)))
+
+			// for the next loop, quick reference
+			var resultmap = make(map[string]DBEntry, len(resultList))
+
+			for _, dbentry := range resultList {
+				item, exists := tt.e.entryMap[*dbentry.ID]
+				testutils.Assert(t, exists == true, fmt.Sprintf("missing %v in entryMap", dbentry.ID))
+				if exists {
+					e, ok := dbentry.Entry.(*entrytype)
+					testutils.Assert(t, ok == true, fmt.Sprintf("entry is incorrect type: %v", dbentry.Entry))
+					if ok {
+						testutils.AssertEquals(t, item, *e)
+					}
+				}
+
+				resultmap[*dbentry.ID] = dbentry
+			}
+
+			for id, item := range tt.e.entryMap {
+				dbentry, exists := resultmap[id]
+				testutils.Assert(t, exists == true, fmt.Sprintf("missing %v in result", id))
+				if exists {
+					e, ok := dbentry.Entry.(*entrytype)
+					testutils.Assert(t, ok == true, fmt.Sprintf("entry is incorrect type: %v", dbentry.Entry))
+					if ok {
+						testutils.AssertEquals(t, item, *e)
+					}
+				}
+			}
+
+		})
+	}
+}

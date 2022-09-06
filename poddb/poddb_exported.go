@@ -151,7 +151,7 @@ func (c Collection) FetchByEntry(value any) (string, error) {
 		return "", ErrorDoesNotExist{"entry not found"}
 	}
 
-	if err = doc.Unmarshal(value); err != nil {
+	if err = doc.Unmarshal(&value); err != nil {
 		return "", fmt.Errorf("unmarshal error: %v", err)
 	}
 	return doc.ObjectId(), nil
@@ -174,11 +174,11 @@ func (c Collection) FetchById(id string, value any) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("find doc error: %v", err)
 	} else if doc == nil {
-		return "", ErrorDoesNotExist{"doc is nil"}
+		return "", ErrorDoesNotExist{"entry not found"}
 	}
 	// todo: more checks??
 
-	if err = doc.Unmarshal(value); err != nil {
+	if err = doc.Unmarshal(&value); err != nil {
 		return "", fmt.Errorf("unmarshal error: %v", err)
 	}
 
@@ -203,6 +203,7 @@ func (c Collection) FetchAllWithQuery(fn func() any, q *clover.Query) (entryList
 	}
 	defer cimpl.Close()
 
+	// fuck if I know what errrors are returned here..
 	docs, err = db.FindAll(q)
 	if err != nil {
 		err = fmt.Errorf("findall failed: %v", err)
