@@ -19,6 +19,9 @@ const ( // commands
 	CheckDownloaded
 )
 
+// for testing purposes
+var fileExists = podutils.FileExists
+
 var cmdMap = map[CommandType]string{
 	Unknown:         "unknown command",
 	Update:          "update",
@@ -74,11 +77,10 @@ func InitCommandLine(defaultConfig string, args []string) (*CommandLine, error) 
 	}
 
 	if c.ConfigFile != "" {
-
-		if exists, err := podutils.FileExists(c.ConfigFile); (err != nil) || (exists == false) {
+		if exists, err := fileExists(c.ConfigFile); (err != nil) || (exists == false) {
 			// check relative to default
 			workFile := filepath.Join(filepath.Dir(defaultConfig), c.ConfigFile)
-			if exists, err := podutils.FileExists(workFile); (err != nil) || (exists == false) {
+			if exists, err := fileExists(workFile); (err != nil) || (exists == false) {
 				return nil, fmt.Errorf("cannot find config file: %v", c.ConfigFile)
 			}
 		}
@@ -113,7 +115,7 @@ func (c *CommandLine) buildOptions(defaultConfig string) *getoptions.GetOpt {
 		opt.Description("Simulate; will not download items or save database"))
 	updateCommand.BoolVar(&c.ForceUpdate, "force", false,
 		opt.Description("force update on xml and items (will process everything in feed"))
-	updateCommand.BoolVar(&c.UseMostRecentXml, "use-recent", false, opt.Alias("use-recent-xml"),
+	updateCommand.BoolVar(&c.UseMostRecentXml, "use-recent", false, opt.Alias("use-recent-xml", "userecent"),
 		opt.Description("Use the most recent feed xml file fetched rather than checking for new; if recent doesn't exist, will still download.  Note: if there are no errors on previous run, will likely do nothing unless --force is specified"))
 	updateCommand.SetCommandFn(c.generateCmdFunc(Update))
 

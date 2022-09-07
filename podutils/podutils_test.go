@@ -39,3 +39,25 @@ func TestCopyAndAppend(t *testing.T) {
 		})
 	}
 }
+
+func TestTern(t *testing.T) {
+	type args struct {
+		cond     bool
+		trueval  string
+		falseval string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{"true", args{true, "foo", "bar"}, "foo"},
+		{"false", args{false, "foo", "bar"}, "bar"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Tern(tt.args.cond, tt.args.trueval, tt.args.falseval)
+			testutils.AssertEquals(t, tt.want, got)
+		})
+	}
+}

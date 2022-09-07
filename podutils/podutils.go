@@ -22,3 +22,12 @@ func CopyAndAppend[T any](src []T, add ...T) []T {
 	dst = append(dst, add...)
 	return dst
 }
+
+// ternary function shit
+func Tern[T any](cond bool, t T, f T) T {
+	if cond {
+		return t
+	} else {
+		return f
+	}
+}
