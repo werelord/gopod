@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -44,7 +45,7 @@ func main() {
 	)
 
 	// todo: flag to check item entries that aren't downloaded
-	if cmdline, err = commandline.InitCommandLine(filepath.Join(defaultworking, "master.toml")); err != nil {
+	if cmdline, err = commandline.InitCommandLine(filepath.Join(defaultworking, "master.toml"), os.Args[1:]); err != nil {
 		// if help called, no errors to output
 		if errors.Is(err, getoptions.ErrorHelpCalled) == false {
 			fmt.Println("failed to init commandline:", err)

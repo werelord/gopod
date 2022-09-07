@@ -197,96 +197,20 @@ func (f *Feed) loadItemEntries() error {
 
 }
 
-// for db conversion only
-// func (f *Feed) CreateExport() *FeedDBEntry {
-
-// 	f.initDB()
-
-// 	feedStruct := FeedDBEntry{
-// 		Hash:        podutils.GenerateHash(f.Shortname),
-// 		XmlFeedData: f.XMLFeedData,
-// 	}
-
-// 	return &feedStruct
-// }
-
-// func (f *Feed) CreateItemDataExport() []*ItemDataDBEntry {
-
-// 	f.initDB()
-
-// 	var list = make([]*ItemDataDBEntry, 0, f.itemlist.Len())
-
-// 	for pair := f.itemlist.Oldest(); pair != nil; pair = pair.Next() {
-// 		entry := ItemDataDBEntry{
-// 			Hash:     pair.Value.Hash,
-// 			ItemData: pair.Value.ItemData,
-// 		}
-// 		list = append(list, &entry)
-// 	}
-
-// 	return list
-// }
-
-// for db conversion only
-// func (f *Feed) CreateItemXmlExport() []*ItemXmlDBEntry {
-
-// 	f.initDB()
-
-// 	records, err := f.db.ReadAll("items")
-// 	if err != nil {
-// 		log.Error("error: ", err)
-// 	}
-
-// 	var list = make([]*ItemXmlDBEntry, 0, len(records))
-
-// 	var scribbleEntryMap = make(map[string]string)
-
-// 	// put these in reverse order.. fuck it
-// 	for i := len(records) - 1; i >= 0; i-- {
-// 		var item = records[i]
-// 		var scribbleEntry = ItemExportScribble{}
-
-// 		if err := json.Unmarshal([]byte(item), &scribbleEntry); err != nil {
-// 			log.Error("unmarshal error: ", err)
-// 		}
-// 		list = append(list, &ItemXmlDBEntry{
-// 			Hash:    scribbleEntry.Hash,
-// 			ItemXml: scribbleEntry.ItemXmlData,
-// 		})
-
-// 		// we're running a check on shit here as well.. make sure this record exists in itemlist
-// 		if _, exists := f.itemlist.Get(scribbleEntry.Hash); exists == false {
-// 			log.Warnf("(%v) Itemlist missing scribble xml hash %v (item:%v)",
-// 				f.Shortname, scribbleEntry.Hash, scribbleEntry.ItemXmlData.Enclosure.Url)
-// 		}
-// 		// set a map to check items the opposite way; just need the hash
-// 		scribbleEntryMap[scribbleEntry.Hash] = scribbleEntry.Hash
-// 	}
-
-// 	// check the other way around
-// 	for pair := f.itemlist.Oldest(); pair != nil; pair = pair.Next() {
-// 		if _, exists := scribbleEntryMap[pair.Value.Hash]; exists == false {
-// 			log.Warnf("(%v) scribble entries missing itemlist hash %v (item:%v)",
-// 				f.Shortname, pair.Value.Hash, pair.Value.Filename)
-// 		}
-// 	}
-
-// 	return list
-// }
-
 // --------------------------------------------------------------------------
-func (f Feed) saveFeedDb() (err error) {
+func (f Feed) saveFeedDb() error {
 
+	var err error
 	log.Info("Saving db for ", f.Shortname)
 
 	// make sure we have an ID
-	if f.dbXmlId == "" {
-		log.Warn("saving feed xml; but id is empty; this shouldn't happen")
-	}
+	// if f.dbXmlId == "" {
+	// 	log.Warn("saving feed xml; but id is empty; new feed??")
+	// }
 
 	if config.Simulate {
 		log.Info("skipping saving database due to sim flag")
-		return
+		return nil
 	}
 
 	entry := FeedXmlDBEntry{
@@ -294,10 +218,19 @@ func (f Feed) saveFeedDb() (err error) {
 		XmlFeedData: f.XMLFeedData,
 	}
 
-	id, err := f.db.FeedCollection().InsertyById(f.dbXmlId, entry)
+	var id string
+
+	if f.dbXmlId == "" {
+		log.Info("Feed ID is empty; inserting via hash (should be new feed)")
+		id, err = f.db.FeedCollection().InsertyByEntry(entry)
+	} else {
+		log.Infof("inserting via id (%v)", f.dbXmlId)
+		id, err = f.db.FeedCollection().InsertyById(f.dbXmlId, entry)
+	}
+
 	if err != nil {
 		return err
-	} else if id != f.dbXmlId {
+	} else if (id != "") && (id != f.dbXmlId) {
 		err := errors.New("id returned from the db doesn't match previously stored")
 		log.Error("%v\nfid:'%v' != dbid:'%v'", err, f.dbXmlId, id)
 		return err

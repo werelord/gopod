@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gopod/podutils"
 	"os"
 	"path/filepath"
 
@@ -46,14 +47,14 @@ type CommandLineOptions struct {
 }
 
 // --------------------------------------------------------------------------
-func InitCommandLine(defaultConfig string) (*CommandLine, error) {
+func InitCommandLine(defaultConfig string, args []string) (*CommandLine, error) {
 
 	var c CommandLine
 
 	opt := c.buildOptions(defaultConfig)
 
 	//fmt.Printf("%+v\n", os.Args[1:])
-	remaining, err := opt.Parse(os.Args[1:])
+	remaining, err := opt.Parse(args)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: %s\n\n", err)
 		fmt.Fprint(os.Stderr, opt.Help(getoptions.HelpSynopsis))
@@ -73,10 +74,11 @@ func InitCommandLine(defaultConfig string) (*CommandLine, error) {
 	}
 
 	if c.ConfigFile != "" {
-		if _, err := os.Stat(c.ConfigFile); err != nil {
+
+		if exists, err := podutils.FileExists(c.ConfigFile); (err != nil) || (exists == false) {
 			// check relative to default
-			work := filepath.Join(filepath.Dir(defaultConfig), c.ConfigFile)
-			if _, err := os.Stat(work); err != nil {
+			workFile := filepath.Join(filepath.Dir(defaultConfig), c.ConfigFile)
+			if exists, err := podutils.FileExists(workFile); (err != nil) || (exists == false) {
 				return nil, fmt.Errorf("cannot find config file: %v", c.ConfigFile)
 			}
 		}
