@@ -73,9 +73,9 @@ func InitLogging(workingdir string, shortname string, timestamp time.Time) error
 
 	logdir = filepath.Join(workingdir, ".logs")
 	allLevelsFile := filepath.Join(logdir, fmt.Sprintf("%v.all.%v.%v", shortname,
-		timestamp.Format("20060102_150405"), "log"))
+		timestamp.Format(podutils.TimeFormatStr), "log"))
 	errorLevelsFile := filepath.Join(logdir, fmt.Sprintf("%v.error.%v.%v", shortname,
-		timestamp.Format("20060102_150405"), "log"))
+		timestamp.Format(podutils.TimeFormatStr), "log"))
 
 	if err := addFileHook(allLevelsFile, log.AllLevels); err != nil {
 		fmt.Print("failed creating logfile hook (all levels): ", err)

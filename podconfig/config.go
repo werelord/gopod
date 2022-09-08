@@ -3,6 +3,7 @@ package podconfig
 import (
 	"fmt"
 	"gopod/commandline"
+	"gopod/podutils"
 	"io"
 	"os"
 	"path/filepath"
@@ -45,7 +46,7 @@ func LoadToml(filename string, timestamp time.Time) (*Config, *[]FeedToml, error
 	// todo: better handling of these objects (pointer?)
 	tomldoc := tomldocImport{}
 	tomldoc.Config.Timestamp = timestamp
-	tomldoc.Config.TimestampStr = timestamp.Format("20060102_150405")
+	tomldoc.Config.TimestampStr = timestamp.Format(podutils.TimeFormatStr)
 	tomldoc.Config.WorkspaceDir = filepath.Dir(filename)
 
 	// defaults, if not defined in config

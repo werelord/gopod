@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 )
 
+const TimeFormatStr = "20060102_150405"
+
 func GenerateHash(str string) string {
 	sha := sha1.New()
 	sha.Write([]byte(str))
