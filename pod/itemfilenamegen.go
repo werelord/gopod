@@ -15,6 +15,7 @@ import (
 )
 
 var cleanFilename = podutils.CleanFilename
+var timeNow = time.Now
 
 // --------------------------------------------------------------------------
 func (i *Item) generateFilename(cfg podconfig.FeedToml) error {
@@ -43,7 +44,7 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml) error {
 
 	if i.xmlData.Pubdate.IsZero() {
 		log.Warn("Pubdate not set; default replacement set to Now()")
-		defaultReplacement = time.Now().Format(podutils.TimeFormatStr)
+		defaultReplacement = timeNow().Format(podutils.TimeFormatStr)
 	} else {
 		defaultReplacement = i.xmlData.Pubdate.Format(podutils.TimeFormatStr)
 	}
@@ -52,7 +53,7 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml) error {
 	newstr = i.replaceLinkFinalPath(newstr, defaultReplacement)
 	newstr = i.replaceEpisode(newstr, defaultReplacement, cfg)
 	newstr = strings.Replace(newstr, "#date#", defaultReplacement, 1)
-	if newstr, err = i.replaceTitleRegex(newstr, cfg.Regex, i.xmlData.Title); err != nil {
+	if newstr, err = i.replaceTitleRegex(newstr, cfg.Regex); err != nil {
 		log.Error("failed parsing title:", err)
 		return err
 	}
@@ -103,7 +104,7 @@ func (i Item) replaceEpisode(str, defaultRep string, cfg podconfig.FeedToml) str
 }
 
 // --------------------------------------------------------------------------
-func (i Item) replaceTitleRegex(dststr, regex, title string) (string, error) {
+func (i Item) replaceTitleRegex(dststr, regex string) (string, error) {
 
 	if strings.Contains(dststr, "#titleregex:") == false {
 		return dststr, nil
@@ -113,12 +114,13 @@ func (i Item) replaceTitleRegex(dststr, regex, title string) (string, error) {
 		r   *regexp.Regexp
 		err error
 	)
-
-	if r, err = regexp.Compile(regex); err != nil {
+	if regex == "" {
+		return "", errors.New("regex is empty")
+	} else if r, err = regexp.Compile(regex); err != nil {
 		return "", err
 	}
 
-	matchSlice := r.FindStringSubmatch(title)
+	matchSlice := r.FindStringSubmatch(i.xmlData.Title)
 
 	if len(matchSlice) < r.NumSubexp() {
 		log.Warn("regex doesn't match; replacing with blank strings")
