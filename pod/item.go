@@ -206,6 +206,7 @@ func (i *Item) getItemDataDBEntry() *poddb.DBEntry {
 	return &entry
 }
 
+//--------------------------------------------------------------------------
 func (i Item) createProgressBar() *progressbar.ProgressBar {
 	bar := progressbar.NewOptions64(0, //
 		progressbar.OptionSetDescription(i.Filename),
@@ -219,6 +220,7 @@ func (i Item) createProgressBar() *progressbar.ProgressBar {
 
 }
 
+//--------------------------------------------------------------------------
 func (i *Item) Download(mp3path string) error {
 
 	var (
