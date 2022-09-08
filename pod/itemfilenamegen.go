@@ -9,9 +9,12 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
+
+var cleanFilename = podutils.CleanFilename
 
 // --------------------------------------------------------------------------
 func (i *Item) generateFilename(cfg podconfig.FeedToml) error {
@@ -34,9 +37,16 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml) error {
 
 	var (
 		newstr             = cfg.FilenameParse
-		defaultReplacement = i.xmlData.Pubdate.Format(podutils.TimeFormatStr)
+		defaultReplacement string
 		err                error
 	)
+
+	if i.xmlData.Pubdate.IsZero() {
+		log.Warn("Pubdate not set; default replacement set to Now()")
+		defaultReplacement = time.Now().Format(podutils.TimeFormatStr)
+	} else {
+		defaultReplacement = i.xmlData.Pubdate.Format(podutils.TimeFormatStr)
+	}
 
 	newstr = strings.Replace(newstr, "#shortname#", cfg.Shortname, 1)
 	newstr = i.replaceLinkFinalPath(newstr, defaultReplacement)
@@ -55,15 +65,18 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml) error {
 }
 
 // --------------------------------------------------------------------------
-func (i *Item) replaceLinkFinalPath(str, failureStr string) string {
+func (i Item) replaceLinkFinalPath(str, failureStr string) string {
 	if strings.Contains(str, "#linkfinalpath#") {
 		// get the final path portion from the link url
-		if u, err := url.Parse(i.xmlData.Link); err == nil {
+		if i.xmlData.Link == "" {
+			log.Warn("item link is empty; replacing with failure option: ", failureStr)
+			str = strings.Replace(str, "#linkfinalpath#", failureStr, 1)
+		} else if u, err := url.Parse(i.xmlData.Link); err == nil {
 			finalLink := path.Base(u.Path)
-			str = strings.Replace(str, "#linkfinalpath#", podutils.CleanFilename(finalLink), 1)
+			str = strings.Replace(str, "#linkfinalpath#", cleanFilename(finalLink), 1)
 		} else {
 			log.Error("failed to parse link path: ", err)
-			log.Debug("Replacing with failure option:")
+			log.Warn("Replacing with failure option: ", failureStr)
 			str = strings.Replace(str, "#linkfinalpath#", failureStr, 1)
 		}
 	}
@@ -71,7 +84,7 @@ func (i *Item) replaceLinkFinalPath(str, failureStr string) string {
 }
 
 // --------------------------------------------------------------------------
-func (i *Item) replaceEpisode(str, defaultRep string, cfg podconfig.FeedToml) string {
+func (i Item) replaceEpisode(str, defaultRep string, cfg podconfig.FeedToml) string {
 	// todo: deprecate this; instead of using #episode#, maintain an episode count within the db
 	if strings.Contains(str, "#episode#") {
 		// default length of 3, unless otherwise defined
@@ -131,17 +144,18 @@ func (i Item) replaceTitleRegex(dststr, regex, title string) (string, error) {
 
 	// in case all are blank.. remove any ".." found
 	dststr = strings.ReplaceAll(dststr, "..", ".")
-	// remove any spaces with underscores
+	// replace any spaces with underscores
 	dststr = strings.ReplaceAll(dststr, " ", "_")
 	return dststr, nil
 }
 
+// --------------------------------------------------------------------------
 func (i Item) replaceUrlFilename(str string, cfg podconfig.FeedToml) string {
 	if strings.Contains(str, "#urlfilename#") {
 		// for now, only applies to urlfilename
 		var urlfilename = path.Base(i.Url)
 		if cfg.SkipFileTrim == false {
-			urlfilename = podutils.CleanFilename(urlfilename)
+			urlfilename = cleanFilename(urlfilename)
 		}
 		str = strings.Replace(str, "#urlfilename#", urlfilename, 1)
 	}

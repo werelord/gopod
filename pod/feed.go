@@ -232,7 +232,7 @@ func (f Feed) saveFeedDb() error {
 		return err
 	} else if (id != "") && (id != f.dbXmlId) {
 		err := errors.New("id returned from the db doesn't match previously stored")
-		log.Error("%v\nfid:'%v' != dbid:'%v'", err, f.dbXmlId, id)
+		log.Errorf("%v\nfid:'%v' != dbid:'%v'", err, f.dbXmlId, id)
 		return err
 	}
 	return nil
