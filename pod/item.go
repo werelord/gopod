@@ -139,8 +139,7 @@ func (i *Item) parseUrl(urlparse string) (err error) {
 
 	u, err := url.ParseRequestURI(urlstr)
 	if err != nil {
-		log.Error("failed url parsing:", err)
-		return err
+		return fmt.Errorf("failed url parsing: %w", err)
 	}
 
 	// remove querystring/fragment
@@ -206,7 +205,7 @@ func (i *Item) getItemDataDBEntry() *poddb.DBEntry {
 	return &entry
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (i Item) createProgressBar() *progressbar.ProgressBar {
 	bar := progressbar.NewOptions64(0, //
 		progressbar.OptionSetDescription(i.Filename),
@@ -220,7 +219,7 @@ func (i Item) createProgressBar() *progressbar.ProgressBar {
 
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (i *Item) Download(mp3path string) error {
 
 	var (
