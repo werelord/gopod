@@ -58,6 +58,7 @@ func main() {
 		return
 	}
 
+	// todo: official db migration methods
 	poddb.SetDBPath(filepath.Join(filepath.Dir(cmdline.ConfigFile), ".db"))
 
 	// logging initialized, lets output commandline struct

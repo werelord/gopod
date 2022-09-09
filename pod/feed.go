@@ -106,7 +106,6 @@ func (f *Feed) initDB() error {
 	if f.dbinitialized == false {
 		var (
 			err error
-			id  string
 		)
 
 		log.Infof("{%v} initializing feed db", f.Shortname)
@@ -115,25 +114,22 @@ func (f *Feed) initDB() error {
 			return err
 		}
 
-		// load feed info
-		feedXml := FeedXmlDBEntry{
-			Hash: f.generateHash(),
-		}
+	}
 
-		if id, err = f.db.FeedCollection().FetchByEntry(&feedXml); err != nil {
-			log.Error("failed fetching feed xml: ", err)
-			return err
-			// data integrity checks
-		} else if id == "" {
-			return errors.New("feed id is missing")
-		} else if feedXml.XmlFeedData.Title == "" {
-			return fmt.Errorf("feed title missing, id: '%v'", id)
-		}
+	if id, err = f.db.FeedCollection().FetchByEntry(&feedXml); err != nil {
+		log.Error("failed fetching feed xml: ", err)
+		return err
+		// data integrity checks
+	} else if id == "" {
+		return errors.New("feed id is missing")
+	} else if feedXml.XmlFeedData.Title == "" {
+		return fmt.Errorf("feed title missing, id: '%v'", id)
+	}
 
-		f.dbXmlId = id
-		f.XMLFeedData = feedXml.XmlFeedData
+	f.dbXmlId = id
+	f.XMLFeedData = feedXml.XmlFeedData
 
-		log.Debugf("feed info fetched: %v (%v) ", f.XMLFeedData.Title, f.dbXmlId)
+	log.Debugf("feed info fetched: %v (%v) ", f.XMLFeedData.Title, f.dbXmlId)
 
 		if err = f.loadItemEntries(); err != nil {
 			log.Error("failed loading item entries: ", err)
@@ -245,7 +241,20 @@ func (f *Feed) Update() error {
 	if err := f.initDB(); err != nil {
 		log.Error("failed to init db: ", err)
 		return err
+	} else if err := f.loadFeedXml(); err != nil {
+		log.Error("failed to load feed xml: ", err)
+		return err
+	} else {
+		var itemCount = podutils.Tern(config.ForceUpdate, -1, config.MaxDupChecks*2)
+		if itemMap, err := f.GetItemEntries(itemCount); err != nil {
+			log.Error("failed to load item entries: ", err)
+			return err
+		} else {
+			f.itemlist = itemMap
+		}
 	}
+
+	log.Debug("Feed loaded from db for update: ", f.Shortname)
 
 	var (
 		body       []byte

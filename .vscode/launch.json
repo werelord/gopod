@@ -17,7 +17,7 @@
                 //"--config", "master.toml",
                 "update",   // command to run
                 //"checkdownloads",
-                //"--feed=twit",
+                "--feed=twit",
                 //"--proxy", "http://localhost:8888",
                 //"--simulate",
                 //"--use-recent",
