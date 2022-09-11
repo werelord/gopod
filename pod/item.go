@@ -69,7 +69,14 @@ func createNewItemEntry(parentConfig podconfig.FeedToml,
 	// new entry, xml coming from feed directly
 	// if this is loaded from the database, ItemExport should be nil
 
+	var (
+		err error
+	)
+
 	// todo: nil checks
+	if xmlData == nil {
+		return nil, errors.New("xml data cannot be nil")
+	}
 
 	item := Item{}
 
@@ -80,7 +87,7 @@ func createNewItemEntry(parentConfig podconfig.FeedToml,
 	item.PubTimeStamp = xmlData.Pubdate
 
 	// parse url
-	if err := item.parseUrl(parentConfig.UrlParse); err != nil {
+	if item.Url, err = parseUrl(item.xmlData.Enclosure.Url, parentConfig.UrlParse); err != nil {
 		log.Error("failed parsing url: ", err)
 		return nil, err
 	} else if err := item.generateFilename(parentConfig); err != nil {
@@ -88,6 +95,8 @@ func createNewItemEntry(parentConfig podconfig.FeedToml,
 		// to make sure we can continue, shortname.uuid.mp3
 		item.Filename = parentConfig.Shortname + "." + strings.ReplaceAll(uuid.NewString(), "-", "") + ".mp3"
 	}
+
+	// todo: verify hash
 
 	// everything should be set
 
@@ -132,14 +141,34 @@ func loadFromDBEntry(parentCfg podconfig.FeedToml, db *poddb.PodDB,
 }
 
 // --------------------------------------------------------------------------
-func (i *Item) parseUrl(urlparse string) (err error) {
+func (i *Item) LoadItemXml() error {
+	if i.db == nil {
+		return errors.New("db is nil")
+	}
+
+	var itemxml = podutils.XItemData{}
+	var entry = ItemXmlDBEntry{Hash: i.Hash, ItemXml: itemxml}
+
+	id, err := i.db.ItemXmlCollection().FetchByEntry(entry)
+	if err != nil {
+		log.Error("error fetching item xml: ", err)
+		return err
+	}
+	i.dbXmlId = id
+	i.xmlData = &entry.ItemXml
+
+	return nil
+
+}
+
+// --------------------------------------------------------------------------
+func parseUrl(urlstr, urlparse string) (string, error) {
 
 	log.Trace("here")
-	var urlstr = i.xmlData.Enclosure.Url
 
 	u, err := url.ParseRequestURI(urlstr)
 	if err != nil {
-		return fmt.Errorf("failed url parsing: %w", err)
+		return "", fmt.Errorf("failed url parsing: %w", err)
 	}
 
 	// remove querystring/fragment
@@ -159,9 +188,22 @@ func (i *Item) parseUrl(urlparse string) (err error) {
 		}
 	}
 
-	i.Url = u.String()
+	return u.String(), nil
+}
 
-	return nil
+// --------------------------------------------------------------------------
+func calcHash(url, guid, urlparse string) (string, error) {
+
+	parsedUrl, err := parseUrl(url, urlparse)
+	if err != nil {
+		return "", err
+	} else if parsedUrl == "" && guid == "" {
+		return "", errors.New("failed to hash item; both url and guid are empty")
+	}
+
+	hash := podutils.GenerateHash(guid + parsedUrl)
+
+	return hash, nil
 }
 
 func (i *Item) updateXmlData(hash string, data *podutils.XItemData) {

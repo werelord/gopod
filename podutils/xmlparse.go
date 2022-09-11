@@ -2,7 +2,6 @@ package podutils
 
 import (
 	"errors"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -13,7 +12,7 @@ import (
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
-// todo: move to either sax or xml tag parsing before writing tests.. 
+// todo: move to either sax or xml tag parsing before writing tests..
 
 // --------------------------------------------------------------------------
 type XChannelData struct {
@@ -85,6 +84,8 @@ type FeedProcess interface {
 	CancelOnPubDate(timestamp time.Time) (cont bool)
 	// returns true if parsing should halt on build date; parse returns ParseCanceledError on true
 	CancelOnBuildDate(timestamp time.Time) (cont bool)
+	// calculate item hash dependant on feed config
+	CalcItemHash(guid string, url string) (string, error)
 }
 
 type ParseCanceledError struct {
@@ -186,7 +187,7 @@ func ParseXml(xmldata []byte, fp FeedProcess) (feedData *XChannelData, newItems 
 
 			if skipRemaining == false {
 				// check to see if hash exists
-				hash, e := calcHash(elem)
+				hash, e := calcHash(elem, fp)
 				if e != nil {
 					log.Error(e)
 					continue
@@ -227,7 +228,7 @@ func getAttributeText(elem *etree.Element, attr string) string {
 }
 
 // --------------------------------------------------------------------------
-func calcHash(elem *etree.Element) (string, error) {
+func calcHash(elem *etree.Element, fp FeedProcess) (string, error) {
 	// first, get the guid/urlstr, check to see if it exists
 	var (
 		guid   string
@@ -239,26 +240,14 @@ func calcHash(elem *etree.Element) (string, error) {
 	}
 	if enclosurenode := elem.FindElement("enclosure"); enclosurenode != nil {
 		if urlnode := enclosurenode.SelectAttr("url"); urlnode != nil {
-			u, err := url.Parse(urlnode.Value)
-			if err != nil {
-				log.Error("error in parsing url: ", err)
-			}
-			u.RawQuery = ""
-			u.Fragment = ""
-
-			urlstr = u.String()
+			urlstr = urlnode.Value
 		}
 	}
 
-	if guid == "" && urlstr == "" {
-		return "", errors.New("failed to hash item; guid and url not parsed")
-	}
+	// by moving the calcHash up to feed, it will handle urlparse factoring as well
+	// by doing so, just with the guid and parsed url we can recreate the hash
 
-	// at least url or guid exists, hash the combination
-	hash := GenerateHash(guid + urlstr)
-	//log.Debugf("guid: '%+v', url: '%+v', hash: '%+v'", guid, urlstr, hash)
-
-	return hash, nil
+	return fp.CalcItemHash(guid, urlstr)
 }
 
 // --------------------------------------------------------------------------

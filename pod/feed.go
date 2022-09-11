@@ -114,7 +114,27 @@ func (f *Feed) initDB() error {
 			return err
 		}
 
+		f.dbinitialized = true
 	}
+
+	return nil
+}
+
+// --------------------------------------------------------------------------
+func (f *Feed) loadFeedXml() error {
+
+	var (
+		id  string
+		err error
+	)
+
+	// make sure feed is init
+	if err := f.initDB(); err != nil {
+		return err
+	}
+
+	// load feed info
+	feedXml := FeedXmlDBEntry{Hash: f.generateHash()}
 
 	if id, err = f.db.FeedCollection().FetchByEntry(&feedXml); err != nil {
 		log.Error("failed fetching feed xml: ", err)
@@ -131,14 +151,6 @@ func (f *Feed) initDB() error {
 
 	log.Debugf("feed info fetched: %v (%v) ", f.XMLFeedData.Title, f.dbXmlId)
 
-		if err = f.loadItemEntries(); err != nil {
-			log.Error("failed loading item entries: ", err)
-			return err
-		}
-
-		f.dbinitialized = true
-	}
-
 	return nil
 }
 
@@ -148,30 +160,34 @@ func (f Feed) generateHash() string {
 }
 
 // --------------------------------------------------------------------------
-func (f *Feed) loadItemEntries() error {
+func (f *Feed) GetItemEntries(numLatest int) (map[string]*Item, error) {
 
 	var (
 		err       error
 		dbEntries []poddb.DBEntry
+		itemMap   = make(map[string]*Item, 0)
 	)
 
-	// load itemlist.. if force is enabled, load everything..
-	// otherwise limit to numdupcheck * relative amount
-	if config.ForceUpdate {
-		// the list is not sorted, so don't worry about that
-		log.Debug("loading all items (force == true)")
+	if err = f.initDB(); err != nil {
+		return nil, err
+	}
+
+	// load itemlist.. if numitems is negative, load everything..
+	// otherwise limit to numLatest
+	if numLatest <= 0 {
+		// the list is not sorted, so don't worry about ordering query by pubdate
+		log.Debug("loading all items")
 		dbEntries, err = f.db.ItemDataCollection().FetchAll(createItemDataDBEntry)
 	} else {
-		var limit = config.MaxDupChecks * 2
 		var opt = clover.SortOption{Field: "ItemData.PubTimeStamp", Direction: -1}
-		q := f.db.ItemDataCollection().NewQuery().Sort(opt).Limit(limit)
-		log.Debugf("loading %v items sorted by pubdated", limit)
+		q := f.db.ItemDataCollection().NewQuery().Sort(opt).Limit(numLatest)
+		log.Debugf("loading %v items sorted by pubdated", numLatest)
 		dbEntries, err = f.db.ItemDataCollection().FetchAllWithQuery(createItemDataDBEntry, q)
 	}
 
 	if err != nil {
 		log.Error("Failed to get item data from db: ", err)
-		return err
+		return itemMap, err
 	} else if len(dbEntries) == 0 {
 		log.Warn("unable to get db entries; list is empty (new feed?)")
 	}
@@ -181,16 +197,15 @@ func (f *Feed) loadItemEntries() error {
 		if item, err = loadFromDBEntry(f.FeedToml, f.db, entry); err != nil {
 			log.Error("failed to load item data: ", err)
 			// if this fails, something is wrong
-			return err
+			return itemMap, err
 		}
-		if _, exists := f.itemlist[item.Hash]; exists == true {
+		if _, exists := itemMap[item.Hash]; exists == true {
 			log.Warn("Duplicate item found; wtf")
 		}
-		f.itemlist[item.Hash] = item
+		itemMap[item.Hash] = item
 	}
 
-	return nil
-
+	return itemMap, nil
 }
 
 // --------------------------------------------------------------------------
@@ -473,6 +488,12 @@ func (f Feed) CancelOnBuildDate(xmlBuildDate time.Time) (cont bool) {
 		}
 	}
 	return false
+}
+
+// --------------------------------------------------------------------------
+func (f Feed) CalcItemHash(guid string, url string) (string, error) {
+	// within item
+	return calcHash(guid, url, f.UrlParse)
 }
 
 // --------------------------------------------------------------------------

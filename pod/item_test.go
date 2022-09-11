@@ -1,7 +1,6 @@
 package pod
 
 import (
-	"gopod/podutils"
 	"gopod/testutils"
 	"testing"
 )
@@ -87,7 +86,7 @@ func Test_loadFromDBEntry(t *testing.T) {
 
 */
 
-func TestItem_parseUrl(t *testing.T) {
+func Test_parseUrl(t *testing.T) {
 	type args struct {
 		encUrl   string
 		urlparse string
@@ -112,19 +111,17 @@ func TestItem_parseUrl(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			var item = Item{xmlData: &podutils.XItemData{
-				Enclosure: struct {
-					Length  uint
-					TypeStr string
-					Url     string
-				}{Url: tt.p.encUrl}}}
-
-			err := item.parseUrl(tt.p.urlparse)
+			url, err := parseUrl(tt.p.encUrl, tt.p.urlparse)
 
 			testutils.AssertErrContains(t, tt.e.errStr, err)
-			testutils.AssertEquals(t, tt.e.resUrl, item.Url)
+			testutils.AssertEquals(t, tt.e.resUrl, url)
 		})
 	}
+}
+
+/*
+func Test_calcHash(t *testing.T) {
+	// todo: this
 }
 
 /*
