@@ -1,5 +1,6 @@
 package poddb
 
+/*
 import (
 	"errors"
 	"fmt"
@@ -270,3 +271,4 @@ func (c Collection) DropCollection() error {
 }
 
 // todo: dump collection based on instance
+*/

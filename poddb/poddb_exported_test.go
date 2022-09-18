@@ -1,5 +1,5 @@
 package poddb
-
+/*
 import (
 	"fmt"
 	"gopod/testutils"
@@ -590,3 +590,4 @@ func TestCollection_FetchAllWithQuery(t *testing.T) {
 		})
 	}
 }
+*/

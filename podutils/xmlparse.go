@@ -16,36 +16,22 @@ import (
 
 // --------------------------------------------------------------------------
 type XChannelData struct {
-	AtomLinkSelf struct {
-		// rel = self
-		Type  string
-		Href  string
-		Title string
-	}
-	NewFeedUrl    string
-	Title         string
-	Subtitle      string
-	PubDate       time.Time
-	LastBuildDate time.Time
-	Link          string
-	Image         struct {
-		Url   string
-		Title string
-		Link  string
-	}
+	AtomLinkSelf   struct{ Type, Href, Title string } `gorm:"embedded;embeddedPrefix:AtomLinkSelf_"`
+	NewFeedUrl     string
+	Title          string
+	Subtitle       string
+	PubDate        time.Time
+	LastBuildDate  time.Time
+	Link           string
+	Image          struct{ Url, Title, Link string } `gorm:"embedded;embeddedPrefix:Image_"`
 	ItunesImageUrl string
-	ItunesOwner    struct {
-		Name  string
-		Email string
-	}
+	ItunesOwner    struct{ Name, Email string } `gorm:"embedded;embeddedPrefix:ItunesOwner_"`
 	Author         string
 	Copyright      string
 	Description    string
-	PodcastFunding struct {
-		Url  string
-		Text string
-	}
-	PersonList []XPodcastPersonData
+	PodcastFunding struct{ Url, Text string } `gorm:"embedded;embeddedPrefix:PodcastFunding_"`
+	// PersonList     []XPersonDataChannel       `gorm:"foreignKey:XChannelDataID"`
+	PersonList []XPodcastPersonData `gorm:"serializer:json"`
 }
 
 type XItemData struct {
@@ -64,11 +50,23 @@ type XItemData struct {
 		Length  uint
 		TypeStr string
 		Url     string
-	}
-	PersonList []XPodcastPersonData
+	} `gorm:"embedded;embeddedPrefix:Enclosure_"`
+	// PersonList []XPersonDataItem `gorm:"foreignKey:XItemDataID"`
+	PersonList []XPodcastPersonData `gorm:"serializer:json"`
 }
 
+// type XPersonDataChannel struct {
+// 	XPodcastPersonData
+// 	XChannelDataID uint
+// }
+
+// type XPersonDataItem struct {
+// 	XPodcastPersonData
+// 	XItemDataID uint
+// }
+
 type XPodcastPersonData struct {
+	// gorm.Model
 	Email string
 	Href  string
 	Img   string
@@ -106,7 +104,7 @@ func ParseXml(xmldata []byte, fp FeedProcess) (feedData *XChannelData, newItems 
 
 	// todo: error on empty body (xmldata)
 
-	feedData = &XChannelData{}
+	feedData = &XChannelData{PersonList: make([]XPodcastPersonData, 0)}
 	newItems = orderedmap.New[string, XItemData]()
 
 	doc := etree.NewDocument()
@@ -181,6 +179,7 @@ func ParseXml(xmldata []byte, fp FeedProcess) (feedData *XChannelData, newItems 
 				Img:  getAttributeText(elem, "img"),
 				Name: elem.Text(),
 			}
+			// feedData.PersonList = append(feedData.PersonList, XPersonDataChannel{XPodcastPersonData: personData})
 			feedData.PersonList = append(feedData.PersonList, personData)
 
 		case strings.EqualFold(elem.FullTag(), "item"):
@@ -262,6 +261,8 @@ func parseDateEntry(date string) time.Time {
 // --------------------------------------------------------------------------
 func parseItemEntry(elem *etree.Element) (item XItemData, err error) {
 
+	item = XItemData{PersonList: make([]XPodcastPersonData, 0)}
+
 	for _, child := range elem.ChildElements() {
 		switch {
 		case strings.EqualFold(child.FullTag(), "title"):
@@ -291,6 +292,7 @@ func parseItemEntry(elem *etree.Element) (item XItemData, err error) {
 				Img:  getAttributeText(child, "img"),
 				Name: child.Text(),
 			}
+			// item.PersonList = append(item.PersonList, XPersonDataItem{XPodcastPersonData: personData})
 			item.PersonList = append(item.PersonList, personData)
 		case strings.EqualFold(child.FullTag(), "media:content"):
 			// hijacking person data for media:credit
@@ -299,6 +301,7 @@ func parseItemEntry(elem *etree.Element) (item XItemData, err error) {
 					Role: getAttributeText(media, "role"),
 					Name: media.Text(),
 				}
+				// item.PersonList = append(item.PersonList, XPersonDataItem{XPodcastPersonData: personData})
 				item.PersonList = append(item.PersonList, personData)
 			}
 		case strings.EqualFold(child.FullTag(), "itunes:episode"):

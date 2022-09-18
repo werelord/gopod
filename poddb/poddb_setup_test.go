@@ -1,5 +1,6 @@
 package poddb
 
+/*
 import (
 	"errors"
 	"fmt"
@@ -13,7 +14,7 @@ import (
 
 type mockClover struct {
 	db          *clover.DB
-	coll        Collection
+	coll        Collection_clover
 	openError   bool
 	openCalled  bool
 	closeCalled bool
@@ -76,7 +77,7 @@ func setupTest(t *testing.T, openDB bool, collname string, openError bool) (*moc
 			if err := mock.db.CreateCollection(collname); err != nil {
 				t.Fatalf("error: %v", err)
 			}
-			mock.coll = Collection{name: collname}
+			mock.coll = Collection_clover{name: collname}
 		}
 
 	}
@@ -92,3 +93,4 @@ func setupTest(t *testing.T, openDB bool, collname string, openError bool) (*moc
 		cimpl = oldclover
 	}
 }
+*/

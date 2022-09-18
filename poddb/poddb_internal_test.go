@@ -1,5 +1,6 @@
 package poddb
 
+/*
 import (
 	"fmt"
 	"gopod/testutils"
@@ -49,9 +50,9 @@ func Test_createCollections(t *testing.T) {
 			}
 
 			// collection insert
-			var list = make([]Collection, 0, len(tt.p.collList))
+			var list = make([]Collection_clover, 0, len(tt.p.collList))
 			for _, c := range tt.p.collList {
-				list = append(list, Collection{name: c})
+				list = append(list, Collection_clover{name: c})
 			}
 			var err = createCollections(clmock.db, list)
 
@@ -105,7 +106,6 @@ func Test_parseAndVerifyEntry(t *testing.T) {
 			expected{entryMap: map[string]any{"Foo": "bar", "Hash": "meh"}, hash: "meh"}},
 		{"success (ptr)", params{entry: &struct{ Foo, Hash string }{Foo: "bar", Hash: "meh"}},
 			expected{entryMap: map[string]any{"Foo": "bar", "Hash": "meh"}, hash: "meh"}},
-
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -139,7 +139,7 @@ func TestCollection_findDocByHash(t *testing.T) {
 
 	type params struct {
 		db   *clover.DB
-		coll Collection
+		coll Collection_clover
 		hash string
 	}
 	type expected struct {
@@ -154,7 +154,7 @@ func TestCollection_findDocByHash(t *testing.T) {
 	}{
 		{"db is nil", params{coll: clmock.coll},
 			expected{errStr: "db is not open"}},
-		{"collection doesn't exist", params{db: clmock.db, coll: Collection{"bar"}, hash: "foobar"},
+		{"collection doesn't exist", params{db: clmock.db, coll: Collection_clover{"bar"}, hash: "foobar"},
 			expected{errStr: "error in query"}},
 		{"hash not found", params{db: clmock.db, coll: clmock.coll, hash: "barfoo"},
 			expected{errStr: "hash not found"}},
@@ -197,7 +197,7 @@ func TestCollection_findDocById(t *testing.T) {
 
 	type params struct {
 		db   *clover.DB
-		coll Collection
+		coll Collection_clover
 		id   string
 	}
 	type expected struct {
@@ -213,7 +213,7 @@ func TestCollection_findDocById(t *testing.T) {
 	}{
 		{"db is nil", params{coll: clmock.coll},
 			expected{errStr: "db is not open"}},
-		{"collection doesn't exist", params{db: clmock.db, coll: Collection{"bar"}, id: "foobar"},
+		{"collection doesn't exist", params{db: clmock.db, coll: Collection_clover{"bar"}, id: "foobar"},
 			expected{errStr: "error in query"}},
 		{"id not found", params{db: clmock.db, coll: clmock.coll, id: "barfoo"},
 			expected{errStr: "id not found"}},
@@ -251,19 +251,19 @@ func TestCollection_insert(t *testing.T) {
 		entry     validEntry
 	}
 
-	var cp = testutils.Cp[DBEntry]
+	var cp = testutils.Cp[DBEntry_clover]
 
 	var (
 		foobar = "foobar"
 		// error entries
-		emptyEntry  = DBEntry{}
-		noHashEntry = DBEntry{Entry: struct{ Foo, Bar string }{Foo: "bar", Bar: "foo"}}
-		entryWithId = DBEntry{ID: &foobar, Entry: validEntry{Hash: "foobar", Foo: "meh"}}
+		emptyEntry  = DBEntry_clover{}
+		noHashEntry = DBEntry_clover{Entry: struct{ Foo, Bar string }{Foo: "bar", Bar: "foo"}}
+		entryWithId = DBEntry_clover{ID: &foobar, Entry: validEntry{Hash: "foobar", Foo: "meh"}}
 
 		// valid entries
-		entryOne   = DBEntry{Entry: validEntry{Hash: "foobar", Foo: "meh"}}
-		entryTwo   = DBEntry{Entry: validEntry{Hash: "armleg", Foo: "bar"}}
-		entryThree = DBEntry{Entry: validEntry{Hash: "barfoo", Foo: "armleg"}}
+		entryOne   = DBEntry_clover{Entry: validEntry{Hash: "foobar", Foo: "meh"}}
+		entryTwo   = DBEntry_clover{Entry: validEntry{Hash: "armleg", Foo: "bar"}}
+		entryThree = DBEntry_clover{Entry: validEntry{Hash: "barfoo", Foo: "armleg"}}
 
 		// preinsert entries
 		entryOneModified = validEntry{Hash: "foobar", Foo: "bah"}
@@ -273,9 +273,9 @@ func TestCollection_insert(t *testing.T) {
 	//var oneEntry = []*DBEntry{&emptyEntry}
 
 	type params struct {
-		coll    Collection
+		coll    Collection_clover
 		openErr bool
-		entries []*DBEntry
+		entries []*DBEntry_clover
 	}
 	type expected struct {
 		preInsert      []preinsert
@@ -289,27 +289,27 @@ func TestCollection_insert(t *testing.T) {
 	}{
 		{"no entries,", params{},
 			expected{errStr: "insert list is empty"}},
-		{"open error", params{openErr: true, entries: []*DBEntry{cp(entryOne)}},
+		{"open error", params{openErr: true, entries: []*DBEntry_clover{cp(entryOne)}},
 			expected{errStr: "failed opening db"}},
-		{"bad entry", params{entries: []*DBEntry{cp(emptyEntry)}},
+		{"bad entry", params{entries: []*DBEntry_clover{cp(emptyEntry)}},
 			expected{errStr: "expecting struct, got"}},
-		{"no hash entry", params{entries: []*DBEntry{cp(noHashEntry)}},
+		{"no hash entry", params{entries: []*DBEntry_clover{cp(noHashEntry)}},
 			expected{errStr: "entry missing hash field"}},
-		{"collection doesn't exist", params{coll: Collection{"bar"}, entries: []*DBEntry{cp(entryOne)}},
+		{"collection doesn't exist", params{coll: Collection_clover{"bar"}, entries: []*DBEntry_clover{cp(entryOne)}},
 			expected{errStr: "collection doesn't exist"}},
-		{"insert by id, doesn't exist", params{entries: []*DBEntry{cp(entryWithId)}},
+		{"insert by id, doesn't exist", params{entries: []*DBEntry_clover{cp(entryWithId)}},
 			expected{errStr: "ID set, but failed to find document"}},
 
-		{"insert by hash, new entry", params{entries: []*DBEntry{cp(entryOne)}},
+		{"insert by hash, new entry", params{entries: []*DBEntry_clover{cp(entryOne)}},
 			expected{totalItemCount: 1}},
-		{"insert by hash, replace existing", params{entries: []*DBEntry{cp(entryOne)}},
+		{"insert by hash, replace existing", params{entries: []*DBEntry_clover{cp(entryOne)}},
 			expected{totalItemCount: 1, preInsert: []preinsert{{entry: entryOneModified}}}},
 
-		{"insert by id, replace existing", params{entries: []*DBEntry{cp(entryOne)}},
+		{"insert by id, replace existing", params{entries: []*DBEntry_clover{cp(entryOne)}},
 			expected{totalItemCount: 1, preInsert: []preinsert{{replaceId: true,
 				entry: entryOneModified}}}},
 
-		{"insert all (mix and match)", params{entries: []*DBEntry{cp(entryOne), cp(entryTwo), cp(entryThree)}},
+		{"insert all (mix and match)", params{entries: []*DBEntry_clover{cp(entryOne), cp(entryTwo), cp(entryThree)}},
 			expected{totalItemCount: 3, preInsert: []preinsert{
 				{replaceId: true, entry: entryOneModified}, // replace by id
 				{entry: entryTwoModified},                  // replace by hash
@@ -386,3 +386,4 @@ func TestCollection_insert(t *testing.T) {
 		})
 	}
 }
+*/

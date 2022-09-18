@@ -14,7 +14,6 @@ import (
 	"gopod/logger"
 	"gopod/pod"
 	"gopod/podconfig"
-	"gopod/poddb"
 
 	"github.com/DavidGamba/go-getoptions"
 	log "github.com/sirupsen/logrus"
@@ -38,10 +37,12 @@ func main() {
 
 	var (
 		cmdline  *commandline.CommandLine
+		poddb    *pod.PodDB
 		config   *podconfig.Config
 		feedList *[]podconfig.FeedToml
 		feedMap  map[string]*pod.Feed
-		err      error
+
+		err error
 	)
 
 	// todo: flag to check item entries that aren't downloaded
@@ -58,8 +59,11 @@ func main() {
 		return
 	}
 
-	// todo: official db migration methods
-	poddb.SetDBPath(filepath.Join(filepath.Dir(cmdline.ConfigFile), ".db"))
+	// todo: official poddb migration methods
+	if poddb, err = SetupDB(); err != nil {
+		log.Error("Failed setting up db: ", err)
+		return
+	}
 
 	// logging initialized, lets output commandline struct
 	log.Debugf("cmdline: %+v", cmdline)
@@ -74,10 +78,12 @@ func main() {
 
 	log.Infof("using config: %+v", config)
 
+	pod.Init(config, poddb)
+
 	// move feedlist into shortname map
 	feedMap = make(map[string]*pod.Feed)
 	for _, feedtoml := range *feedList {
-		f, err := pod.NewFeed(config, feedtoml)
+		f, err := pod.NewFeed(feedtoml)
 		if err != nil {
 			log.Error("failed to create new feed: ", err)
 			continue
@@ -87,9 +93,8 @@ func main() {
 
 	//------------------------------------- DEBUG -------------------------------------
 	//	const RunTest = true
-	if config.Debug && false {
-		migrateDownloads(feedMap["russo"], filepath.Join(filepath.Dir(cmdline.ConfigFile), ".db"))
-		//migratedbs(feedMap, filepath.Join(filepath.Dir(cmdline.ConfigFile), ".db"))
+	if config.Debug && RunTest(config, feedMap) {
+		// runtest run, exit
 		return
 	}
 	//------------------------------------- DEBUG -------------------------------------
@@ -124,14 +129,32 @@ func main() {
 		}
 	}
 
-	if config.Debug {
-		exportpath := filepath.Join(defaultworking, ".dbexport")
-		log.Debug("dumping db to ", exportpath)
-		poddb.ExportAllCollections(exportpath)
-	}
+	// todo: db export to json
 
 	// rotate the log files
 	logger.RotateLogFiles()
+}
+
+// --------------------------------------------------------------------------
+func RunTest(config *podconfig.Config, feedMap map[string]*pod.Feed) (exit bool) {
+	if config.Debug && false {
+		//convertdb(feedMap)
+		//checkdb(feedMap)
+		//checkHashes(feedMap)
+		testConflict(feedMap)
+		return true
+	}
+	return false
+}
+
+// --------------------------------------------------------------------------
+func SetupDB() (*pod.PodDB, error) {
+	var dbpath = filepath.Join(defaultworking, "gopod.db")
+	if db, err := pod.NewDB(dbpath); err != nil {
+		return nil, err
+	} else {
+		return db, nil
+	}
 }
 
 // --------------------------------------------------------------------------

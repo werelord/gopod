@@ -25,10 +25,6 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml) error {
 
 	// todo: need to check for filename collisions!! fucking shit
 
-	if i.xmlData == nil {
-		return errors.New("item xml data is nil")
-	}
-
 	if cfg.FilenameParse == "" {
 		// fallthru to default
 		log.Debug("using default filename (no parsing): ", i.Filename)
@@ -42,11 +38,11 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml) error {
 		err                error
 	)
 
-	if i.xmlData.Pubdate.IsZero() {
+	if i.XmlData.Pubdate.IsZero() {
 		log.Warn("Pubdate not set; default replacement set to Now()")
 		defaultReplacement = timeNow().Format(podutils.TimeFormatStr)
 	} else {
-		defaultReplacement = i.xmlData.Pubdate.Format(podutils.TimeFormatStr)
+		defaultReplacement = i.XmlData.Pubdate.Format(podutils.TimeFormatStr)
 	}
 
 	newstr = strings.Replace(newstr, "#shortname#", cfg.Shortname, 1)
@@ -69,10 +65,10 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml) error {
 func (i Item) replaceLinkFinalPath(str, failureStr string) string {
 	if strings.Contains(str, "#linkfinalpath#") {
 		// get the final path portion from the link url
-		if i.xmlData.Link == "" {
+		if i.XmlData.Link == "" {
 			log.Warn("item link is empty; replacing with failure option: ", failureStr)
 			str = strings.Replace(str, "#linkfinalpath#", failureStr, 1)
-		} else if u, err := url.Parse(i.xmlData.Link); err == nil {
+		} else if u, err := url.Parse(i.XmlData.Link); err == nil {
 			finalLink := path.Base(u.Path)
 			str = strings.Replace(str, "#linkfinalpath#", cleanFilename(finalLink), 1)
 		} else {
@@ -90,7 +86,7 @@ func (i Item) replaceEpisode(str, defaultRep string, cfg podconfig.FeedToml) str
 	if strings.Contains(str, "#episode#") {
 		// default length of 3, unless otherwise defined
 		var padLen = podutils.Tern(cfg.EpisodePad > 0, cfg.EpisodePad, 3)
-		epStr := i.xmlData.EpisodeStr
+		epStr := i.XmlData.EpisodeStr
 
 		if epStr == "" {
 			epStr = defaultRep
@@ -120,7 +116,7 @@ func (i Item) replaceTitleRegex(dststr, regex string) (string, error) {
 		return "", err
 	}
 
-	matchSlice := r.FindStringSubmatch(i.xmlData.Title)
+	matchSlice := r.FindStringSubmatch(i.XmlData.Title)
 
 	if len(matchSlice) < r.NumSubexp() {
 		log.Warn("regex doesn't match; replacing with blank strings")

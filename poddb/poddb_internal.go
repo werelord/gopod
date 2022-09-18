@@ -1,5 +1,6 @@
 package poddb
 
+/*
 import (
 	"errors"
 	"fmt"
@@ -39,7 +40,7 @@ var (
 	options = clover.InMemoryMode(false)
 )
 
-func createCollections(db *clover.DB, colllist []Collection) error {
+func createCollections(db *clover.DB, colllist []Collection_clover) error {
 	for _, coll := range colllist {
 		if exists, err := db.HasCollection(coll.name); err != nil {
 			return fmt.Errorf("failed checking collection '%v' exists, wtf: %w", coll, err)
@@ -97,7 +98,7 @@ func parseAndVerifyEntry(entry any) (map[string]any, string, error) {
 }
 
 // --------------------------------------------------------------------------
-func (c Collection) findDocByHash(db *clover.DB, hash string) (*clover.Document, error) {
+func (c Collection_clover) findDocByHash(db *clover.DB, hash string) (*clover.Document, error) {
 	if db == nil {
 		return nil, errors.New("db is not open")
 	}
@@ -105,14 +106,14 @@ func (c Collection) findDocByHash(db *clover.DB, hash string) (*clover.Document,
 	if err != nil {
 		return nil, fmt.Errorf("error in query: %w", err)
 	} else if doc == nil {
-		return nil, ErrorDoesNotExist{"hash not found"}
+		return nil, ErrorDoesNotExist_clover{"hash not found"}
 	}
 
 	return doc, nil
 }
 
 // --------------------------------------------------------------------------
-func (c Collection) findDocById(db *clover.DB, id string) (*clover.Document, error) {
+func (c Collection_clover) findDocById(db *clover.DB, id string) (*clover.Document, error) {
 	if db == nil {
 		return nil, errors.New("db is not open")
 	}
@@ -120,7 +121,7 @@ func (c Collection) findDocById(db *clover.DB, id string) (*clover.Document, err
 	if err != nil {
 		return nil, fmt.Errorf("error in query: %w", err)
 	} else if doc == nil {
-		return nil, ErrorDoesNotExist{"id not found"}
+		return nil, ErrorDoesNotExist_clover{"id not found"}
 	}
 
 	return doc, nil
@@ -130,7 +131,7 @@ func (c Collection) findDocById(db *clover.DB, id string) (*clover.Document, err
 // inserts entry, replacing via key if it exists..
 // will use ID if exists, otherwise will try to find based on hash key
 // returns ID of inserted item if successful, error otherwise
-func (c Collection) insert(dbEntryList []*DBEntry) error {
+func (c Collection_clover) insert(dbEntryList []*DBEntry_clover) error {
 	// todo: move this to array
 	var (
 		db  *clover.DB
@@ -169,7 +170,7 @@ func (c Collection) insert(dbEntryList []*DBEntry) error {
 		// todo: move this if into InsertBy* methods (???)
 		if entry.ID == nil || *entry.ID == "" {
 			// find doc by hash based on entry
-			if doc, err = c.findDocByHash(db, hash); err != nil && errors.As(err, &ErrorDoesNotExist{}) == false {
+			if doc, err = c.findDocByHash(db, hash); err != nil && errors.As(err, &ErrorDoesNotExist_clover{}) == false {
 				log.Warn("failed to find document: ", err)
 			}
 		} else {
@@ -198,3 +199,4 @@ func (c Collection) insert(dbEntryList []*DBEntry) error {
 	}
 	return nil
 }
+*/
