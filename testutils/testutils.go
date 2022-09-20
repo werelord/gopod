@@ -47,9 +47,11 @@ func AssertErr(tb testing.TB, wantErr bool, e error) bool {
 // returns whether err == nil, for continuation checks
 func AssertErrContains(tb testing.TB, contains string, e error) bool {
 	tb.Helper()
-	AssertErr(tb, contains != "", e)
-	if (contains != "") && (strings.Contains(e.Error(), contains) == false) {
-		tb.Errorf("\033[31m wanted error '%s' got: '%s' \033[39m", contains, e)
+	var isNil = AssertErr(tb, contains != "", e)
+	if isNil == false {
+		if (contains != "") && (strings.Contains(e.Error(), contains) == false) {
+			tb.Errorf("\033[31m wanted error '%s' got: '%s' \033[39m", contains, e)
+		}
 	}
 	return e == nil
 }

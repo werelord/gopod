@@ -199,12 +199,12 @@ func checkdb(flist map[string]*pod.Feed) {
 	var res *gorm.DB
 	// for _, feed := range flist {
 
-	res = db.Where(&pod.FeedDBEntry{/*Hash: pod.GenerateHash(*feed)*/}).First(&feed.FeedDBEntry)
+	res = db.Where(&pod.FeedDBEntry{ /*Hash: pod.GenerateHash(*feed)*/ }).First(&feed.FeedDBEntry)
 	if res.Error != nil {
 		log.Errorf("rows: '%v', err: '%v'", res.RowsAffected, res.Error)
 	} else {
 		log.Debugf("rows: '%v', err: '%v'", res.RowsAffected, res.Error)
-		log.Debug("%+v", feed)
+		log.Debugf("%+v", feed)
 	}
 	var itemListFull = make([]*pod.ItemDBEntry, 0)
 	//db.Where(&pod.ItemDBEntry{FeedId: feed.ID}).Order("pub_time_stamp").Find(&itemListFull)
@@ -243,7 +243,7 @@ func checkHashes(flist map[string]*pod.Feed) {
 			itemlist = make([]*pod.ItemDBEntry, 0)
 		)
 
-		res = db.Where(&pod.FeedDBEntry{/*Hash: pod.GenerateHash(*feed)*/}).First(&feed.FeedDBEntry)
+		res = db.Where(&pod.FeedDBEntry{ /*Hash: pod.GenerateHash(*feed)*/ }).First(&feed.FeedDBEntry)
 		if res.Error != nil {
 			log.Error("error in feed query: ", err)
 			return
@@ -265,7 +265,7 @@ func checkHashes(flist map[string]*pod.Feed) {
 				continue
 			}
 			if hash != item.Hash {
-				log.Warn("Hash mismatch{%v}:\n\t'%v'\n\t'%v%\n")
+				log.Warnf("Hash mismatch{%v}:\n\t'%v'\n\t'%v%\n", feed.Shortname, hash, item.Hash)
 			}
 		}
 	}
@@ -288,7 +288,7 @@ func testConflict(flist map[string]*pod.Feed) {
 
 	var itemlist = make([]*pod.ItemDBEntry, 0)
 
-	res := db.Debug().Where(&pod.FeedDBEntry{/*Hash: pod.GenerateHash(*feed)*/}).Preload("XmlFeedData").Find(&ftest)
+	res := db.Debug().Where(&pod.FeedDBEntry{ /*Hash: pod.GenerateHash(*feed)*/ }).Preload("XmlFeedData").Find(&ftest)
 	if res.Error != nil {
 		log.Error("error in query: ", res.Error)
 		return

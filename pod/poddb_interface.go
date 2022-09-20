@@ -44,21 +44,11 @@ type gormDBImpl struct {
 //	func (gdbi *gormDBImpl) AutoMigrate(dst ...any) error {
 //		return gdbi.AutoMigrate(dst...)
 //	}
-func (gdbi *gormDBImpl) Where(query any, args ...any) *gormDBImpl {
-	return &gormDBImpl{gdbi.DB.Where(query, args...)}
-}
-func (gdbi *gormDBImpl) Preload(query string, args ...any) *gormDBImpl {
-	return &gormDBImpl{gdbi.DB.Preload(query, args...)}
-}
-func (gdbi *gormDBImpl) Order(value any) *gormDBImpl {
-	return &gormDBImpl{gdbi.DB.Order(value)}
-}
-func (gdbi *gormDBImpl) Limit(limit int) *gormDBImpl {
-	return &gormDBImpl{gdbi.DB.Limit(limit)}
-}
-func (gdbi *gormDBImpl) Session(config *gorm.Session) *gormDBImpl {
-	return &gormDBImpl{gdbi.DB.Session(config)}
-}
+func (gdbi *gormDBImpl) Where(query any, args ...any) *gormDBImpl { return &gormDBImpl{gdbi.DB.Where(query, args...)} }
+func (gdbi *gormDBImpl) Preload(query string, args ...any) *gormDBImpl { return &gormDBImpl{gdbi.DB.Preload(query, args...)} }
+func (gdbi *gormDBImpl) Order(value any) *gormDBImpl { return &gormDBImpl{gdbi.DB.Order(value)} }
+func (gdbi *gormDBImpl) Limit(limit int) *gormDBImpl { return &gormDBImpl{gdbi.DB.Limit(limit)} }
+func (gdbi *gormDBImpl) Session(config *gorm.Session) *gormDBImpl { return &gormDBImpl{gdbi.DB.Session(config)} }
 
 // func (gdbi *gormDBImpl) Find(dest any, conds ...any) *gormDBImpl {
 // 	return &gormDBImpl{gdbi.DB.Find(dest, conds...)}
