@@ -59,12 +59,6 @@ func main() {
 		return
 	}
 
-	// todo: official poddb migration methods
-	if poddb, err = SetupDB(); err != nil {
-		log.Error("Failed setting up db: ", err)
-		return
-	}
-
 	// logging initialized, lets output commandline struct
 	log.Debugf("cmdline: %+v", cmdline)
 
@@ -78,6 +72,13 @@ func main() {
 
 	log.Infof("using config: %+v", config)
 
+	// todo: lock down pointer receivers where necessary
+
+	// todo: official poddb migration methods
+	if poddb, err = SetupDB(*config); err != nil {
+		log.Error("Failed setting up db: ", err)
+		return
+	}
 	pod.Init(config, poddb)
 
 	// move feedlist into shortname map
@@ -93,7 +94,7 @@ func main() {
 
 	//------------------------------------- DEBUG -------------------------------------
 	//	const RunTest = true
-	if config.Debug && RunTest(config, feedMap) {
+	if config.Debug && RunTest(*config, feedMap) {
 		// runtest run, exit
 		return
 	}
@@ -136,7 +137,7 @@ func main() {
 }
 
 // --------------------------------------------------------------------------
-func RunTest(config *podconfig.Config, feedMap map[string]*pod.Feed) (exit bool) {
+func RunTest(config podconfig.Config, feedMap map[string]*pod.Feed) (exit bool) {
 	if config.Debug && false {
 		//convertdb(feedMap)
 		//checkdb(feedMap)
@@ -148,8 +149,9 @@ func RunTest(config *podconfig.Config, feedMap map[string]*pod.Feed) (exit bool)
 }
 
 // --------------------------------------------------------------------------
-func SetupDB() (*pod.PodDB, error) {
+func SetupDB(cfg podconfig.Config) (*pod.PodDB, error) {
 	var dbpath = filepath.Join(defaultworking, "gopod.db")
+
 	if db, err := pod.NewDB(dbpath); err != nil {
 		return nil, err
 	} else {

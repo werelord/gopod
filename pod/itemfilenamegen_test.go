@@ -66,13 +66,16 @@ func TestItem_generateFilename(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			var item = Item{ItemDBEntry: ItemDBEntry{
-				ItemData: ItemData{Url: tt.i.url},
-				XmlData: ItemXmlDBEntry{
-					XItemData: podutils.XItemData{Title: tt.i.title, Link: tt.i.xLink, EpisodeStr: tt.i.epStr},
-				}}}
+			var item = Item{}
+			item.Url = tt.i.url
+			item.XmlData.Title = tt.i.title
+			item.XmlData.Link = tt.i.xLink
+			item.XmlData.EpisodeStr = tt.i.epStr
 
-			var cfg = podconfig.FeedToml{Shortname: tt.c.shortname, FilenameParse: tt.c.parse, Regex: tt.c.regex}
+			var cfg = podconfig.FeedToml{}
+			cfg.Shortname = tt.c.shortname
+			cfg.FilenameParse = tt.c.parse
+			cfg.Regex = tt.c.regex
 
 			if tt.i.defaultTime.IsZero() == false {
 				var oldTimeNow = timeNow
@@ -110,8 +113,8 @@ func TestItem_replaceLinkFinalPath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			var item = Item{ItemDBEntry: ItemDBEntry{XmlData: ItemXmlDBEntry{
-				XItemData: podutils.XItemData{Link: tt.p.xLink}}}}
+			var item = Item{}
+			item.XmlData.Link = tt.p.xLink
 
 			got := item.replaceLinkFinalPath(tt.p.repstr, tt.p.defstring)
 			testutils.AssertEquals(t, tt.want, got)
@@ -140,8 +143,8 @@ func TestItem_replaceEpisode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			var item = Item{ItemDBEntry: ItemDBEntry{XmlData: ItemXmlDBEntry{
-				XItemData: podutils.XItemData{EpisodeStr: tt.p.epstr}}}}
+			var item = Item{}
+			item.XmlData.EpisodeStr = tt.p.epstr
 
 			var cfg = podconfig.FeedToml{EpisodePad: tt.p.padlen}
 			got := item.replaceEpisode(tt.p.str, tt.p.defaultRep, cfg)
@@ -209,8 +212,8 @@ func TestItem_replaceTitleRegex(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var item = Item{ItemDBEntry: ItemDBEntry{XmlData: ItemXmlDBEntry{
-				XItemData: podutils.XItemData{Title: tt.p.title}}}}
+			var item = Item{}
+			item.XmlData.Title = tt.p.title
 
 			got, err := item.replaceTitleRegex(tt.p.str, tt.p.regex)
 			testutils.AssertErrContains(t, tt.e.errStr, err)
@@ -249,8 +252,8 @@ func TestItem_replaceUrlFilename(t *testing.T) {
 			cleanFilename = func(s string) string { cleanCalled = true; return s }
 			defer func() { cleanFilename = oldClean }()
 
-			//var item = Item{ItemData: ItemData{Url: tt.p.url}}
-			var item = Item{ItemDBEntry: ItemDBEntry{ItemData: ItemData{Url: tt.p.url}}}
+			var item = Item{}
+			item.Url = tt.p.url
 
 			var cfg = podconfig.FeedToml{SkipFileTrim: tt.p.skiptrim}
 			got := item.replaceUrlFilename(tt.p.str, cfg)

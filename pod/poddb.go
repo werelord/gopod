@@ -32,7 +32,7 @@ func NewDB(path string) (*PodDB, error) {
 	}
 
 	var poddb = PodDB{path: path, config: defaultConfig}
-	if db, err := gorm.Open(sqlite.Open(poddb.path), &poddb.config); err != nil {
+	if db, err := gImpl.Open(sqlite.Open(poddb.path), &poddb.config); err != nil {
 		return nil, fmt.Errorf("error opening db: %w", err)
 	} else if err = db.AutoMigrate(
 		&FeedDBEntry{},
@@ -55,7 +55,7 @@ func (pdb PodDB) loadDBFeed(feedEntry *FeedDBEntry, loadXml bool) error {
 		return errors.New("cannot load feed entry; hash or ID has not been set")
 	}
 
-	db, err := gorm.Open(sqlite.Open(pdb.path), &pdb.config)
+	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
 	if err != nil {
 		return fmt.Errorf("error opening db: %w", err)
 	}
@@ -71,7 +71,7 @@ func (pdb PodDB) loadDBFeed(feedEntry *FeedDBEntry, loadXml bool) error {
 	if res.Error != nil {
 		return res.Error
 	}
-	log.Debug("rows found: ", res.RowsAffected)
+	// log.Debug("rows found: ", res.RowsAffected)
 	// should be done
 
 	return nil
@@ -86,7 +86,7 @@ func (pdb PodDB) loadDBFeedXml(feedXml *FeedXmlDBEntry) error {
 		return errors.New("feed id cannot be zero")
 	}
 
-	db, err := gorm.Open(sqlite.Open(pdb.path), &pdb.config)
+	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
 	if err != nil {
 		return fmt.Errorf("error opening db: %w", err)
 	}
@@ -95,7 +95,7 @@ func (pdb PodDB) loadDBFeedXml(feedXml *FeedXmlDBEntry) error {
 	if res.Error != nil {
 		return res.Error
 	}
-	log.Debug("rows found: ", res.RowsAffected)
+	// log.Debug("rows found: ", res.RowsAffected)
 
 	return nil
 }
@@ -106,28 +106,24 @@ func (pdb PodDB) loadFeedItems(feedId uint, numItems int, includeXml bool) ([]*I
 	if feedId == 0 {
 		return nil, errors.New("feed id cannot be zero")
 	}
-	db, err := gorm.Open(sqlite.Open(pdb.path), &pdb.config)
+	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
 	if err != nil {
 		return nil, fmt.Errorf("error opening db: %w", err)
 	}
 
-	var (
-		itemList = make([]*ItemDBEntry, 0)
-		tx, res  *gorm.DB
-	)
-	tx = db.Where(&ItemDBEntry{FeedId: feedId})
+	var itemList = make([]*ItemDBEntry, 0)
+	var tx = db.Where(&ItemDBEntry{FeedId: feedId})
 	// if numitems is negative, load everything..
 	// we don't care about order; will be transitioned to map anyways
 	if numItems > 0 {
-		tx = tx.Order(clause.OrderByColumn{
-			Column: clause.Column{Name: "PubTimeStamp"}, Desc: true}).
+		tx = tx.Order(clause.OrderByColumn{Column: clause.Column{Name: "PubTimeStamp"}, Desc: true}).
 			Limit(numItems)
 	}
 	if includeXml {
 		tx = tx.Preload("XmlData")
 	}
 
-	res = tx.Find(&itemList)
+	var res = tx.Find(&itemList)
 	if res.Error != nil {
 		return itemList, res.Error
 	}
@@ -148,11 +144,11 @@ func (pdb PodDB) saveFeed(feed *FeedDBEntry) error {
 		return errors.New("hash cannot be empty")
 	}
 
-	if (feed.XmlFeedData.ID == 0) {
+	if feed.XmlFeedData.ID == 0 {
 		log.Warn("xml feed id is zero; will insert new xml entry instead of replacing existing")
 	}
 
-	db, err := gorm.Open(sqlite.Open(pdb.path), &pdb.config)
+	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
 	if err != nil {
 		return fmt.Errorf("error opening db: %w", err)
 	}
@@ -175,7 +171,7 @@ func (pdb PodDB) saveFeed(feed *FeedDBEntry) error {
 // 		return nil
 // 	}
 
-// 	db, err := gorm.Open(sqlite.Open(pdb.path), &pdb.config)
+// 	db, err := gimpl.Open(pdb.path, &pdb.config)
 // 	if err != nil {
 // 		return fmt.Errorf("error opening db: %w", err)
 // 	}
