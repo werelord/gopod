@@ -82,10 +82,12 @@ func (pdb PodDB) loadDBFeed(feedEntry *FeedDBEntry, loadXml bool) error {
 // --------------------------------------------------------------------------
 func (pdb PodDB) loadDBFeedXml(feedXml *FeedXmlDBEntry) error {
 
-	if feedXml == nil {
-		return errors.New("feed xml cannot be nil")
-	} else if feedXml.ID == 0 {
-		return errors.New("feed id cannot be zero")
+	if pdb.path == "" {
+		return errors.New("poddb is not initialized; call NewDB() first")
+	} else if feedXml == nil {
+		return errors.New("feedxml cannot be nil")
+	} else if feedXml.ID == 0 && feedXml.FeedId == 0 {
+		return errors.New("xmlID or feedID cannot be zero")
 	}
 
 	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
@@ -93,7 +95,10 @@ func (pdb PodDB) loadDBFeedXml(feedXml *FeedXmlDBEntry) error {
 		return fmt.Errorf("error opening db: %w", err)
 	}
 	// only feed id
-	var res = db.Where(&FeedXmlDBEntry{PodDBModel: PodDBModel{ID: feedXml.ID}}).First(feedXml)
+	var res = db.Where(&FeedXmlDBEntry{
+		PodDBModel: PodDBModel{ID: feedXml.ID}, 
+		FeedId: feedXml.FeedId}).
+		First(feedXml)
 	if res.Error != nil {
 		return res.Error
 	}

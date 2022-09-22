@@ -63,6 +63,9 @@ func (gdbi *gormDBImpl) Session(config *gorm.Session) gormDBInterface {
 func (gdbi *gormDBImpl) FirstOrCreate(dest any, conds ...any) *gorm.DB {
 	return gdbi.DB.FirstOrCreate(dest, conds...)
 }
+func (gdbi *gormDBImpl) First(dest any, conds ...any) *gorm.DB {
+	return gdbi.DB.First(dest, conds...)
+}
 func (gdbi *gormDBImpl) Find(dest any, conds ...any) *gorm.DB {
 	return gdbi.DB.Find(dest, conds...)
 }

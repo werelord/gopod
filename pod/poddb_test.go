@@ -6,6 +6,7 @@ import (
 	"gopod/podutils"
 	"gopod/testutils"
 	"testing"
+	"time"
 
 	"github.com/go-test/deep"
 	"golang.org/x/exp/slices"
@@ -73,8 +74,10 @@ func (mgdb *mockGormDB) FirstOrCreate(dest any, conds ...any) *gorm.DB {
 	appendCallstack(firstorcreate)
 	return mgdb.DB.FirstOrCreate(dest, conds...)
 }
-
-// todo: replace these
+func (mgdb *mockGormDB) First(dest any, conds ...any) *gorm.DB {
+	appendCallstack(first)
+	return mgdb.DB.First(dest, conds...)
+}
 func (mgdb *mockGormDB) Where(query any, args ...any) gormDBInterface {
 	appendCallstack(where)
 	var newdb = mockGormDB{
@@ -122,6 +125,7 @@ const (
 	limit         stackType = "db.limit"
 	session       stackType = "db.session"
 	firstorcreate stackType = "db.firstorcreate"
+	first         stackType = "db.first"
 )
 
 var callStack []stackType
@@ -130,6 +134,12 @@ func resetCallStack()             { callStack = make([]stackType, 0) }
 func appendCallstack(s stackType) { callStack = append(callStack, s) }
 func compareCallstack(tb testing.TB, exp []stackType) {
 	tb.Helper()
+
+	// make sure we're not comparing possible empty slice to nil slice
+	if exp == nil {
+		exp = make([]stackType, 0)
+	}
+
 	if diffs := deep.Equal(exp, callStack); diffs != nil {
 		str := "\033[31m\nObjects not equal:\033[39m\n"
 		for _, d := range diffs {
@@ -288,7 +298,6 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 		{"missing id+hash", args{}, exp{errStr: "hash or ID has not been set"}},
 		{"open error", args{openErr: true, fq: hashQuery},
 			exp{errStr: "error opening db", callStack: []stackType{open}}},
-
 		// success results
 		{"success with hash", args{fq: hashQuery},
 			exp{fe: entryOneNoXml, callStack: defCS}},
@@ -311,7 +320,7 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 
 			err := poddb.loadDBFeed(podutils.Tern(tt.p.entryNil, nil, &fq), tt.p.loadXml)
 			if testutils.AssertErrContains(t, tt.e.errStr, err) {
-				// general insert structure
+				// general expected structure
 				testutils.Assert(t, fq.ID > 0, fmt.Sprintf("Id > 0, got %v", fq.ID))
 				if tt.p.loadXml {
 					testutils.Assert(t, fq.XmlFeedData.ID > 0,
@@ -336,34 +345,102 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 				testutils.AssertEquals(t, exp, fq)
 			}
 			// check the call stack
-			var expCallStack = podutils.Tern(tt.e.callStack != nil, tt.e.callStack, make([]stackType, 0))
-			compareCallstack(t, expCallStack)
+
+			compareCallstack(t, tt.e.callStack)
 		})
 	}
 }
 
-/*
 func TestPodDB_loadDBFeedXml(t *testing.T) {
+
+	gmock, teardown := setupMock(t, nil, true)
+	defer teardown(t, gmock)
+
+	// insert stuff for retrieval
+	var (
+		entryOne, entryTwo         FeedXmlDBEntry
+		qWithId, qWithFeedId       FeedXmlDBEntry
+		notFoundId, notfoundFeedId FeedXmlDBEntry
+	)
+
+	entryOne.Title = "foobar"
+	entryOne.Author = "meh"
+
+	entryTwo.Title = "barfoo"
+	entryTwo.FeedId = 42
+	entryTwo.PubDate = time.Now()
+
+	if err := gmock.mockdb.DB.AutoMigrate(&FeedDBEntry{}, &FeedXmlDBEntry{}); err != nil {
+		t.Fatalf("error in automigrate: %v", err)
+	} else if res := gmock.mockdb.DB.Create([]*FeedXmlDBEntry{&entryOne, &entryTwo}); res.Error != nil {
+		t.Fatalf("error in insert: %v", res.Error)
+	} else {
+		fmt.Printf("inserted %v rows, ids: %v %v\n", res.RowsAffected, entryOne.ID, entryTwo.ID)
+	}
+
+	qWithId.ID = entryOne.ID
+	qWithFeedId.FeedId = entryTwo.FeedId
+	notFoundId.ID = 99
+	notfoundFeedId.FeedId = 13
+
+	var expCS = []stackType{open, where, first}
+
 	type args struct {
+		emptyPath bool
+		openErr   bool
+		entryNil  bool
+		fxq       FeedXmlDBEntry
 	}
 	type exp struct {
+		fxe       FeedXmlDBEntry
+		errStr    string
+		callStack []stackType
 	}
 	tests := []struct {
 		name string
 		p    args
 		e    exp
 	}{
-		// TODO: Add test cases.
+		// error tests
+		{"empty path", args{emptyPath: true, fxq: qWithId}, exp{errStr: "poddb is not initialized"}},
+		{"entry nil", args{entryNil: true}, exp{errStr: "feedxml cannot be nil"}},
+		{"missing id+hash", args{}, exp{errStr: "xmlID or feedID cannot be zero"}},
+		{"open error", args{openErr: true, fxq: qWithId},
+			exp{errStr: "error opening db", callStack: []stackType{open}}},
+
+		// not existing tests
+		{"id doesn't exist", args{fxq: notFoundId},
+			exp{errStr: "record not found", callStack: expCS}},
+		{"feedid doesn't exist", args{fxq: notfoundFeedId},
+			exp{errStr: "record not found", callStack: expCS}},
+
+		// success
+		{"success by id", args{fxq: qWithId}, exp{fxe: entryOne, callStack: expCS}},
+		{"success by feedid", args{fxq: qWithFeedId}, exp{fxe: entryTwo, callStack: expCS}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.pdb.loadDBFeedXml(tt.args.feedXml); (err != nil) != tt.wantErr {
-				t.Errorf("PodDB.loadDBFeedXml() error = %v, wantErr %v", err, tt.wantErr)
+
+			resetCallStack()
+			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
+			gmock.openErr = tt.p.openErr
+
+			var fxq = tt.p.fxq
+
+			var err = poddb.loadDBFeedXml(podutils.Tern(tt.p.entryNil, nil, &fxq))
+			if testutils.AssertErrContains(t, tt.e.errStr, err) {
+				testutils.Assert(t, fxq.ID > 0, fmt.Sprintf("Id > 0, got %v", fxq.ID))
+
+				// compare objects
+				testutils.AssertEquals(t, tt.e.fxe, fxq)
 			}
+
+			compareCallstack(t, tt.e.callStack)
 		})
 	}
 }
-*/ /*
+
+/*
 func TestPodDB_loadFeedItems(t *testing.T) {
 	type args struct {
 	}
