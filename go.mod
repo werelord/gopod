@@ -25,8 +25,10 @@ require (
 	github.com/DavidGamba/go-getoptions v0.25.3
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/flytam/filenamify v1.1.1
+	github.com/go-test/deep v1.0.8
 	github.com/google/uuid v1.3.0
 	github.com/schollz/progressbar/v3 v3.10.1
 	github.com/wk8/go-ordered-map/v2 v2.0.0
+	golang.org/x/exp v0.0.0-20220921023135-46d9e7742f1e
 	golang.org/x/sys v0.0.0-20220907062415-87db552b00fd // indirect
 )

@@ -49,10 +49,12 @@ func NewDB(path string) (*PodDB, error) {
 // --------------------------------------------------------------------------
 func (pdb PodDB) loadDBFeed(feedEntry *FeedDBEntry, loadXml bool) error {
 
-	if feedEntry == nil {
+	if pdb.path == "" {
+		return errors.New("poddb is not initialized; call NewDB() first")
+	} else if feedEntry == nil {
 		return errors.New("feed cannot be nil")
 	} else if feedEntry.ID == 0 && feedEntry.Hash == "" {
-		return errors.New("cannot load feed entry; hash or ID has not been set")
+		return errors.New("hash or ID has not been set")
 	}
 
 	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)

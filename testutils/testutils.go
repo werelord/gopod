@@ -1,9 +1,13 @@
 package testutils
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/go-test/deep"
+	"golang.org/x/exp/slices"
 )
 
 // inspired by https://github.com/benbjohnson/testing
@@ -18,9 +22,17 @@ func Assert(tb testing.TB, condition bool, msg string) {
 // equals fails the test if exp is not equal to act.
 func AssertEquals(tb testing.TB, exp, act any) {
 	tb.Helper()
-	if !reflect.DeepEqual(exp, act) {
-		tb.Errorf("\033[31m \nexp: %#v \ngot: %#v \033[39m", exp, act)
+	// if !reflect.DeepEqual(exp, act) {
+	// 	tb.Errorf("\033[31m \nexp: %#v \ngot: %#v \033[39m", exp, act)
+	// }
+	if diff := deep.Equal(exp, act); diff != nil {
+		str := "\033[31m\nObjects not equal:\033[39m\n"
+		for _, d := range diff {
+			str += fmt.Sprintf("\033[31m\t%v\033[39m\n", d)
+		}
+		tb.Error(str)
 	}
+
 }
 
 func AssertNotEquals(tb testing.TB, exp, act any) {
@@ -56,10 +68,42 @@ func AssertErrContains(tb testing.TB, contains string, e error) bool {
 	return e == nil
 }
 
+// --------------------------------------------------------------------------
 // copies an entry (usually struct) by value, returns pointer to new copy
 func Cp[T any](orig T) *T {
 	// allocate new, copy entry values, return reference to new
 	var cpy = new(T)
 	*cpy = orig
 	return cpy
+}
+
+// --------------------------------------------------------------------------
+// takes in any type, returns a map of type names
+func ListTypes(ty ...any) []string {
+	var typelist = make([]string, 0, len(ty))
+	for _, t := range ty {
+		typelist = append(typelist, fmt.Sprintf("%T", t))
+	}
+	return typelist
+}
+
+// --------------------------------------------------------------------------
+// checks all keys in want, make sure it exists in got; any not existing is returned in []missing
+// checks all keys in got, make sure it exists in want, any not existing is returned in []extra
+func ListDiff(wantList, gotList []string) (missing, extra []string) {
+
+	// for every in want, make sure it exists in got
+	for _, want := range wantList {
+		if slices.Contains(gotList, want) == false {
+			missing = append(missing, want)
+		}
+	}
+	// and vice versa
+	for _, got := range gotList {
+		if slices.Contains(wantList, got) == false {
+			extra = append(extra, got)
+		}
+	}
+
+	return missing, extra
 }

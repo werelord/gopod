@@ -265,7 +265,7 @@ func checkHashes(flist map[string]*pod.Feed) {
 				continue
 			}
 			if hash != item.Hash {
-				log.Warnf("Hash mismatch{%v}:\n\t'%v'\n\t'%v%\n", feed.Shortname, hash, item.Hash)
+				log.Warnf("Hash mismatch{%v}:\n\t'%v'\n\t'%v'\n", feed.Shortname, hash, item.Hash)
 			}
 		}
 	}
