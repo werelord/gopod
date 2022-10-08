@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gopod/podutils"
 	"gopod/testutils"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -78,6 +79,15 @@ func (mgdb *mockGormDB) First(dest any, conds ...any) *gorm.DB {
 	appendCallstack(first)
 	return mgdb.DB.First(dest, conds...)
 }
+func (mgdb *mockGormDB) Find(dest any, conds ...any) *gorm.DB {
+	appendCallstack(find)
+	return mgdb.DB.Find(dest, conds...)
+}
+func (mgdb *mockGormDB) Save(value any) *gorm.DB {
+	appendCallstack(save)
+	return mgdb.DB.Save(value)
+}
+
 func (mgdb *mockGormDB) Where(query any, args ...any) gormDBInterface {
 	appendCallstack(where)
 	var newdb = mockGormDB{
@@ -126,6 +136,8 @@ const (
 	session       stackType = "db.session"
 	firstorcreate stackType = "db.firstorcreate"
 	first         stackType = "db.first"
+	find          stackType = "db.find"
+	save          stackType = "db.save"
 )
 
 var callStack []stackType
@@ -225,9 +237,7 @@ func TestNewDB(t *testing.T) {
 						len(autoMigrageTypes), len(gmock.mockdb.autoMigrateTypes)))
 
 				// check types on automigrate
-				var missing, extra = testutils.ListDiff(autoMigrageTypes, gmock.mockdb.autoMigrateTypes)
-				testutils.Assert(t, len(missing) == 0, fmt.Sprintf("Missing types in automigrate: %v", missing))
-				testutils.Assert(t, len(extra) == 0, fmt.Sprintf("Extra types in automigrate: %v", extra))
+				testutils.AssertDiff(t, autoMigrageTypes, gmock.mockdb.autoMigrateTypes)
 			}
 		})
 	}
@@ -440,51 +450,272 @@ func TestPodDB_loadDBFeedXml(t *testing.T) {
 	}
 }
 
-/*
 func TestPodDB_loadFeedItems(t *testing.T) {
+
+	gmock, teardown := setupMock(t, nil, true)
+	defer teardown(t, gmock)
+
+	var (
+		item1, item2, item3 ItemDBEntry
+		itemA, itemB, itemC ItemDBEntry
+
+		r = rand.New(rand.NewSource(time.Now().UnixNano()))
+	)
+
+	// semi random shit
+	const tslayout = "2006-01-02"
+	var datelist = []string{"2022-03-01", "2022-01-01", "2022-02-01", "2005-05-01", "2005-06-01", "2005-04-01"}
+	for idx, item := range []*ItemDBEntry{&item1, &item2, &item3, &itemA, &itemB, &itemC} {
+		item.Downloaded = podutils.Tern(r.Intn(2) == 1, true, false)
+		item.Hash = testutils.RandStringBytes(8)
+		item.Filename = testutils.RandStringBytes(8)
+		item.XmlData.Title = testutils.RandStringBytes(8)
+		item.XmlData.Enclosure.Url = testutils.RandStringBytes(20)
+		item.FeedId = uint(podutils.Tern(idx < 3, 1, 2))
+		var fu error
+		item.PubTimeStamp, fu = time.Parse(tslayout, datelist[idx])
+		if fu != nil {
+			fmt.Printf("fuck, %v", fu)
+		}
+	}
+
+	if err := gmock.mockdb.DB.AutoMigrate(&ItemDBEntry{}, &ItemXmlDBEntry{}); err != nil {
+		t.Fatalf("error in automigrate: %v", err)
+	} else if res := gmock.mockdb.DB.Create(
+		[]*ItemDBEntry{&item1, &item2, &item3, &itemA, &itemB, &itemC}); res.Error != nil {
+		t.Fatalf("error in insert: %v", res.Error)
+	} else {
+		fmt.Printf("inserted %v rows\n", res.RowsAffected)
+	}
+
+	var blnX = func(e ItemDBEntry) *ItemDBEntry {
+		return &ItemDBEntry{e.PodDBModel, e.Hash, e.FeedId, e.ItemData, ItemXmlDBEntry{}}
+	}
+
 	type args struct {
+		emptyPath  bool
+		openErr    bool
+		feedId     uint
+		numItems   int
+		includeXml bool
 	}
 	type exp struct {
+		resultList []*ItemDBEntry
+		errStr     string
+		callStack  []stackType
 	}
 	tests := []struct {
 		name string
 		p    args
 		e    exp
 	}{
-		// TODO: Add test cases.
+		// order pubdate desc: item1, item3, item2, itemB, itemA, itemC
+
+		// error results
+		{"empty path", args{emptyPath: true}, exp{errStr: "poddb is not initialized", resultList: nil}},
+		{"feed id zero", args{}, exp{errStr: "feed id cannot be zero"}},
+		{"open error", args{openErr: true, feedId: 2},
+			exp{errStr: "error opening db", callStack: []stackType{open}}},
+
+		// success results
+		{"no results", args{feedId: 3},
+			exp{resultList: []*ItemDBEntry{}, callStack: []stackType{open, where, order, find}}},
+		{"full results", args{feedId: 2},
+			exp{resultList: []*ItemDBEntry{blnX(itemB), blnX(itemA), blnX(itemC)},
+				callStack: []stackType{open, where, order, find}}},
+		{"limit results", args{feedId: 1, numItems: 2},
+			exp{resultList: []*ItemDBEntry{blnX(item1), blnX(item3)},
+				callStack: []stackType{open, where, order, limit, find}}},
+		{"full include xml", args{feedId: 2, includeXml: true},
+			exp{resultList: []*ItemDBEntry{&itemB, &itemA, &itemC},
+				callStack: []stackType{open, where, order, preload, find}}},
+		{"limit include xml", args{feedId: 1, numItems: 2, includeXml: true},
+			exp{resultList: []*ItemDBEntry{&item1, &item3},
+				callStack: []stackType{open, where, order, limit, preload, find}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.pdb.loadFeedItems(tt.args.feedId, tt.args.numItems, tt.args.includeXml)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("PodDB.loadFeedItems() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("PodDB.loadFeedItems() = %v, want %v", got, tt.want)
-			}
+
+			resetCallStack()
+			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
+			gmock.openErr = tt.p.openErr
+
+			res, err := poddb.loadFeedItems(tt.p.feedId, tt.p.numItems, tt.p.includeXml)
+			testutils.AssertErrContains(t, tt.e.errStr, err)
+
+			// var wtflist = make([]*ItemDBEntry, 0)
+			// wtf := gmock.mockdb.DB.Where(&ItemDBEntry{FeedId: tt.p.feedId}).Order(clause.OrderByColumn{Column: clause.Column{Name: "PubTimeStamp"}, Desc: true}).Find(&wtflist)
+			// fmt.Printf("rows: %v, err: %v\n", wtf.RowsAffected, wtf.Error)
+
+			// fmt.Printf("wtflist:\n")
+			// for _, i := range wtflist {
+			// 	fmt.Printf("\t(%v)(f:%v)'%v'\n", i.ID, i.FeedId, i.PubTimeStamp.Format(podutils.TimeFormatStr))
+			// }
+			// fmt.Printf("want:\n")
+			// for _, i := range tt.e.resultList {
+			// 	fmt.Printf("\t(%v)(f:%v)'%v'\n", i.ID, i.FeedId, i.PubTimeStamp.Format(podutils.TimeFormatStr))
+			// }
+			// fmt.Printf("got:\n")
+			// for _, i := range res {
+			// 	fmt.Printf("\t(%v)(f:%v)'%v'\n", i.ID, i.FeedId, i.PubTimeStamp.Format(podutils.TimeFormatStr))
+			// }
+
+			testutils.AssertEquals(t, tt.e.resultList, res)
+
+			compareCallstack(t, tt.e.callStack)
 		})
 	}
 }
-*/ /*
+
 func TestPodDB_saveFeed(t *testing.T) {
+
+	gmock, teardown := setupMock(t, nil, true)
+	defer teardown(t, gmock)
+
+	var (
+		of1, of2                 FeedDBEntry
+		mf1, mf2                 FeedDBEntry
+		oi1, oi2, ni3, ni4       ItemDBEntry
+		mf1ItemList, mf2ItemList []*ItemDBEntry
+	)
+
+	of1.Hash = testutils.RandStringBytes(8)
+	of1.XmlFeedData.Title = testutils.RandStringBytes(8)
+	of2.Hash = testutils.RandStringBytes(8)
+	of2.XmlFeedData.Title = testutils.RandStringBytes(8)
+
+	oi1.Hash = testutils.RandStringBytes(8)
+	oi1.ItemData.Filename = testutils.RandStringBytes(8)
+	oi1.XmlData.Enclosure.Url = testutils.RandStringBytes(8)
+	oi2.Hash = testutils.RandStringBytes(8)
+	oi2.ItemData.Filename = testutils.RandStringBytes(8)
+	oi2.XmlData.Enclosure.Url = testutils.RandStringBytes(8)
+	of2.ItemList = []*ItemDBEntry{&oi1, &oi2}
+
+	// do insert
+
+	if err := gmock.mockdb.DB.AutoMigrate(&FeedDBEntry{}, &FeedXmlDBEntry{}, &ItemDBEntry{}, &ItemXmlDBEntry{}); err != nil {
+		t.Fatalf("error in automigrate: %v", err)
+	} else if res := gmock.mockdb.DB.Create([]*FeedDBEntry{&of1, &of2}); res.Error != nil {
+		t.Fatalf("error in insert: %v", res.Error)
+	} else {
+		fmt.Printf("inserted %v rows\n", res.RowsAffected)
+	}
+
+	ni3.Hash = testutils.RandStringBytes(8)
+	ni3.ItemData.Filename = testutils.RandStringBytes(8)
+	ni3.XmlData.Enclosure.Url = testutils.RandStringBytes(8)
+	ni4.Hash = testutils.RandStringBytes(8)
+	ni4.ItemData.Filename = testutils.RandStringBytes(8)
+	ni4.XmlData.Enclosure.Url = testutils.RandStringBytes(8)
+
+	// make modifications
+	mf1 = of1
+	mf1.XmlFeedData.Description = testutils.RandStringBytes(8)
+	mf1ItemList = []*ItemDBEntry{&ni3}
+	mf2 = of2
+	mf2.XmlFeedData.Link = testutils.RandStringBytes(8)
+	mf2ItemList = []*ItemDBEntry{&ni4}
+
 	type args struct {
+		emptyPath   bool
+		nilFeed     bool
+		modFeed     FeedDBEntry
+		modItemList []*ItemDBEntry
+		openErr     bool
 	}
 	type exp struct {
+		expFeed     FeedDBEntry
+		expItemList []*ItemDBEntry
+		errStr      string
+		callStack   []stackType
 	}
 	tests := []struct {
 		name string
 		p    args
 		e    exp
 	}{
-		// TODO: Add test cases.
+		//{"", args{}, exp{}},
+		// error tests, no db changes
+		{"empty path", args{emptyPath: true, modFeed: mf1},
+			exp{errStr: "poddb is not initialized", expFeed: of1}},
+		{"feed nil", args{nilFeed: true}, exp{errStr: "feed cannot be nil"}},
+		{"feed id zero", args{modFeed: FeedDBEntry{}}, exp{errStr: "feed id is zero; make sure feed is created/loaded first"}},
+		{"feed hash empty", args{modFeed: FeedDBEntry{PodDBModel: PodDBModel{ID: 3}}},
+			exp{errStr: "hash cannot be empty"}},
+		{"open error", args{openErr: true, modFeed: mf1},
+			exp{errStr: "error opening db", callStack: []stackType{open}}},
+
+		// success tests
+		{"success 1", args{modFeed: mf1, modItemList: mf1ItemList},
+			exp{expFeed: mf1, expItemList: []*ItemDBEntry{&ni3}, callStack: []stackType{open, session, save}}},
+		{"success 2", args{modFeed: mf2, modItemList: mf2ItemList},
+			exp{expFeed: mf2, expItemList: []*ItemDBEntry{&oi1, &oi2, &ni4}, callStack: []stackType{open, session, save}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.pdb.saveFeed(tt.args.feed); (err != nil) != tt.wantErr {
-				t.Errorf("PodDB.saveFeed() error = %v, wantErr %v", err, tt.wantErr)
+			resetCallStack()
+			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
+			gmock.openErr = tt.p.openErr
+
+			tt.p.modFeed.ItemList = tt.p.modItemList
+
+			err := poddb.saveFeed(podutils.Tern(tt.p.nilFeed, nil, &tt.p.modFeed))
+
+			testutils.AssertErrContains(t, tt.e.errStr, err)
+			compareCallstack(t, tt.e.callStack)
+
+			// get the feed & items from the db, compare them to this
+			if tt.e.expFeed.ID > 0 {
+
+				var compEntry, dbEntry FeedDBEntry
+				compEntry = tt.e.expFeed
+				dbEntry.ID = tt.p.modFeed.ID
+				res := gmock.mockdb.DB.Preload("XmlFeedData").Where(&dbEntry).First(&dbEntry)
+				testutils.AssertErr(t, false, res.Error)
+				// ignore model and itemlist..
+				feedCompare(t, dbEntry, compEntry)
+				
+				// check dbItems
+				var dbItems = make([]*ItemDBEntry, 0, len(tt.e.expItemList))
+				res = gmock.mockdb.DB.Debug().Preload("XmlData").Where(&ItemDBEntry{FeedId: tt.p.modFeed.ID}).Find(&dbItems)
+				testutils.AssertErr(t, false, res.Error)
+				// this will fail; pull out itemlist and compare from that
+				testutils.AssertDiffFunc(t, tt.e.expItemList, dbItems, itemCompare)
 			}
 		})
 	}
 }
-*/
+
+func feedCompare(tb testing.TB, one, two FeedDBEntry) {
+	tb.Helper()
+	var ret = make([]string, 0)
+	ret = append(ret, deep.Equal(one.Hash, two.Hash)...)
+	ret = append(ret, deep.Equal(one.XmlFeedData.FeedId, two.XmlFeedData.FeedId)...)
+	ret = append(ret, deep.Equal(one.XmlFeedData.XChannelData, two.XmlFeedData.XChannelData)...)
+
+	testutils.Assert(tb, len(ret) == 0, fmt.Sprintf("feed difference: %v", ret))
+}
+
+func itemCompare(l, r *ItemDBEntry) bool {
+	if l.Hash != r.Hash {
+		return false
+	} else if l.FeedId != r.FeedId {
+		return false
+	} else {
+		var diff = deep.Equal(l.ItemData, r.ItemData)
+		if len(diff) > 0 {
+			return false
+		}
+		diff = deep.Equal(l.XmlData.ItemId, r.XmlData.ItemId)
+		if len(diff) > 0 {
+			return false
+		}
+		diff = deep.Equal(l.XmlData.XItemData, r.XmlData.XItemData)
+		if len(diff) > 0 {
+			return false
+		}
+	}
+
+	return true
+}

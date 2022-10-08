@@ -96,8 +96,8 @@ func (pdb PodDB) loadDBFeedXml(feedXml *FeedXmlDBEntry) error {
 	}
 	// only feed id
 	var res = db.Where(&FeedXmlDBEntry{
-		PodDBModel: PodDBModel{ID: feedXml.ID}, 
-		FeedId: feedXml.FeedId}).
+		PodDBModel: PodDBModel{ID: feedXml.ID},
+		FeedId:     feedXml.FeedId}).
 		First(feedXml)
 	if res.Error != nil {
 		return res.Error
@@ -110,7 +110,9 @@ func (pdb PodDB) loadDBFeedXml(feedXml *FeedXmlDBEntry) error {
 // --------------------------------------------------------------------------
 func (pdb PodDB) loadFeedItems(feedId uint, numItems int, includeXml bool) ([]*ItemDBEntry, error) {
 
-	if feedId == 0 {
+	if pdb.path == "" {
+		return nil, errors.New("poddb is not initialized; call NewDB() first")
+	} else if feedId == 0 {
 		return nil, errors.New("feed id cannot be zero")
 	}
 	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
@@ -119,12 +121,14 @@ func (pdb PodDB) loadFeedItems(feedId uint, numItems int, includeXml bool) ([]*I
 	}
 
 	var itemList = make([]*ItemDBEntry, 0)
-	var tx = db.Where(&ItemDBEntry{FeedId: feedId})
+	// even tho order doesn't matter in the end, as this list is transitioned to map, for testing
+	// purposes and to retain consistency (ordered in all possible runs) adding order here
+	var tx = db.Where(&ItemDBEntry{FeedId: feedId}).
+		Order(clause.OrderByColumn{Column: clause.Column{Name: "PubTimeStamp"}, Desc: true})
 	// if numitems is negative, load everything..
 	// we don't care about order; will be transitioned to map anyways
 	if numItems > 0 {
-		tx = tx.Order(clause.OrderByColumn{Column: clause.Column{Name: "PubTimeStamp"}, Desc: true}).
-			Limit(numItems)
+		tx = tx.Limit(numItems)
 	}
 	if includeXml {
 		tx = tx.Preload("XmlData")
@@ -142,8 +146,10 @@ func (pdb PodDB) loadFeedItems(feedId uint, numItems int, includeXml bool) ([]*I
 // --------------------------------------------------------------------------
 func (pdb PodDB) saveFeed(feed *FeedDBEntry) error {
 	// should save feed xml, if set
-	if feed == nil {
-		return errors.New("feed is nil")
+	if pdb.path == "" {
+		return errors.New("poddb is not initialized; call NewDB() first")
+	} else if feed == nil {
+		return errors.New("feed cannot be nil")
 	} else if feed.ID == 0 {
 		// this hopefully will never happen; fail if it does
 		return errors.New("feed id is zero; make sure feed is created/loaded first")

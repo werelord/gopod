@@ -2,13 +2,19 @@ package testutils
 
 import (
 	"fmt"
+	"math/rand"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-test/deep"
 	"golang.org/x/exp/slices"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 // inspired by https://github.com/benbjohnson/testing
 
@@ -32,7 +38,6 @@ func AssertEquals(tb testing.TB, exp, act any) {
 		}
 		tb.Error(str)
 	}
-
 }
 
 func AssertNotEquals(tb testing.TB, exp, act any) {
@@ -90,7 +95,14 @@ func ListTypes(ty ...any) []string {
 // --------------------------------------------------------------------------
 // checks all keys in want, make sure it exists in got; any not existing is returned in []missing
 // checks all keys in got, make sure it exists in want, any not existing is returned in []extra
-func ListDiff(wantList, gotList []string) (missing, extra []string) {
+func AssertDiff[T comparable](tb testing.TB, wantList, gotList []T) {
+	tb.Helper()
+
+	// todo: rather than use slices.Contains, write our own contains func using deep.Equal()
+	var (
+		missing = make([]T, 0)
+		extra   = make([]T, 0)
+	)
 
 	// for every in want, make sure it exists in got
 	for _, want := range wantList {
@@ -105,5 +117,48 @@ func ListDiff(wantList, gotList []string) (missing, extra []string) {
 		}
 	}
 
-	return missing, extra
+	Assert(tb, len(missing) == 0, fmt.Sprintf("Missing types in gotList: %v", missing))
+	Assert(tb, len(extra) == 0, fmt.Sprintf("Extra types in gotList: %v", extra))
+}
+
+func RandStringBytes(n int) string {
+	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
+
+func AssertDiffFunc[T comparable](tb testing.TB, wantList, gotList []T, comp func(T, T) bool) {
+
+	var (
+		missing = make([]T, 0)
+		extra   = make([]T, 0)
+	)
+
+	var indexOf = func(s []T, v T) int {
+		for i, e := range s {
+			if comp(e, v) {
+				return i
+			}
+		}
+		return -1
+	}
+
+	// for every in want, make sure it exists in got
+	for _, want := range wantList {
+		if indexOf(gotList, want) < 0 {
+			missing = append(missing, want)
+		}
+	}
+	// and vice versa
+	for _, got := range gotList {
+		if indexOf(wantList, got) < 0 {
+			extra = append(extra, got)
+		}
+	}
+	Assert(tb, len(missing) == 0, fmt.Sprintf("Missing types in gotList: %v", missing))
+	Assert(tb, len(extra) == 0, fmt.Sprintf("Extra types in gotList: %v", extra))
 }
