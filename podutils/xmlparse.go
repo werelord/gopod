@@ -37,6 +37,7 @@ type XChannelData struct {
 type XItemData struct {
 	Title          string
 	Pubdate        time.Time
+	SeasonStr      string
 	EpisodeStr     string
 	Guid           string
 	Link           string
@@ -188,7 +189,7 @@ func ParseXml(xmldata []byte, fp FeedProcess) (feedData *XChannelData, newItems 
 				// check to see if hash exists
 				hash, e := calcHash(elem, fp)
 				if e != nil {
-					log.Error(e)
+					log.Errorf("error in calculating hash; skipping item entry: %v", e)
 					continue
 				}
 				var skipitem = false
@@ -304,6 +305,8 @@ func parseItemEntry(elem *etree.Element) (item XItemData, err error) {
 				// item.PersonList = append(item.PersonList, XPersonDataItem{XPodcastPersonData: personData})
 				item.PersonList = append(item.PersonList, personData)
 			}
+		case strings.EqualFold(child.FullTag(), "itunes:season"):
+			item.SeasonStr = child.Text()
 		case strings.EqualFold(child.FullTag(), "itunes:episode"):
 			item.EpisodeStr = child.Text()
 		case strings.EqualFold(child.FullTag(), "enclosure"):

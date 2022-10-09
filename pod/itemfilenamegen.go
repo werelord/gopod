@@ -48,6 +48,7 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml) error {
 	newstr = strings.Replace(newstr, "#shortname#", cfg.Shortname, 1)
 	newstr = i.replaceLinkFinalPath(newstr, defaultReplacement)
 	newstr = i.replaceEpisode(newstr, defaultReplacement, cfg)
+	newstr = strings.Replace(newstr, "#season#", i.XmlData.SeasonStr, 1)
 	newstr = strings.Replace(newstr, "#date#", defaultReplacement, 1)
 	if newstr, err = i.replaceTitleRegex(newstr, cfg.Regex); err != nil {
 		log.Error("failed parsing title:", err)

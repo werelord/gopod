@@ -196,7 +196,10 @@ func calcHash(guid, url, urlparse string) (string, error) {
 
 	parsedUrl, err := parseUrl(url, urlparse)
 	if err != nil {
-		return "", err
+		newerr := fmt.Errorf("failed to calc hash: %w", err)
+		log.Errorf("%v", newerr)
+		log.Errorf("check item with guid '%v' in xml", guid)
+		return "", newerr
 	} else if parsedUrl == "" && guid == "" {
 		return "", errors.New("failed to hash item; both url and guid are empty")
 	}

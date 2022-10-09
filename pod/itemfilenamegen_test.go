@@ -26,6 +26,7 @@ func TestItem_generateFilename(t *testing.T) {
 		url         string
 		xLink       string
 		epStr       string
+		sesnStr     string
 		title       string
 		defaultTime time.Time
 	}
@@ -52,6 +53,10 @@ func TestItem_generateFilename(t *testing.T) {
 			exp{filename: "foo042bar"}},
 		{"episode string missing", cfgarg{parse: "foo#episode#bar"}, itemarg{},
 			exp{filename: "foo" + defstr + "bar"}},
+		{"season string", cfgarg{parse: "foo#season#bar"}, itemarg{sesnStr: "13"},
+			exp{filename: "foo13bar"}},
+		{"season string missing", cfgarg{parse: "foo#season#bar"}, itemarg{},
+			exp{filename: "foobar"}},
 		{"pubdate", cfgarg{parse: "foo_#date#_bar"}, itemarg{},
 			exp{filename: "foo_" + defstr + "_bar"}},
 		{"pubdate, replacement", cfgarg{parse: "foo_#date#_bar"}, itemarg{defaultTime: testTimeRep},
@@ -71,6 +76,7 @@ func TestItem_generateFilename(t *testing.T) {
 			item.XmlData.Title = tt.i.title
 			item.XmlData.Link = tt.i.xLink
 			item.XmlData.EpisodeStr = tt.i.epStr
+			item.XmlData.SeasonStr = tt.i.sesnStr
 
 			var cfg = podconfig.FeedToml{}
 			cfg.Shortname = tt.c.shortname
