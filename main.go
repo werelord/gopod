@@ -150,7 +150,7 @@ func RunTest(config podconfig.Config, feedMap map[string]*pod.Feed) (exit bool) 
 
 // --------------------------------------------------------------------------
 func SetupDB(cfg podconfig.Config) (*pod.PodDB, error) {
-	var dbpath = filepath.Join(defaultworking, "gopod.db")
+	var dbpath = filepath.Join(defaultworking, "gopod_TEST.db")
 
 	if db, err := pod.NewDB(dbpath); err != nil {
 		return nil, err

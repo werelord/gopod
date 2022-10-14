@@ -44,6 +44,7 @@ type FeedDBEntry struct {
 	// anything that needs to be persisted between runs, go here
 	PodDBModel
 	Hash        string         `gorm:"uniqueIndex"`
+	DBShortname string         // just for db browsing
 	XmlFeedData FeedXmlDBEntry `gorm:"foreignKey:FeedId"`
 	ItemList    []*ItemDBEntry `gorm:"foreignKey:FeedId"`
 }
@@ -225,8 +226,9 @@ func (f Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error 
 		return nil
 	}
 
-	// make sure hash is set
+	// make sure hash and shortname is set
 	f.Hash = f.generateHash()
+	f.DBShortname = f.Shortname
 	if newxml != nil {
 		f.XmlFeedData.FeedId = f.ID
 		f.XmlFeedData.XChannelData = *newxml

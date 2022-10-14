@@ -6,8 +6,8 @@ require (
 	github.com/beevik/etree v1.1.0
 	github.com/pelletier/go-toml/v2 v2.0.5
 	github.com/sirupsen/logrus v1.9.0
-	gorm.io/driver/sqlite v1.3.6
-	gorm.io/gorm v1.23.10
+	gorm.io/driver/sqlite v1.4.2
+	gorm.io/gorm v1.24.0
 )
 
 require (
@@ -29,6 +29,6 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/schollz/progressbar/v3 v3.11.0
 	github.com/wk8/go-ordered-map/v2 v2.0.0
-	golang.org/x/exp v0.0.0-20220921164117-439092de6870
-	golang.org/x/sys v0.0.0-20220926163933-8cfa568d3c25 // indirect
+	golang.org/x/exp v0.0.0-20221012211006-4de253d81b95
+	golang.org/x/sys v0.0.0-20221013171732-95e765b1cc43 // indirect
 )
