@@ -107,6 +107,9 @@ func Test_parseUrl(t *testing.T) {
 		{"url with query and parse",
 			args{encUrl: "http://track.me/foo/foo.bar.com/meh.mp3?foo=bar", urlparse: "foo.bar.com"},
 			exp{resUrl: "http://foo.bar.com/meh.mp3"}},
+		{"url with non-existant parse",
+			args{encUrl: "http://track.me/foo/foo.bar.com/meh.mp3?foo=bar", urlparse: "meh.bar.com"},
+			exp{resUrl: "http://track.me/foo/foo.bar.com/meh.mp3"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

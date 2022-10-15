@@ -30,6 +30,8 @@ type mockGormDB struct {
 
 	autoMigrateErr   bool
 	autoMigrateTypes []string
+
+	termErr bool
 }
 
 func (mg *mockGorm) Open(d gorm.Dialector, opts ...gorm.Option) (gormDBInterface, error) {
@@ -71,55 +73,78 @@ func (mgdb *mockGormDB) AutoMigrate(dst ...any) error {
 	}
 }
 
+// terminal method calls
 func (mgdb *mockGormDB) FirstOrCreate(dest any, conds ...any) *gorm.DB {
 	appendCallstack(firstorcreate)
-	return mgdb.DB.FirstOrCreate(dest, conds...)
+	if mgdb.termErr {
+		return &gorm.DB{Error: errors.New("firstorcreate:foobar")}
+	} else {
+		return mgdb.DB.FirstOrCreate(dest, conds...)
+	}
 }
 func (mgdb *mockGormDB) First(dest any, conds ...any) *gorm.DB {
 	appendCallstack(first)
-	return mgdb.DB.First(dest, conds...)
+	if mgdb.termErr {
+		return &gorm.DB{Error: errors.New("first:foobar")}
+	} else {
+		return mgdb.DB.First(dest, conds...)
+	}
 }
 func (mgdb *mockGormDB) Find(dest any, conds ...any) *gorm.DB {
 	appendCallstack(find)
-	return mgdb.DB.Find(dest, conds...)
+	if mgdb.termErr {
+		return &gorm.DB{Error: errors.New("find:foobar")}
+	} else {
+		return mgdb.DB.Find(dest, conds...)
+	}
 }
 func (mgdb *mockGormDB) Save(value any) *gorm.DB {
 	appendCallstack(save)
-	return mgdb.DB.Save(value)
+	if mgdb.termErr {
+		return &gorm.DB{Error: errors.New("save:foobar")}
+	} else {
+		return mgdb.DB.Save(value)
+	}
 }
 
+// continuaetion method calls
 func (mgdb *mockGormDB) Where(query any, args ...any) gormDBInterface {
 	appendCallstack(where)
 	var newdb = mockGormDB{
-		DB: mgdb.DB.Where(query, args...),
+		termErr: mgdb.termErr,
+		DB:      mgdb.DB.Where(query, args...),
 	}
 	return &newdb
 }
 func (mgdb *mockGormDB) Preload(query string, args ...any) gormDBInterface {
 	appendCallstack(preload)
 	var newdb = mockGormDB{
-		DB: mgdb.DB.Preload(query, args...),
+		termErr: mgdb.termErr,
+		DB:      mgdb.DB.Preload(query, args...),
 	}
 	return &newdb
 }
 func (mgdb *mockGormDB) Order(value any) gormDBInterface {
 	appendCallstack(order)
 	var newdb = mockGormDB{
-		DB: mgdb.DB.Order(value),
+		termErr: mgdb.termErr,
+		DB:      mgdb.DB.Order(value),
 	}
 	return &newdb
 }
 func (mgdb *mockGormDB) Limit(lim int) gormDBInterface {
 	appendCallstack(limit)
 	var newdb = mockGormDB{
-		DB: mgdb.DB.Limit(lim),
+		termErr: mgdb.termErr,
+		DB:      mgdb.DB.Limit(lim),
 	}
 	return &newdb
 }
 func (mgdb *mockGormDB) Session(config *gorm.Session) gormDBInterface {
 	appendCallstack(session)
 	var newdb = mockGormDB{
-		DB: mgdb.DB.Session(config),
+		termErr: mgdb.termErr,
+		DB:      mgdb.DB.Session(config),
 	}
 	return &newdb
 }
@@ -270,7 +295,6 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 	} else {
 		fmt.Printf("inserted %v rows, ids: %v %v\n", res.RowsAffected, entryOne.ID, entryTwo.ID)
 	}
-	//gmock.mockdb.DB.
 	hashQuery.Hash = entryOne.Hash
 	entryOneNoXml = entryOne
 	entryOneNoXml.XmlFeedData = FeedXmlDBEntry{}
@@ -288,6 +312,7 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 		emptyPath bool
 		openErr   bool
 		entryNil  bool
+		termErr   bool
 		fq        FeedDBEntry
 		loadXml   bool
 	}
@@ -308,6 +333,8 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 		{"missing id+hash", args{}, exp{errStr: "hash or ID has not been set"}},
 		{"open error", args{openErr: true, fq: hashQuery},
 			exp{errStr: "error opening db", callStack: []stackType{open}}},
+		{"firstOrCreate error", args{termErr: true, fq: hashQuery},
+			exp{errStr: "firstorcreate:foobar", callStack: defCS}},
 		// success results
 		{"success with hash", args{fq: hashQuery},
 			exp{fe: entryOneNoXml, callStack: defCS}},
@@ -324,6 +351,7 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
 			gmock.openErr = tt.p.openErr
+			gmock.mockdb.termErr = tt.p.termErr
 
 			resetCallStack()
 			var fq = tt.p.fq
@@ -399,6 +427,7 @@ func TestPodDB_loadDBFeedXml(t *testing.T) {
 		emptyPath bool
 		openErr   bool
 		entryNil  bool
+		termErr   bool
 		fxq       FeedXmlDBEntry
 	}
 	type exp struct {
@@ -417,6 +446,8 @@ func TestPodDB_loadDBFeedXml(t *testing.T) {
 		{"missing id+hash", args{}, exp{errStr: "xmlID or feedID cannot be zero"}},
 		{"open error", args{openErr: true, fxq: qWithId},
 			exp{errStr: "error opening db", callStack: []stackType{open}}},
+		{"generic find error", args{termErr: true, fxq: qWithId},
+			exp{errStr: "first:foobar", callStack: expCS}},
 
 		// not existing tests
 		{"id doesn't exist", args{fxq: notFoundId},
@@ -434,6 +465,7 @@ func TestPodDB_loadDBFeedXml(t *testing.T) {
 			resetCallStack()
 			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
 			gmock.openErr = tt.p.openErr
+			gmock.mockdb.termErr = tt.p.termErr
 
 			var fxq = tt.p.fxq
 
@@ -456,26 +488,18 @@ func TestPodDB_loadFeedItems(t *testing.T) {
 	defer teardown(t, gmock)
 
 	var (
-		item1, item2, item3 ItemDBEntry
-		itemA, itemB, itemC ItemDBEntry
-
-		r = rand.New(rand.NewSource(time.Now().UnixNano()))
+		item1, item2, item3 = generateItem(true), generateItem(true), generateItem(true)
+		itemA, itemB, itemC = generateItem(true), generateItem(true), generateItem(true)
 	)
 
 	// semi random shit
-	const tslayout = "2006-01-02"
 	var datelist = []string{"2022-03-01", "2022-01-01", "2022-02-01", "2005-05-01", "2005-06-01", "2005-04-01"}
 	for idx, item := range []*ItemDBEntry{&item1, &item2, &item3, &itemA, &itemB, &itemC} {
-		item.Downloaded = podutils.Tern(r.Intn(2) == 1, true, false)
-		item.Hash = testutils.RandStringBytes(8)
-		item.Filename = testutils.RandStringBytes(8)
-		item.XmlData.Title = testutils.RandStringBytes(8)
-		item.XmlData.Enclosure.Url = testutils.RandStringBytes(20)
 		item.FeedId = uint(podutils.Tern(idx < 3, 1, 2))
 		var fu error
-		item.PubTimeStamp, fu = time.Parse(tslayout, datelist[idx])
+		item.PubTimeStamp, fu = time.Parse("2006-01-02", datelist[idx])
 		if fu != nil {
-			fmt.Printf("fuck, %v", fu)
+			t.Errorf("fuck, %v", fu)
 		}
 	}
 
@@ -495,6 +519,7 @@ func TestPodDB_loadFeedItems(t *testing.T) {
 	type args struct {
 		emptyPath  bool
 		openErr    bool
+		termErr    bool
 		feedId     uint
 		numItems   int
 		includeXml bool
@@ -516,6 +541,8 @@ func TestPodDB_loadFeedItems(t *testing.T) {
 		{"feed id zero", args{}, exp{errStr: "feed id cannot be zero"}},
 		{"open error", args{openErr: true, feedId: 2},
 			exp{errStr: "error opening db", callStack: []stackType{open}}},
+		{"find error", args{termErr: true, feedId: 2},
+			exp{errStr: "find:foobar", resultList: []*ItemDBEntry{}, callStack: []stackType{open, where, order, find}}},
 
 		// success results
 		{"no results", args{feedId: 3},
@@ -539,6 +566,7 @@ func TestPodDB_loadFeedItems(t *testing.T) {
 			resetCallStack()
 			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
 			gmock.openErr = tt.p.openErr
+			gmock.mockdb.termErr = tt.p.termErr
 
 			res, err := poddb.loadFeedItems(tt.p.feedId, tt.p.numItems, tt.p.includeXml)
 			testutils.AssertErrContains(t, tt.e.errStr, err)
@@ -573,23 +601,13 @@ func TestPodDB_saveFeed(t *testing.T) {
 	defer teardown(t, gmock)
 
 	var (
-		of1, of2                 FeedDBEntry
+		of1, of2                 = generateFeed(true), generateFeed(true)
 		mf1, mf2                 FeedDBEntry
-		oi1, oi2, ni3, ni4       ItemDBEntry
+		oi1, oi2                 = generateItem(true), generateItem(true)
+		ni3, ni4                 = generateItem(true), generateItem(true)
 		mf1ItemList, mf2ItemList []*ItemDBEntry
 	)
 
-	of1.Hash = testutils.RandStringBytes(8)
-	of1.XmlFeedData.Title = testutils.RandStringBytes(8)
-	of2.Hash = testutils.RandStringBytes(8)
-	of2.XmlFeedData.Title = testutils.RandStringBytes(8)
-
-	oi1.Hash = testutils.RandStringBytes(8)
-	oi1.ItemData.Filename = testutils.RandStringBytes(8)
-	oi1.XmlData.Enclosure.Url = testutils.RandStringBytes(8)
-	oi2.Hash = testutils.RandStringBytes(8)
-	oi2.ItemData.Filename = testutils.RandStringBytes(8)
-	oi2.XmlData.Enclosure.Url = testutils.RandStringBytes(8)
 	of2.ItemList = []*ItemDBEntry{&oi1, &oi2}
 
 	// do insert
@@ -601,13 +619,6 @@ func TestPodDB_saveFeed(t *testing.T) {
 	} else {
 		fmt.Printf("inserted %v rows\n", res.RowsAffected)
 	}
-
-	ni3.Hash = testutils.RandStringBytes(8)
-	ni3.ItemData.Filename = testutils.RandStringBytes(8)
-	ni3.XmlData.Enclosure.Url = testutils.RandStringBytes(8)
-	ni4.Hash = testutils.RandStringBytes(8)
-	ni4.ItemData.Filename = testutils.RandStringBytes(8)
-	ni4.XmlData.Enclosure.Url = testutils.RandStringBytes(8)
 
 	// make modifications
 	mf1 = of1
@@ -623,6 +634,7 @@ func TestPodDB_saveFeed(t *testing.T) {
 		modFeed     FeedDBEntry
 		modItemList []*ItemDBEntry
 		openErr     bool
+		termErr     bool
 	}
 	type exp struct {
 		expFeed     FeedDBEntry
@@ -645,6 +657,8 @@ func TestPodDB_saveFeed(t *testing.T) {
 			exp{errStr: "hash cannot be empty"}},
 		{"open error", args{openErr: true, modFeed: mf1},
 			exp{errStr: "error opening db", callStack: []stackType{open}}},
+		{"save error", args{termErr: true, modFeed: mf1},
+			exp{errStr: "save:foobar", callStack: []stackType{open, session, save}}},
 
 		// success tests
 		{"success 1", args{modFeed: mf1, modItemList: mf1ItemList},
@@ -657,6 +671,7 @@ func TestPodDB_saveFeed(t *testing.T) {
 			resetCallStack()
 			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
 			gmock.openErr = tt.p.openErr
+			gmock.mockdb.termErr = tt.p.termErr
 
 			tt.p.modFeed.ItemList = tt.p.modItemList
 
@@ -675,7 +690,7 @@ func TestPodDB_saveFeed(t *testing.T) {
 				testutils.AssertErr(t, false, res.Error)
 				// ignore model and itemlist..
 				feedCompare(t, dbEntry, compEntry)
-				
+
 				// check dbItems
 				var dbItems = make([]*ItemDBEntry, 0, len(tt.e.expItemList))
 				res = gmock.mockdb.DB.Debug().Preload("XmlData").Where(&ItemDBEntry{FeedId: tt.p.modFeed.ID}).Find(&dbItems)
@@ -685,6 +700,31 @@ func TestPodDB_saveFeed(t *testing.T) {
 			}
 		})
 	}
+}
+
+func generateFeed(withXml bool) FeedDBEntry {
+	var f FeedDBEntry
+	f.Hash = testutils.RandStringBytes(8)
+	if withXml {
+		f.XmlFeedData.Title = testutils.RandStringBytes(8)
+	}
+	return f
+}
+
+func generateItem(withXml bool) ItemDBEntry {
+	var (
+		i ItemDBEntry
+		r = rand.New(rand.NewSource(time.Now().UnixNano()))
+	)
+
+	i.Hash = testutils.RandStringBytes(8)
+	i.Filename = testutils.RandStringBytes(8)
+	i.Downloaded = podutils.Tern(r.Intn(2) == 1, true, false)
+	if withXml {
+		i.XmlData.Title = testutils.RandStringBytes(8)
+		i.XmlData.Enclosure.Url = testutils.RandStringBytes(8)
+	}
+	return i
 }
 
 func feedCompare(tb testing.TB, one, two FeedDBEntry) {
