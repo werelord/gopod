@@ -15,8 +15,8 @@
             "args": [
                 //"--help",
                 //"--config", "master.toml",
-                "update",
-                //"checkdownloads",
+                //"update",
+                "checkdownloads",
                 "--feed=twit",
                 //"--proxy", "http://localhost:8888",
                 //"--simulate",

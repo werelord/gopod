@@ -189,11 +189,16 @@ type commandFunc func(*pod.Feed)
 
 func runUpdate(f *pod.Feed) {
 	log.Infof("runing update on '%v'", f.Shortname)
-	f.Update()
+	if err := f.Update(); err != nil {
+		log.Errorf("Error in updating feed '%v': %v", f.Shortname, err)
+	}
 }
 
 // --------------------------------------------------------------------------
 func runCheckDownloads(f *pod.Feed) {
 	// todo: this
-	log.Debug("TODO")
+	log.Infof("running check downloads on '%v'", f.Shortname)
+	if err := f.CheckDownloads(); err != nil {
+		log.Errorf("Error in checking downloads for feed '%v': %v", f.Shortname, err)
+	}
 }

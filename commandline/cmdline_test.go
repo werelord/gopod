@@ -20,6 +20,7 @@ func TestInitCommandLine(t *testing.T) {
 		"--simulate",
 		"--force",
 		"--userecent",
+		"--archive",
 	}
 
 	type args struct {
@@ -46,23 +47,31 @@ func TestInitCommandLine(t *testing.T) {
 
 		// success results.. don't use named parameters, so that changes to underlying struct
 		// will make this test fail to compile
-		{"default false", args{args: []string{"update"}},
+		{"default false (update)", args{args: []string{"update"}},
 			expect{cmdline: CommandLine{"defaultConfig", Update, "", "",
-				CommandLineOptions{false, false, false, false}}},
+				CommandLineOptions{false, false, false, false, false}}},
 		},
-		{"default true", args{args: []string{"update", "--feed=foo", "--debug", "--proxy=barfoo"}},
+		{"default true (update)", args{args: []string{"update", "--feed=foo", "--debug", "--proxy=barfoo"}},
 			expect{cmdline: CommandLine{"defaultConfig", Update, "foo", "barfoo",
-				CommandLineOptions{true, false, false, false}}},
+				CommandLineOptions{true, false, false, false, false}}},
+		},
+		{"default false (checkdownloads)", args{args: []string{"checkdownloads"}},
+			expect{cmdline: CommandLine{"defaultConfig", CheckDownloaded, "", "",
+				CommandLineOptions{false, false, false, false, false}}},
+		},
+		{"default true (checkdownloads)", args{args: []string{"checkdownloads", "--feed=foo", "--debug", "--proxy=barfoo", "--archive"}},
+			expect{cmdline: CommandLine{"defaultConfig", CheckDownloaded, "foo", "barfoo",
+				CommandLineOptions{true, false, false, false, true}}},
 		},
 
 		// flags dependent on command, regardless on whether they're on the commandline or not
 		{"update dependant", args{args: CopyAndAppend([]string{"update"}, allFlags...)},
 			expect{cmdline: CommandLine{"barfoo.toml", Update, "foo", "barfoo",
-				CommandLineOptions{true, true, true, true}}},
+				CommandLineOptions{true, true, true, true, false}}},
 		},
 		{"check downloads dependant", args{args: CopyAndAppend([]string{"checkdownloads"}, allFlags...)},
 			expect{cmdline: CommandLine{"barfoo.toml", CheckDownloaded, "foo", "barfoo",
-				CommandLineOptions{true, false, false, false}}},
+				CommandLineOptions{true, false, false, false, true}}},
 		},
 	}
 	for _, tt := range tests {

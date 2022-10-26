@@ -47,6 +47,7 @@ type CommandLineOptions struct {
 	Simulate         bool
 	ForceUpdate      bool
 	UseMostRecentXml bool
+	SetArchive       bool
 }
 
 // --------------------------------------------------------------------------
@@ -120,6 +121,8 @@ func (c *CommandLine) buildOptions(defaultConfig string) *getoptions.GetOpt {
 	updateCommand.SetCommandFn(c.generateCmdFunc(Update))
 
 	checkcommand := opt.NewCommand("checkdownloads", "check downloads of files")
+	checkcommand.BoolVar(&c.SetArchive, "archive", false, opt.Alias("arc"),
+		opt.Description("set missing downloads to archived"))
 	checkcommand.SetCommandFn(c.generateCmdFunc(CheckDownloaded))
 
 	opt.HelpCommand("help", opt.Alias("h", "?"))

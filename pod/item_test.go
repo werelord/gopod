@@ -159,9 +159,9 @@ func Test_calcHash(t *testing.T) {
 
 // mocking for os, net
 
-type mockShit struct {
-	// todo: shit here
-}
+// type mockShit struct {
+// 	// todo: shit here
+// }
 
 
 

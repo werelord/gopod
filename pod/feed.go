@@ -398,6 +398,28 @@ func (f *Feed) Update() error {
 	return nil
 }
 
+//--------------------------------------------------------------------------
+func (f *Feed) CheckDownloads() error {
+
+	// make sure db is loaded; don't need xml for this
+	if err := f.LoadDBFeed(false); err != nil {
+		log.Error("failed to load feed data from db: ", err)
+		return err
+	} else {
+		// we do want item xml however
+		if itemMap, err := f.loadDBFeedItems(-1, true); err != nil {
+			log.Error("failed to load item entries: ", err)
+			return err
+		} else {
+			f.itemMap = itemMap
+		}
+	}
+
+	log.Debug("Feed loaded from db for update: ", f.Shortname)
+
+	return nil
+}
+
 // --------------------------------------------------------------------------
 func (f Feed) downloadFeedXml() (body []byte, err error) {
 	// download file
