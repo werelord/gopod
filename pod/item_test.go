@@ -1,6 +1,7 @@
 package pod
 
 import (
+	"fmt"
 	"gopod/testutils"
 	"testing"
 )
@@ -122,79 +123,56 @@ func Test_parseUrl(t *testing.T) {
 	}
 }
 
-/*
 func Test_calcHash(t *testing.T) {
-	// todo: this
-}
-
-/*
-func TestItem_getItemXmlDBEntry(t *testing.T) {
-
-	var xml = podutils.XItemData{
-		Title: "foo",
-		Pubdate: time.Now(),
-		EpisodeStr: "42",
-		Guid: "gooid",
-		Link: "link",
-		Author: "fu",
-		Description: "meh",
-		Enclosure: struct{Length uint; TypeStr string; Url string}{42, "meh", "url"},
+	type args struct {
+		guid, url string
 	}
-
-
-
+	type exp struct {
+		errStr    string
+		validHash bool
+	}
 	tests := []struct {
 		name string
-		i    *Item
-		want *poddb.DBEntry
+		p    args
+		e    exp
 	}{
-		// TODO: Add test cases.
+		//{"", args{}, exp{}},
+		{"parse failure", args{guid: "foobar"}, exp{errStr: "failed to calc hash"}},
+		{"empty guid", args{url: "http://foo.bar/meh.mp3"}, exp{validHash: true}},
+		{"all exists", args{url: "http://foo.bar/meh.mp3", guid: "foobar"}, exp{validHash: true}},
+		// todo: tests
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.i.getItemXmlDBEntry(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Item.getItemXmlDBEntry() = %v, want %v", got, tt.want)
-			}
+			// what the hash results to is outside of scope
+
+			hash, err := calcHash(tt.p.guid, tt.p.url, "")
+
+			testutils.AssertErrContains(t, tt.e.errStr, err)
+			testutils.Assert(t, (len(hash) == 28) == tt.e.validHash, fmt.Sprintf("unexpected hash: '%v'", hash))
+
 		})
 	}
 }
 
-func TestItem_getItemDataDBEntry(t *testing.T) {
-	tests := []struct {
-		name string
-		i    *Item
-		want *poddb.DBEntry
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.i.getItemDataDBEntry(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Item.getItemDataDBEntry() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+
+
+// mocking for os, net
+
+type mockShit struct {
+	// todo: shit here
 }
 
-/*
 
-func TestItem_createProgressBar(t *testing.T) {
-	tests := []struct {
-		name string
-		i    Item
-		want *progressbar.ProgressBar
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.i.createProgressBar(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Item.createProgressBar() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-*/
+
+// func setupPodUtilsMock() (mockShit, func(string, mockShit)) {
+// 	var ms = mockShit{}
+// 	var oldImpl = pnuImpl
+// 	pnuImpl = ms
+
+
+// }
+
 /*
 
 func TestItem_Download(t *testing.T) {

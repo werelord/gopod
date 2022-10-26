@@ -200,8 +200,10 @@ func calcHash(guid, url, urlparse string) (string, error) {
 		log.Errorf("%v", newerr)
 		log.Errorf("check item with guid '%v' in xml", guid)
 		return "", newerr
-	} else if parsedUrl == "" && guid == "" {
-		return "", errors.New("failed to hash item; both url and guid are empty")
+	// removing below.. if parse succeeded, url will never b empty
+	// and since a url is always required, this really never will be called
+	// } else if parsedUrl == "" && guid == "" {
+	// 	return "", errors.New("failed to hash item; both url and guid are empty")
 	}
 
 	hash := podutils.GenerateHash(guid + parsedUrl)

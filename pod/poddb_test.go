@@ -186,7 +186,7 @@ func compareCallstack(tb testing.TB, exp []stackType) {
 	}
 }
 
-func setupMock(t *testing.T, mock *mockGorm, openDB bool) (*mockGorm, func(*testing.T, *mockGorm)) {
+func setupGormMock(t *testing.T, mock *mockGorm, openDB bool) (*mockGorm, func(*testing.T, *mockGorm)) {
 	if mock == nil {
 		mock = &mockGorm{}
 	}
@@ -242,7 +242,7 @@ func TestNewDB(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			var gmock, teardown = setupMock(t, &tt.p.mock, false)
+			var gmock, teardown = setupGormMock(t, &tt.p.mock, false)
 			defer teardown(t, gmock)
 
 			resetCallStack()
@@ -270,7 +270,7 @@ func TestNewDB(t *testing.T) {
 
 func TestPodDB_loadDBFeed(t *testing.T) {
 
-	var gmock, teardown = setupMock(t, nil, true)
+	var gmock, teardown = setupGormMock(t, nil, true)
 	defer teardown(t, gmock)
 
 	// insert shit here, for retrieval
@@ -391,7 +391,7 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 
 func TestPodDB_loadDBFeedXml(t *testing.T) {
 
-	gmock, teardown := setupMock(t, nil, true)
+	gmock, teardown := setupGormMock(t, nil, true)
 	defer teardown(t, gmock)
 
 	// insert stuff for retrieval
@@ -484,7 +484,7 @@ func TestPodDB_loadDBFeedXml(t *testing.T) {
 
 func TestPodDB_loadFeedItems(t *testing.T) {
 
-	gmock, teardown := setupMock(t, nil, true)
+	gmock, teardown := setupGormMock(t, nil, true)
 	defer teardown(t, gmock)
 
 	var (
@@ -597,7 +597,7 @@ func TestPodDB_loadFeedItems(t *testing.T) {
 
 func TestPodDB_saveFeed(t *testing.T) {
 
-	gmock, teardown := setupMock(t, nil, true)
+	gmock, teardown := setupGormMock(t, nil, true)
 	defer teardown(t, gmock)
 
 	var (
