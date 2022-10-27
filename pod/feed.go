@@ -38,6 +38,8 @@ type feedInternal struct {
 	// itemMap is not explicitly exported, but converted to array to be exported
 	// used mostly for checking update, as to when to quit
 	itemMap map[string]*Item
+
+	log *log.Entry
 }
 
 type FeedDBEntry struct {
@@ -74,10 +76,9 @@ func Init(cfg *podconfig.Config, pdb *PodDB) {
 // --------------------------------------------------------------------------
 func NewFeed(feedToml podconfig.FeedToml) (*Feed, error) {
 	var feed = Feed{FeedToml: feedToml}
-
+	
 	if err := feed.initFeed(); err != nil {
-		log.Error("Failed to init feed: ", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to init feed '%v': %w", feed.Name, err)
 	}
 	return &feed, nil
 }
@@ -87,26 +88,28 @@ func (f *Feed) initFeed() error {
 	// make sure stuff is set
 	if config == nil {
 		return errors.New("config is nil; make sure set thru Init()")
-	} else if db == nil {
-		return errors.New("db is nil; make sure set thru Init()")
-	}
-
-	if len(f.Shortname) == 0 {
-		f.Shortname = f.Name
-	}
-	// todo: more error propegation
+		} else if db == nil {
+			return errors.New("db is nil; make sure set thru Init()")
+		}
+		
+		if len(f.Shortname) == 0 {
+			f.Shortname = f.Name
+		}
+		// todo: more error propegation
+		
+		f.log = log.WithField("feed", f.Shortname)
 
 	// attempt create the dirs
 	var xmlFilePath = filepath.Join(config.WorkspaceDir, f.Shortname, ".xml")
 	if err := podutils.MkdirAll(xmlFilePath); err != nil {
-		log.Error("error making xml directory: ", err)
+		f.log.Error("error making xml directory: ", err)
 		return err
 	}
 	f.xmlfile = filepath.Join(xmlFilePath, f.Shortname+"."+config.TimestampStr+".xml")
 
 	f.mp3Path = filepath.Join(config.WorkspaceDir, f.Shortname)
 	if err := podutils.MkdirAll(f.mp3Path); err != nil {
-		log.Error("error making mp3 directory: ", err)
+		f.log.Error("error making mp3 directory: ", err)
 		return err
 	}
 
@@ -132,11 +135,11 @@ func (f *Feed) LoadDBFeed(includeXml bool) error {
 	// make sure hash is prepopulated
 	f.Hash = f.generateHash()
 	if err := db.loadDBFeed(&f.FeedDBEntry, includeXml); err != nil {
-		log.Error("failed loading feed: ", err)
+		f.log.Error("failed loading feed: ", err)
 		return err
 	}
 	// xml is loaded (if applicable) from above query, no reason to call explicitly
-	log.Infof("{%v} feed loaded, id: %v, xml id: %v", f.Shortname, f.ID, f.XmlFeedData.ID)
+	f.log.Infof("{%v} feed loaded, id: %v, xml id: %v", f.Shortname, f.ID, f.XmlFeedData.ID)
 
 	return nil
 }
@@ -155,11 +158,11 @@ func (f *Feed) loadDBFeedXml() error {
 
 	f.XmlFeedData.FeedId = f.ID
 	if err := db.loadDBFeedXml(&f.XmlFeedData); err != nil {
-		log.Error("failed loading feed xml: ", err)
+		f.log.Error("failed loading feed xml: ", err)
 		return err
 	}
 
-	log.Infof("{%v} feed xml loaded, id: %v, xml id: %v", f.Shortname, f.ID, f.XmlFeedData.ID)
+	f.log.Infof("{%v} feed xml loaded, id: %v, xml id: %v", f.Shortname, f.ID, f.XmlFeedData.ID)
 
 	return nil
 }
@@ -189,10 +192,10 @@ func (f *Feed) loadDBFeedItems(numLatest int, includeXml bool) ([]*Item, error) 
 	// otherwise limit to numLatest
 	entryList, err = db.loadFeedItems(f.ID, numLatest, includeXml)
 	if err != nil {
-		log.Error("Failed to get item data from db: ", err)
+		f.log.Error("Failed to get item data from db: ", err)
 		return nil, err
 	} else if len(entryList) == 0 {
-		log.Warn("unable to get db entries; list is empty (new feed?)")
+		f.log.Warn("unable to get db entries; list is empty (new feed?)")
 	}
 
 	var itemList = make([]*Item, 0, len(entryList))
@@ -201,12 +204,12 @@ func (f *Feed) loadDBFeedItems(numLatest int, includeXml bool) ([]*Item, error) 
 
 		var item *Item
 		if item, err = loadFromDBEntry(f.FeedToml, entry); err != nil {
-			log.Error("failed to load item data: ", err)
+			f.log.Error("failed to load item data: ", err)
 			// if this fails, something is wrong
 			return itemList, err
 		}
 		itemList = append(itemList, item)
-		// log.Tracef("item:'%v':'%v'", item.PubTimeStamp.Format(podutils.TimeFormatStr), item.Filename)
+		// f.log.Tracef("item:'%v':'%v'", item.PubTimeStamp.Format(podutils.TimeFormatStr), item.Filename)
 	}
 
 	return itemList, nil
@@ -219,10 +222,10 @@ func (f Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error 
 	if f.ID == 0 {
 		return errors.New("unalbe to save to db; id is zero")
 	}
-	log.Info("Saving db for ", f.Shortname)
+	f.log.Info("Saving db for ", f.Shortname)
 
 	if config.Simulate {
-		log.Info("skipping saving database due to sim flag")
+		f.log.Info("skipping saving database due to sim flag")
 		return nil
 	}
 
@@ -246,13 +249,13 @@ func (f Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error 
 	}
 
 	if err := db.saveFeed(&f.FeedDBEntry); err != nil {
-		log.Errorf("error saving feed db: %v", err)
+		f.log.Errorf("error saving feed db: %v", err)
 		return err
 	}
 
-	log.Infof("{%v} feed saved, id: %v, xml id: %v", f.Shortname, f.ID, f.XmlFeedData.ID)
+	f.log.Infof("{%v} feed saved, id: %v, xml id: %v", f.Shortname, f.ID, f.XmlFeedData.ID)
 	for _, i := range f.ItemList {
-		log.Infof("{%v} item saved, id: %v, xmlId: %v", i.Filename, i.ID, i.XmlData.ID)
+		f.log.Infof("{%v} item saved, id: %v, xmlId: %v", i.Filename, i.ID, i.XmlData.ID)
 	}
 
 	return nil
@@ -263,26 +266,26 @@ func (f *Feed) Update() error {
 
 	// make sure db is loaded
 	if err := f.LoadDBFeed(true); err != nil {
-		log.Error("failed to load feed data from db: ", err)
+		f.log.Error("failed to load feed data from db: ", err)
 		return err
 	} else {
 
 		var itemCount = podutils.Tern(config.ForceUpdate, -1, config.MaxDupChecks*2)
 		if itemList, err := f.loadDBFeedItems(itemCount, false); err != nil {
-			log.Error("failed to load item entries: ", err)
+			f.log.Error("failed to load item entries: ", err)
 			return err
 		} else {
 			// associate items into map for update hashes
 			for _, item := range itemList {
 				if _, exists := f.itemMap[item.Hash]; exists == true {
-					log.Warn("Duplicate item found; wtf")
+					f.log.Warn("Duplicate item found; wtf")
 				}
 				f.itemMap[item.Hash] = item
 			}
 		}
 	}
 
-	log.Debug("Feed loaded from db for update: ", f.Shortname)
+	f.log.Debug("Feed loaded from db for update: ", f.Shortname)
 
 	var (
 		body       []byte
@@ -297,11 +300,11 @@ func (f *Feed) Update() error {
 		body, err = f.downloadFeedXml()
 	}
 	if err != nil {
-		log.Error("error in download: ", err)
+		f.log.Error("error in download: ", err)
 		return err
 	} else if len(body) == 0 {
 		err = fmt.Errorf("body length is zero")
-		log.Error(err)
+		f.log.Error(err)
 		return err
 	}
 
@@ -311,11 +314,11 @@ func (f *Feed) Update() error {
 	newXmlData, itemList, err = podutils.ParseXml(body, f)
 	if err != nil {
 		if errors.Is(err, podutils.ParseCanceledError{}) {
-			log.Info("parse cancelled: ", err)
+			f.log.Info("parse cancelled: ", err)
 			return nil // this is not an error, just a shortcut to stop processing
 		} else {
 			// not canceled; some other error.. exit
-			log.Error("failed to parse xml: ", err)
+			f.log.Error("failed to parse xml: ", err)
 			// save the file (don't rotate) for future examination
 			f.saveAndRotateXml(body, false)
 			return err
@@ -331,13 +334,13 @@ func (f *Feed) Update() error {
 	// check url vs atom link & new feed url
 	// TODO: handle this
 	if f.XmlFeedData.AtomLinkSelf.Href != "" && f.Url != f.XmlFeedData.AtomLinkSelf.Href {
-		log.Warnf("Feed url possibly changing: '%v':'%v'", f.Url, f.XmlFeedData.AtomLinkSelf.Href)
+		f.log.Warnf("Feed url possibly changing: '%v':'%v'", f.Url, f.XmlFeedData.AtomLinkSelf.Href)
 	} else if f.XmlFeedData.NewFeedUrl != "" && f.Url != f.XmlFeedData.NewFeedUrl {
-		log.Warnf("Feed url possibly changing: '%v':'%v'", f.Url, f.XmlFeedData.NewFeedUrl)
+		f.log.Warnf("Feed url possibly changing: '%v':'%v'", f.Url, f.XmlFeedData.NewFeedUrl)
 	}
 
 	if itemList.Len() == 0 {
-		log.Info("no items found to process")
+		f.log.Info("no items found to process")
 		return nil
 	}
 
@@ -354,7 +357,7 @@ func (f *Feed) Update() error {
 		if itemEntry, exists = f.itemMap[hash]; exists {
 			// this should only happen when force == true; log warning if this is not the case
 			if config.ForceUpdate == false {
-				log.Warn("hash for new item already exists and --force is not set; something is seriously wrong")
+				f.log.Warn("hash for new item already exists and --force is not set; something is seriously wrong")
 			}
 			// we don't necessarily want to create and replace;
 			// just update the new data in the existing entry
@@ -364,11 +367,11 @@ func (f *Feed) Update() error {
 			itemEntry.updateXmlData(hash, &xmldata)
 
 		} else if itemEntry, err = createNewItemEntry(f.FeedToml, hash, &xmldata); err != nil {
-			log.Error("failed creating new item entry; skipping: ", err)
+			f.log.Error("failed creating new item entry; skipping: ", err)
 			continue
 		}
 
-		log.Infof("item added: :%+v", itemEntry)
+		f.log.Infof("item added: :%+v", itemEntry)
 
 		// add it to the entry list
 		f.itemMap[hash] = itemEntry
@@ -386,9 +389,9 @@ func (f *Feed) Update() error {
 	// todo: move this outside update (likely on goroutine implementation)
 
 	if errlist := f.processNew(newItems); len(errlist) > 0 {
-		log.Error("errors in processing new items:\n")
+		f.log.Error("errors in processing new items:\n")
 		for _, err := range errlist {
-			log.Errorf("%v", err)
+			f.log.Errorf("%v", err)
 		}
 		return errlist[0]
 	}
@@ -396,11 +399,11 @@ func (f *Feed) Update() error {
 	// save everything here, as processing is done.. any errors should have exited out at some point
 	// inserting everything into feed db; by assoc should save everything
 	if err = f.saveDBFeed(newXmlData, newItems); err != nil {
-		log.Error("saving db failed: ", err)
+		f.log.Error("saving db failed: ", err)
 		return err
 	}
 
-	log.Debugf("{%v} done processing feed", f.Shortname)
+	f.log.Debugf("{%v} done processing feed", f.Shortname)
 	return nil
 }
 
@@ -414,16 +417,16 @@ func (f *Feed) CheckDownloads() error {
 	)
 
 	if err = f.LoadDBFeed(false); err != nil {
-		log.Error("failed to load feed data from db: ", err)
+		f.log.Error("failed to load feed data from db: ", err)
 		return err
 	} else {
 		// load all items (will be sorted desc); we do want item xml
 		if itemList, err = f.loadDBFeedItems(-1, true); err != nil {
-			log.Error("failed to load item entries: ", err)
+			f.log.Error("failed to load item entries: ", err)
 			return err
 		}
 	}
-	log.Debug("Feed loaded from db for update: ", f.Shortname)
+	f.log.Debug("Feed loaded from db for update: ", f.Shortname)
 
 	// todo:
 	// check download exist
@@ -431,28 +434,28 @@ func (f *Feed) CheckDownloads() error {
 	for _, item := range itemList {
 		// check item hashes
 		var (
-			verifyHash string
-			filePathStr   string
-			fileExists bool
-			err        error
+			verifyHash  string
+			filePathStr string
+			fileExists  bool
+			err         error
 		)
 
 		verifyHash, err = calcHash(item.XmlData.Guid, item.XmlData.Enclosure.Url, f.UrlParse)
 		if err != nil {
-			log.Errorf("error calculating hash: %v", err)
+			f.log.Errorf("error calculating hash: %v", err)
 			return err
 		}
 		if verifyHash != item.Hash {
-			log.Warnf("hash mismatch: calc:'%v', stored:'%v'", verifyHash, item.Hash)
+			f.log.Warnf("hash mismatch: calc:'%v', stored:'%v'", verifyHash, item.Hash)
 		}
 
 		// check download exists
 		filePathStr = filepath.Join(f.mp3Path, item.Filename)
 		fileExists, err = podutils.FileExists(filePathStr)
 		if err != nil {
-			log.Error("Error checking file exists: ", err)
+			f.log.Error("Error checking file exists: ", err)
 		} else if fileExists == false {
-			log.Warnf("File missing: %v", filePathStr)
+			f.log.Warnf("File missing: %v", filePathStr)
 		}
 
 		// check filename generation, in case shit changed..
@@ -465,7 +468,7 @@ func (f *Feed) CheckDownloads() error {
 func (f Feed) downloadFeedXml() (body []byte, err error) {
 	// download file
 	if body, err = podutils.Download(f.Url); err != nil {
-		log.Error("failed to download: ", err)
+		f.log.Error("failed to download: ", err)
 	}
 	return
 }
@@ -477,7 +480,7 @@ func (f Feed) loadMostRecentXml() (body []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Debug("loading xml file: ", filename)
+	f.log.Debug("loading xml file: ", filename)
 
 	return podutils.LoadFile(filename)
 }
@@ -486,10 +489,10 @@ func (f Feed) loadMostRecentXml() (body []byte, err error) {
 func (f Feed) saveAndRotateXml(body []byte, shouldRotate bool) {
 	// for external reference
 	if err := podutils.SaveToFile(body, f.xmlfile); err != nil {
-		log.Error("failed saving xml file: ", err)
+		f.log.Error("failed saving xml file: ", err)
 		// not exiting; not a fatal error as the parsing happens on the byte string
 	} else if shouldRotate && config.XmlFilesRetained > 0 {
-		log.Debug("rotating xml files..")
+		f.log.Debug("rotating xml files..")
 		podutils.RotateFiles(filepath.Dir(f.xmlfile),
 			fmt.Sprintf("%v.*.xml", f.Shortname),
 			uint(config.XmlFilesRetained))
@@ -526,10 +529,10 @@ func (f Feed) CancelOnPubDate(xmlPubDate time.Time) (cont bool) {
 		return false
 	}
 
-	//log.Tracef("Checking build date; \nFeed.Pubdate:'%v' \nxmlBuildDate:'%v'", f.XMLFeedData.PubDate.Unix(), xmlPubDate.Unix())
+	//f.log.Tracef("Checking build date; \nFeed.Pubdate:'%v' \nxmlBuildDate:'%v'", f.XMLFeedData.PubDate.Unix(), xmlPubDate.Unix())
 	if f.XmlFeedData.PubDate.IsZero() == false {
 		if xmlPubDate.After(f.XmlFeedData.PubDate) == false {
-			log.Info("new pub date not after previous; cancelling parse")
+			f.log.Info("new pub date not after previous; cancelling parse")
 			return true
 		}
 	}
@@ -544,10 +547,10 @@ func (f Feed) CancelOnBuildDate(xmlBuildDate time.Time) (cont bool) {
 		return false
 	}
 
-	//log.Tracef("Checking build date; Feed.LastBuildDate:'%v', xmlBuildDate:'%v'", f.XMLFeedData.LastBuildDate, xmlBuildDate)
+	//f.log.Tracef("Checking build date; Feed.LastBuildDate:'%v', xmlBuildDate:'%v'", f.XMLFeedData.LastBuildDate, xmlBuildDate)
 	if f.XmlFeedData.LastBuildDate.IsZero() == false {
 		if xmlBuildDate.After(f.XmlFeedData.LastBuildDate) == false {
-			log.Info("new build date not after previous; cancelling parse")
+			f.log.Info("new build date not after previous; cancelling parse")
 			return true
 		}
 	}
@@ -566,7 +569,7 @@ func (f *Feed) processNew(newItems []*Item) []error {
 	var errList = make([]error, 0)
 
 	if len(newItems) == 0 {
-		log.Info("no items to process; item list is empty")
+		f.log.Info("no items to process; item list is empty")
 		return nil
 	}
 
@@ -576,35 +579,35 @@ func (f *Feed) processNew(newItems []*Item) []error {
 	//------------------------------------- DEBUG -------------------------------------
 	// todo: move download handling within item
 	for _, item := range newItems {
-		log.Debugf("processing new item: {%v %v}", item.Filename, item.Hash)
+		f.log.Debugf("processing new item: {%v %v}", item.Filename, item.Hash)
 
 		podfile := filepath.Join(f.mp3Path, item.Filename)
 		var fileExists bool
 
 		fileExists, err := podutils.FileExists(podfile)
 		if err != nil {
-			log.Warn("error in FileExists: ", err)
+			f.log.Warn("error in FileExists: ", err)
 			errList = append(errList, err)
 		}
 
 		//------------------------------------- DEBUG -------------------------------------
 		if config.Debug && skipRemaining {
-			log.Debug("skip remaining set; previously downloaded items.. making sure downloaded == true")
+			f.log.Debug("skip remaining set; previously downloaded items.. making sure downloaded == true")
 			item.Downloaded = true
 			continue
 		}
 		//------------------------------------- DEBUG -------------------------------------
 
 		if item.Downloaded == true {
-			log.Debug("skipping entry; file already downloaded")
+			f.log.Debug("skipping entry; file already downloaded")
 			continue
 		} else if fileExists == true {
-			log.Debug("downloaded == false, but file already exists.. updating itemdata")
+			f.log.Debug("downloaded == false, but file already exists.. updating itemdata")
 			item.Downloaded = true
 
 			//------------------------------------- DEBUG -------------------------------------
 			if config.Debug {
-				log.Debug("debug setup, setting skip remaining to true")
+				f.log.Debug("debug setup, setting skip remaining to true")
 				skipRemaining = true
 			}
 			//------------------------------------- DEBUG -------------------------------------
@@ -613,17 +616,17 @@ func (f *Feed) processNew(newItems []*Item) []error {
 		}
 
 		if config.Simulate {
-			log.Info("skipping downloading file due to sim flag")
+			f.log.Info("skipping downloading file due to sim flag")
 			continue
 		}
 		if err = item.Download(f.mp3Path); err != nil {
-			log.Error("Error downloading file: ", err)
+			f.log.Error("Error downloading file: ", err)
 			errList = append(errList, err)
 		}
-		log.Info("finished processing file: ", podfile)
+		f.log.Info("finished processing file: ", podfile)
 	}
 
-	log.Info("all new downloads completed")
+	f.log.Info("all new downloads completed")
 	return errList
 }
 
@@ -632,7 +635,7 @@ func (f *Feed) processNew(newItems []*Item) []error {
 
 // 	// loop thru new items, saving xml
 // 	if len(itemList) == 0 {
-// 		log.Info("nothing to insert into db; item list is empty")
+// 		f.log.Info("nothing to insert into db; item list is empty")
 // 		return nil
 // 	}
 

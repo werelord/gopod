@@ -28,6 +28,8 @@ type Item struct {
 
 type itemInternal struct {
 	parentShortname string // for logging purposes
+
+	log *log.Entry
 }
 
 type ItemDBEntry struct {
@@ -102,6 +104,8 @@ func createNewItemEntry(feedcfg podconfig.FeedToml, hash string, xml *podutils.X
 		item.Filename = feedcfg.Shortname + "." + strings.ReplaceAll(uuid.NewString(), "-", "") + ".mp3"
 	}
 
+	item.log = log.WithField("item", item.Filename)
+
 	// everything should be set
 	return &item, nil
 }
@@ -153,7 +157,7 @@ func (i *Item) LoadItemXml() error {
 
 	id, err := i.db.ItemXmlCollection().FetchByEntry(entry)
 	if err != nil {
-		log.Error("error fetching item xml: ", err)
+		i.log.Error("error fetching item xml: ", err)
 		return err
 	}
 	i.dbXmlId = id
@@ -216,8 +220,8 @@ func calcHash(guid, url, urlparse string) (string, error) {
 func (i *Item) updateXmlData(hash string, data *podutils.XItemData) {
 
 	if i.Hash != hash {
-		log.Warn("Hashes do not match; something is wrong")
-		log.Warnf("itemhash:'%v' newhash:'%v'", i.Hash, hash)
+		i.log.Warn("Hashes do not match; something is wrong")
+		i.log.Warnf("itemhash:'%v' newhash:'%v'", i.Hash, hash)
 	}
 
 	// for now, just set the xml data
@@ -253,16 +257,16 @@ func (i *Item) Download(mp3path string) error {
 
 	file, err := podutils.CreateTemp(filepath.Dir(destfile), filepath.Base(destfile)+"_temp*")
 	if err != nil {
-		log.Error("Failed creating temp file: ", err)
+		i.log.Error("Failed creating temp file: ", err)
 		return err
 	}
 	defer file.Close()
 
 	if bw, cd, err := podutils.DownloadBuffered(i.Url, file, i.createProgressBar()); err != nil {
-		log.Error("Failed downloading pod:", err)
+		i.log.Error("Failed downloading pod:", err)
 		return err
 	} else {
-		log.Debugf("file written {%v} bytes: %.2fKB", filepath.Base(file.Name()), float64(bw)/(1<<10))
+		i.log.Debugf("file written {%v} bytes: %.2fKB", filepath.Base(file.Name()), float64(bw)/(1<<10))
 
 		if strings.Contains(cd, "filename") {
 			// content disposition header, for the hell of it
@@ -271,7 +275,7 @@ func (i *Item) Download(mp3path string) error {
 					i.CDFilename = matches[1]
 				}
 			} else {
-				log.Warn("parsing content disposition had regex error: ", err)
+				i.log.Warn("parsing content disposition had regex error: ", err)
 			}
 		}
 	}
@@ -280,12 +284,12 @@ func (i *Item) Download(mp3path string) error {
 
 	// move tempfile to finished file
 	if err = podutils.Rename(file.Name(), destfile); err != nil {
-		log.Debug("error moving temp file: ", err)
+		i.log.Debug("error moving temp file: ", err)
 		return err
 	}
 
 	if err := podutils.Chtimes(destfile, downloadTimestamp, i.PubTimeStamp); err != nil {
-		log.Error("failed to change modified time: ", err)
+		i.log.Error("failed to change modified time: ", err)
 		// don't skip due to timestamp issue
 	}
 
