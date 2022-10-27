@@ -175,11 +175,10 @@ func (f Feed) generateHash() string {
 }
 
 // --------------------------------------------------------------------------
-func (f *Feed) loadDBFeedItems(numLatest int, includeXml bool) (map[string]*Item, error) {
+func (f *Feed) loadDBFeedItems(numLatest int, includeXml bool) ([]*Item, error) {
 	var (
-		err      error
-		itemlist []*ItemDBEntry
-		itemMap  = make(map[string]*Item, 0)
+		err       error
+		entryList []*ItemDBEntry
 	)
 	// lets not load feed here; return error if feed is not loaded
 	if f.ID == 0 {
@@ -188,28 +187,29 @@ func (f *Feed) loadDBFeedItems(numLatest int, includeXml bool) (map[string]*Item
 
 	// load itemlist.. if numitems is negative, load everything..
 	// otherwise limit to numLatest
-	itemlist, err = db.loadFeedItems(f.ID, numLatest, includeXml)
+	entryList, err = db.loadFeedItems(f.ID, numLatest, includeXml)
 	if err != nil {
 		log.Error("Failed to get item data from db: ", err)
 		return nil, err
-	} else if len(itemlist) == 0 {
+	} else if len(entryList) == 0 {
 		log.Warn("unable to get db entries; list is empty (new feed?)")
 	}
 
-	for _, entry := range itemlist {
+	var itemList = make([]*Item, 0, len(entryList))
+
+	for _, entry := range entryList {
+
 		var item *Item
 		if item, err = loadFromDBEntry(f.FeedToml, entry); err != nil {
 			log.Error("failed to load item data: ", err)
 			// if this fails, something is wrong
-			return itemMap, err
+			return itemList, err
 		}
-		if _, exists := itemMap[item.Hash]; exists == true {
-			log.Warn("Duplicate item found; wtf")
-		}
-		itemMap[item.Hash] = item
+		itemList = append(itemList, item)
+		// log.Tracef("item:'%v':'%v'", item.PubTimeStamp.Format(podutils.TimeFormatStr), item.Filename)
 	}
 
-	return itemMap, nil
+	return itemList, nil
 }
 
 // --------------------------------------------------------------------------
@@ -268,11 +268,17 @@ func (f *Feed) Update() error {
 	} else {
 
 		var itemCount = podutils.Tern(config.ForceUpdate, -1, config.MaxDupChecks*2)
-		if itemMap, err := f.loadDBFeedItems(itemCount, false); err != nil {
+		if itemList, err := f.loadDBFeedItems(itemCount, false); err != nil {
 			log.Error("failed to load item entries: ", err)
 			return err
 		} else {
-			f.itemMap = itemMap
+			// associate items into map for update hashes
+			for _, item := range itemList {
+				if _, exists := f.itemMap[item.Hash]; exists == true {
+					log.Warn("Duplicate item found; wtf")
+				}
+				f.itemMap[item.Hash] = item
+			}
 		}
 	}
 
@@ -398,24 +404,59 @@ func (f *Feed) Update() error {
 	return nil
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (f *Feed) CheckDownloads() error {
 
 	// make sure db is loaded; don't need xml for this
-	if err := f.LoadDBFeed(false); err != nil {
+	var (
+		itemList []*Item
+		err      error
+	)
+
+	if err = f.LoadDBFeed(false); err != nil {
 		log.Error("failed to load feed data from db: ", err)
 		return err
 	} else {
-		// we do want item xml however
-		if itemMap, err := f.loadDBFeedItems(-1, true); err != nil {
+		// load all items (will be sorted desc); we do want item xml
+		if itemList, err = f.loadDBFeedItems(-1, true); err != nil {
 			log.Error("failed to load item entries: ", err)
 			return err
-		} else {
-			f.itemMap = itemMap
 		}
 	}
-
 	log.Debug("Feed loaded from db for update: ", f.Shortname)
+
+	// todo:
+	// check download exist
+
+	for _, item := range itemList {
+		// check item hashes
+		var (
+			verifyHash string
+			filePathStr   string
+			fileExists bool
+			err        error
+		)
+
+		verifyHash, err = calcHash(item.XmlData.Guid, item.XmlData.Enclosure.Url, f.UrlParse)
+		if err != nil {
+			log.Errorf("error calculating hash: %v", err)
+			return err
+		}
+		if verifyHash != item.Hash {
+			log.Warnf("hash mismatch: calc:'%v', stored:'%v'", verifyHash, item.Hash)
+		}
+
+		// check download exists
+		filePathStr = filepath.Join(f.mp3Path, item.Filename)
+		fileExists, err = podutils.FileExists(filePathStr)
+		if err != nil {
+			log.Error("Error checking file exists: ", err)
+		} else if fileExists == false {
+			log.Warnf("File missing: %v", filePathStr)
+		}
+
+		// check filename generation, in case shit changed..
+	}
 
 	return nil
 }
