@@ -5,6 +5,8 @@ import (
 	"gopod/podutils"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -20,13 +22,13 @@ type LogrusFileHook struct {
 const numLogsToKeep = 5
 
 var (
-	logdir          string
+	logdir string
 )
 
 // --------------------------------------------------------------------------
 func NewLogrusFileHook(file string, levels []log.Level) (*LogrusFileHook, error) {
 
-	plainFormatter := &log.TextFormatter{DisableColors: true}
+	plainFormatter := &log.TextFormatter{DisableColors: true, CallerPrettyfier: gopodCallerPrettyfier}
 	// gc will close the file handle; fuck the finalizer
 	logFile, err := os.OpenFile(file, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0666)
 	if err != nil {
@@ -66,7 +68,7 @@ func InitLogging(workingdir string, shortname string, timestamp time.Time) error
 	// todo: somehow differentiate between debug/release programmatically
 
 	log.SetLevel(log.TraceLevel)
-	log.SetFormatter(&log.TextFormatter{ForceColors: true, FullTimestamp: true})
+	log.SetFormatter(&log.TextFormatter{ForceColors: true, FullTimestamp: true, CallerPrettyfier: gopodCallerPrettyfier})
 	log.SetLevel(log.TraceLevel)
 	log.SetOutput(os.Stdout)
 	log.SetReportCaller(true)
@@ -103,6 +105,30 @@ func InitLogging(workingdir string, shortname string, timestamp time.Time) error
 	}
 
 	return nil
+}
+
+// --------------------------------------------------------------------------
+func gopodCallerPrettyfier(frame *runtime.Frame) (functionName string, fileName string) {
+
+	if frame != nil {
+
+		// strip qualified path; first dot after first slash
+		var function = frame.Function
+		if idx := strings.Index(function, "/"); idx > -1 {
+			if idy := strings.Index(function[idx:], "."); idy > -1 {
+				function = function[idx+idy+1:]
+			}
+		}
+
+		// return relative path to file
+		// todo: check path programmatically??
+		var file = frame.File
+		if relPath, err := filepath.Rel(`d:\sc\gosrc\gopod`, frame.File); err == nil {
+			file = relPath
+		}
+		return fmt.Sprintf("%v()", function), fmt.Sprintf(" %s:%d", file, frame.Line)
+	}
+	return
 }
 
 // --------------------------------------------------------------------------
