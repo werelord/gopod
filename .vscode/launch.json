@@ -13,15 +13,22 @@
             "env": {},
             "console": "integratedTerminal",
             "args": [
+                // global args
                 //"--help",
                 //"--config", "master.toml",
-                //"update",
-                "checkdownloads",
-                "--feed=twit",
+                //"--feed=digctzn",
                 //"--proxy", "http://localhost:8888",
-                //"--simulate",
-                //"--use-recent",
+
+                // update commands
+                //"update",
                 //"--force",
+                //"--use-recent",
+                //"--simulate",
+
+                // check commands
+                "checkdownloads",
+                //"--archive",
+
                 "--debug=true"
             ]
         }

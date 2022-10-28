@@ -157,9 +157,9 @@ func (pdb PodDB) saveFeed(feed *FeedDBEntry) error {
 		return errors.New("hash cannot be empty")
 	}
 
-	if feed.XmlFeedData.ID == 0 {
-		log.Warn("xml feed id is zero; will insert new xml entry instead of replacing existing")
-	}
+	// if feed.XmlFeedData.ID == 0 {
+	// 	log.Warn("xml feed id is zero; will insert new xml entry instead of replacing existing")
+	// }
 
 	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
 	if err != nil {

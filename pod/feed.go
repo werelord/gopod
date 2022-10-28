@@ -76,7 +76,7 @@ func Init(cfg *podconfig.Config, pdb *PodDB) {
 // --------------------------------------------------------------------------
 func NewFeed(feedToml podconfig.FeedToml) (*Feed, error) {
 	var feed = Feed{FeedToml: feedToml}
-	
+
 	if err := feed.initFeed(); err != nil {
 		return nil, fmt.Errorf("failed to init feed '%v': %w", feed.Name, err)
 	}
@@ -88,16 +88,16 @@ func (f *Feed) initFeed() error {
 	// make sure stuff is set
 	if config == nil {
 		return errors.New("config is nil; make sure set thru Init()")
-		} else if db == nil {
-			return errors.New("db is nil; make sure set thru Init()")
-		}
-		
-		if len(f.Shortname) == 0 {
-			f.Shortname = f.Name
-		}
-		// todo: more error propegation
-		
-		f.log = log.WithField("feed", f.Shortname)
+	} else if db == nil {
+		return errors.New("db is nil; make sure set thru Init()")
+	}
+
+	if len(f.Shortname) == 0 {
+		f.Shortname = f.Name
+	}
+	// todo: more error propegation
+
+	f.log = log.WithField("feed", f.Shortname)
 
 	// attempt create the dirs
 	var xmlFilePath = filepath.Join(config.WorkspaceDir, f.Shortname, ".xml")
@@ -222,7 +222,7 @@ func (f Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error 
 	if f.ID == 0 {
 		return errors.New("unalbe to save to db; id is zero")
 	}
-	f.log.Info("Saving db for ", f.Shortname)
+	f.log.Infof("Saving db, xml:%v, itemCount:%v", newxml, len(newitems))
 
 	if config.Simulate {
 		f.log.Info("skipping saving database due to sim flag")
@@ -237,13 +237,18 @@ func (f Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error 
 		f.XmlFeedData.XChannelData = *newxml
 	}
 
+	// TODO: separate new item saving into separate function; allows saving items without "saving" feed
 	if len(newitems) > 0 {
 		f.ItemList = make([]*ItemDBEntry, 0, len(newitems))
 		for _, item := range newitems {
 			if item.Hash == "" {
 				return fmt.Errorf("hash is empty for item: %v", item.Filename)
 			}
-			item.FeedId = f.ID
+			if item.FeedId > 0 && item.FeedId != f.ID {
+				return fmt.Errorf("item feed id is set(%v), and does not match feed id (%v): %v", item.FeedId, f.ID, item.Filename)
+			} else if item.FeedId == 0 {
+				item.FeedId = f.ID
+			}
 			f.ItemList = append(f.ItemList, &item.ItemDBEntry)
 		}
 	}
@@ -412,8 +417,9 @@ func (f *Feed) CheckDownloads() error {
 
 	// make sure db is loaded; don't need xml for this
 	var (
-		itemList []*Item
-		err      error
+		itemList  []*Item
+		dirtyList = make([]*Item, 0)
+		err       error
 	)
 
 	if err = f.LoadDBFeed(false); err != nil {
@@ -454,11 +460,34 @@ func (f *Feed) CheckDownloads() error {
 		fileExists, err = podutils.FileExists(filePathStr)
 		if err != nil {
 			f.log.Error("Error checking file exists: ", err)
-		} else if fileExists == false {
-			f.log.Warnf("File missing: %v", filePathStr)
+		} else {
+
+			if config.SetArchive && fileExists == false {
+				f.log.Info("setting '%v' as archived", item.Filename)
+				item.Archived = true
+				dirtyList = append(dirtyList, item)
+			}
+
+			// logging mismatched file, in case mismatch still exists
+			if fileExists == item.Archived {
+				f.log.Warnf("%v, archive: %v, exists:%v", filePathStr, item.Archived, fileExists)
+			}
+
+			if item.Archived == false {
+				if item.Downloaded == false {
+					f.log.Warnf("File not downloaded: '%v'", item.Filename)
+				} else if fileExists == false {
+					f.log.Warnf("file downloaded, but not found: '%v'", item.Filename)
+				}
+			}
 		}
 
 		// check filename generation, in case shit changed..
+
+	}
+
+	if len(dirtyList) > 0 {
+		f.saveDBFeed(nil, dirtyList)
 	}
 
 	return nil
