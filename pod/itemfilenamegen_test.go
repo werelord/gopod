@@ -1,6 +1,7 @@
 package pod
 
 import (
+	"fmt"
 	"gopod/podconfig"
 	"gopod/podutils"
 	"gopod/testutils"
@@ -91,10 +92,13 @@ func TestItem_generateFilename(t *testing.T) {
 				item.XmlData.Pubdate = testTime
 			}
 
-			err := item.generateFilename(cfg)
+			filename, err := item.generateFilename(cfg)
+
+			// make sure generate filename does not set the filename
+			testutils.Assert(t, item.Filename == "", fmt.Sprintf("expecting item.Filename to be blank, got '%v'", item.Filename))
 
 			testutils.AssertErrContains(t, tt.e.errStr, err)
-			testutils.AssertEquals(t, tt.e.filename, item.Filename)
+			testutils.AssertEquals(t, tt.e.filename, filename)
 		})
 	}
 }

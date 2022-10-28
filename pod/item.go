@@ -98,10 +98,12 @@ func createNewItemEntry(feedcfg podconfig.FeedToml, hash string, xml *podutils.X
 	if item.Url, err = parseUrl(item.XmlData.Enclosure.Url, feedcfg.UrlParse); err != nil {
 		log.Error("failed parsing url: ", err)
 		return nil, err
-	} else if err := item.generateFilename(feedcfg); err != nil {
+	} else if item.Filename, err = item.generateFilename(feedcfg); err != nil {
 		log.Error("failed to generate filename:", err)
 		// to make sure we can continue, shortname.uuid.mp3
 		item.Filename = feedcfg.Shortname + "." + strings.ReplaceAll(uuid.NewString(), "-", "") + ".mp3"
+	} else {
+		log.Debug("using generated filename: ", item.Filename)
 	}
 
 	item.log = log.WithField("item", item.Filename)

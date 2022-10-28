@@ -443,6 +443,7 @@ func (f *Feed) CheckDownloads() error {
 			verifyHash  string
 			filePathStr string
 			fileExists  bool
+			genFilename string
 			err         error
 		)
 
@@ -460,30 +461,56 @@ func (f *Feed) CheckDownloads() error {
 		fileExists, err = podutils.FileExists(filePathStr)
 		if err != nil {
 			f.log.Error("Error checking file exists: ", err)
-		} else {
+			continue
+		}
 
-			if config.SetArchive && fileExists == false {
-				f.log.Info("setting '%v' as archived", item.Filename)
-				item.Archived = true
-				dirtyList = append(dirtyList, item)
-			}
+		if config.SetArchive && fileExists == false {
+			f.log.Infof("setting '%v' as archived", item.Filename)
+			item.Archived = true
+			dirtyList = append(dirtyList, item)
+		}
 
-			// logging mismatched file, in case mismatch still exists
-			if fileExists == item.Archived {
-				f.log.Warnf("%v, archive: %v, exists:%v", filePathStr, item.Archived, fileExists)
-			}
+		// logging mismatched file, in case mismatch still exists
+		if fileExists == item.Archived {
+			f.log.Warnf("%v, archive: %v, exists:%v", filePathStr, item.Archived, fileExists)
+		}
 
-			if item.Archived == false {
-				if item.Downloaded == false {
-					f.log.Warnf("File not downloaded: '%v'", item.Filename)
-				} else if fileExists == false {
-					f.log.Warnf("file downloaded, but not found: '%v'", item.Filename)
-				}
+		if item.Archived == false {
+			if item.Downloaded == false {
+				f.log.Warnf("File not downloaded: '%v'", item.Filename)
+			} else if fileExists == false {
+				f.log.Warnf("file downloaded, but not found: '%v'", item.Filename)
 			}
 		}
 
-		// check filename generation, in case shit changed..
+		// check filename generation, in case shit changed.. only check non-archived (as to the arcane rules initially set up)
+		if item.Archived == false {
 
+			if genFilename, err = item.generateFilename(f.FeedToml); err != nil {
+				f.log.Error("error generating filename: ", err)
+				continue
+			}
+			if genFilename != item.Filename {
+				if config.DoRename == false {
+					f.log.Warnf("filename mismatch; item.Filename: '%v', genFilename: '%v'", item.Filename, genFilename)
+				} else {
+
+					if fileExists == false {
+						f.log.Warnf("cannot rename file '%v'; file does not exist.. skipping rename", item.Filename)
+					} else if err = podutils.Rename(filepath.Join(f.mp3Path, item.Filename),
+						filepath.Join(f.mp3Path, genFilename)); err != nil {
+
+						f.log.Warnf("error in renaming file '%v'; skipping commit: %v", item.Filename, err)
+					} else {
+						// rename successful, commit the change
+
+						item.Filename = genFilename
+						dirtyList = append(dirtyList, item)
+					}
+
+				}
+			}
+		}
 	}
 
 	if len(dirtyList) > 0 {

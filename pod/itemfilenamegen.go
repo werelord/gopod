@@ -18,18 +18,18 @@ var cleanFilename = podutils.CleanFilename
 var timeNow = time.Now
 
 // --------------------------------------------------------------------------
-func (i *Item) generateFilename(cfg podconfig.FeedToml) error {
+func (i *Item) generateFilename(cfg podconfig.FeedToml) (string, error) {
 	// check to see if we neeed to parse.. simple search/replace
 
 	// verify that export data is not null
-
+	
 	// todo: need to check for filename collisions!! fucking shit
 
 	if cfg.FilenameParse == "" {
 		// fallthru to default
-		log.Debug("using default filename (no parsing): ", i.Filename)
-		i.Filename = path.Base(i.Url)
-		return nil
+		var filename = path.Base(i.Url)
+		//log.Debug("using default filename (no parsing): ", filename)
+		return filename, nil
 	}
 
 	var (
@@ -52,14 +52,13 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml) error {
 	newstr = strings.Replace(newstr, "#date#", defaultReplacement, 1)
 	if newstr, err = i.replaceTitleRegex(newstr, cfg.Regex); err != nil {
 		log.Error("failed parsing title:", err)
-		return err
+		return "", err
 	}
 	newstr = i.replaceUrlFilename(newstr, cfg)
 
 	// complete
-	i.Filename = newstr
-	log.Debug("using generated filename: ", i.Filename)
-	return nil
+
+	return newstr, nil
 }
 
 // --------------------------------------------------------------------------

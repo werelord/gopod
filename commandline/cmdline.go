@@ -43,11 +43,24 @@ type CommandLine struct {
 }
 
 type CommandLineOptions struct {
-	Debug            bool
+	// global
+	Debug bool
+
+	UpdateOpt
+	CheckDownloadOpt
+}
+
+// update specific
+type UpdateOpt struct {
 	Simulate         bool
 	ForceUpdate      bool
 	UseMostRecentXml bool
-	SetArchive       bool
+}
+
+// check downloads specific
+type CheckDownloadOpt struct {
+	SetArchive bool
+	DoRename   bool
 }
 
 // --------------------------------------------------------------------------
@@ -123,6 +136,8 @@ func (c *CommandLine) buildOptions(defaultConfig string) *getoptions.GetOpt {
 	checkcommand := opt.NewCommand("checkdownloads", "check downloads of files")
 	checkcommand.BoolVar(&c.SetArchive, "archive", false, opt.Alias("arc"),
 		opt.Description("set missing downloads to archived"))
+	checkcommand.BoolVar(&c.DoRename, "rename", false,
+		opt.Description("perform rename on files dependant on Filename parse (useful when parse value changes"))
 	checkcommand.SetCommandFn(c.generateCmdFunc(CheckDownloaded))
 
 	opt.HelpCommand("help", opt.Alias("h", "?"))

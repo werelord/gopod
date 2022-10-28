@@ -21,6 +21,7 @@ func TestInitCommandLine(t *testing.T) {
 		"--force",
 		"--userecent",
 		"--archive",
+		"--rename",
 	}
 
 	type args struct {
@@ -47,31 +48,23 @@ func TestInitCommandLine(t *testing.T) {
 
 		// success results.. don't use named parameters, so that changes to underlying struct
 		// will make this test fail to compile
-		{"default false (update)", args{args: []string{"update"}},
+		{"global false", args{args: []string{"update"}},
 			expect{cmdline: CommandLine{"defaultConfig", Update, "", "",
-				CommandLineOptions{false, false, false, false, false}}},
+				CommandLineOptions{false, UpdateOpt{false, false, false}, CheckDownloadOpt{false, false}}}},
 		},
-		{"default true (update)", args{args: []string{"update", "--feed=foo", "--debug", "--proxy=barfoo"}},
+		{"global true", args{args: []string{"update", "--feed=foo", "--debug", "--proxy=barfoo"}},
 			expect{cmdline: CommandLine{"defaultConfig", Update, "foo", "barfoo",
-				CommandLineOptions{true, false, false, false, false}}},
-		},
-		{"default false (checkdownloads)", args{args: []string{"checkdownloads"}},
-			expect{cmdline: CommandLine{"defaultConfig", CheckDownloaded, "", "",
-				CommandLineOptions{false, false, false, false, false}}},
-		},
-		{"default true (checkdownloads)", args{args: []string{"checkdownloads", "--feed=foo", "--debug", "--proxy=barfoo", "--archive"}},
-			expect{cmdline: CommandLine{"defaultConfig", CheckDownloaded, "foo", "barfoo",
-				CommandLineOptions{true, false, false, false, true}}},
+				CommandLineOptions{true, UpdateOpt{false, false, false}, CheckDownloadOpt{false, false}}}},
 		},
 
 		// flags dependent on command, regardless on whether they're on the commandline or not
 		{"update dependant", args{args: CopyAndAppend([]string{"update"}, allFlags...)},
 			expect{cmdline: CommandLine{"barfoo.toml", Update, "foo", "barfoo",
-				CommandLineOptions{true, true, true, true, false}}},
+				CommandLineOptions{true, UpdateOpt{true, true, true}, CheckDownloadOpt{false, false}}}},
 		},
 		{"check downloads dependant", args{args: CopyAndAppend([]string{"checkdownloads"}, allFlags...)},
 			expect{cmdline: CommandLine{"barfoo.toml", CheckDownloaded, "foo", "barfoo",
-				CommandLineOptions{true, false, false, false, true}}},
+				CommandLineOptions{true, UpdateOpt{false, false, false}, CheckDownloadOpt{true, true}}}},
 		},
 	}
 	for _, tt := range tests {

@@ -16,7 +16,7 @@
                 // global args
                 //"--help",
                 //"--config", "master.toml",
-                //"--feed=digctzn",
+                //"--feed=dfo",
                 //"--proxy", "http://localhost:8888",
 
                 // update commands
@@ -28,6 +28,7 @@
                 // check commands
                 "checkdownloads",
                 //"--archive",
+                //"--rename",
 
                 "--debug=true"
             ]
