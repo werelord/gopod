@@ -523,6 +523,7 @@ func TestPodDB_loadFeedItems(t *testing.T) {
 		feedId     uint
 		numItems   int
 		includeXml bool
+		asc        bool
 	}
 	type exp struct {
 		resultList []*ItemDBEntry
@@ -550,14 +551,26 @@ func TestPodDB_loadFeedItems(t *testing.T) {
 		{"full results", args{feedId: 2},
 			exp{resultList: []*ItemDBEntry{blnX(itemB), blnX(itemA), blnX(itemC)},
 				callStack: []stackType{open, where, order, find}}},
+		{"full results (asc)", args{feedId: 2, asc: true},
+			exp{resultList: []*ItemDBEntry{blnX(itemC), blnX(itemA), blnX(itemB)},
+				callStack: []stackType{open, where, order, find}}},
 		{"limit results", args{feedId: 1, numItems: 2},
 			exp{resultList: []*ItemDBEntry{blnX(item1), blnX(item3)},
+				callStack: []stackType{open, where, order, limit, find}}},
+		{"limit results (asc)", args{feedId: 1, numItems: 2, asc: true},
+			exp{resultList: []*ItemDBEntry{blnX(item2), blnX(item3)},
 				callStack: []stackType{open, where, order, limit, find}}},
 		{"full include xml", args{feedId: 2, includeXml: true},
 			exp{resultList: []*ItemDBEntry{&itemB, &itemA, &itemC},
 				callStack: []stackType{open, where, order, preload, find}}},
+		{"full include xml (asc)", args{feedId: 2, includeXml: true, asc: true},
+			exp{resultList: []*ItemDBEntry{&itemC, &itemA, &itemB},
+				callStack: []stackType{open, where, order, preload, find}}},
 		{"limit include xml", args{feedId: 1, numItems: 2, includeXml: true},
 			exp{resultList: []*ItemDBEntry{&item1, &item3},
+				callStack: []stackType{open, where, order, limit, preload, find}}},
+		{"limit include xml (asc)", args{feedId: 1, numItems: 2, includeXml: true, asc: true},
+			exp{resultList: []*ItemDBEntry{&item2, &item3},
 				callStack: []stackType{open, where, order, limit, preload, find}}},
 	}
 	for _, tt := range tests {
@@ -568,7 +581,9 @@ func TestPodDB_loadFeedItems(t *testing.T) {
 			gmock.openErr = tt.p.openErr
 			gmock.mockdb.termErr = tt.p.termErr
 
-			res, err := poddb.loadFeedItems(tt.p.feedId, tt.p.numItems, tt.p.includeXml)
+			var direction = podutils.Tern(tt.p.asc == true, asc, desc)
+
+			res, err := poddb.loadFeedItems(tt.p.feedId, tt.p.numItems, tt.p.includeXml, direction)
 			testutils.AssertErrContains(t, tt.e.errStr, err)
 
 			// var wtflist = make([]*ItemDBEntry, 0)

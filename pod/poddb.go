@@ -14,6 +14,13 @@ import (
 
 type PodDBModel gorm.Model
 
+type direction bool
+
+const (
+	asc  direction = false
+	desc direction = true
+)
+
 type PodDB struct {
 	path   string
 	config gorm.Config
@@ -108,7 +115,7 @@ func (pdb PodDB) loadDBFeedXml(feedXml *FeedXmlDBEntry) error {
 }
 
 // --------------------------------------------------------------------------
-func (pdb PodDB) loadFeedItems(feedId uint, numItems int, includeXml bool) ([]*ItemDBEntry, error) {
+func (pdb PodDB) loadFeedItems(feedId uint, numItems int, includeXml bool, dtn direction) ([]*ItemDBEntry, error) {
 
 	if pdb.path == "" {
 		return nil, errors.New("poddb is not initialized; call NewDB() first")
@@ -124,7 +131,7 @@ func (pdb PodDB) loadFeedItems(feedId uint, numItems int, includeXml bool) ([]*I
 	// even tho order doesn't matter in the end, as this list is transitioned to map, for testing
 	// purposes and to retain consistency (ordered in all possible runs) adding order here
 	var tx = db.Where(&ItemDBEntry{FeedId: feedId}).
-		Order(clause.OrderByColumn{Column: clause.Column{Name: "PubTimeStamp"}, Desc: true})
+		Order(clause.OrderByColumn{Column: clause.Column{Name: "PubTimeStamp"}, Desc: bool(dtn)})
 	// if numitems is negative, load everything..
 	// we don't care about order; will be transitioned to map anyways
 	if numItems > 0 {

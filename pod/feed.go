@@ -190,7 +190,7 @@ func (f *Feed) loadDBFeedItems(numLatest int, includeXml bool) ([]*Item, error) 
 
 	// load itemlist.. if numitems is negative, load everything..
 	// otherwise limit to numLatest
-	entryList, err = db.loadFeedItems(f.ID, numLatest, includeXml)
+	entryList, err = db.loadFeedItems(f.ID, numLatest, includeXml, desc)
 	if err != nil {
 		f.log.Error("Failed to get item data from db: ", err)
 		return nil, err
