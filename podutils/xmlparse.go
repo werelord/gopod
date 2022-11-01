@@ -9,7 +9,6 @@ import (
 	"github.com/araddon/dateparse"
 	"github.com/beevik/etree"
 	log "github.com/sirupsen/logrus"
-	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 // todo: move to either sax or xml tag parsing before writing tests..
@@ -97,16 +96,18 @@ func (r ParseCanceledError) Error() string {
 
 func (r ParseCanceledError) Is(target error) bool { return target == ParseCanceledError{} }
 
-// --------------------------------------------------------------------------
-func ParseXml(xmldata []byte, fp FeedProcess) (feedData *XChannelData, newItems *orderedmap.OrderedMap[string, XItemData], err error) {
+type ItemPair struct {
+	Hash     string
+	ItemData *XItemData
+}
 
-	// fuck the ignore list
-	//ignoreList := []string{"atom:link", "lastBuildDate"}
+// --------------------------------------------------------------------------
+func ParseXml(xmldata []byte, fp FeedProcess) (feedData *XChannelData, newItems []ItemPair, err error) {
 
 	// todo: error on empty body (xmldata)
 
 	feedData = &XChannelData{PersonList: make([]XPodcastPersonData, 0)}
-	newItems = orderedmap.New[string, XItemData]()
+	newItems = make([]ItemPair, 0)
 
 	doc := etree.NewDocument()
 	if err = doc.ReadFromBytes(xmldata); err != nil {
@@ -194,11 +195,12 @@ func ParseXml(xmldata []byte, fp FeedProcess) (feedData *XChannelData, newItems 
 				}
 				var skipitem = false
 				if skipitem, skipRemaining = fp.SkipParsingItem(hash); skipitem == false {
-					// not skipping item; automatically add to new item set
-					if item, e := parseItemEntry(elem); e == nil {
-						newItems.Set(hash, item)
+					// not skipping xItemData; automatically add to new xItemData set
+					if xItemData, e := parseItemEntry(elem); e == nil {
+						var newPair = ItemPair{Hash: hash, ItemData: &xItemData}
+						newItems = append(newItems, newPair)
 					} else {
-						log.Warnf("parse failed; not adding item {'%v' (%v)}: %v", item.Title, hash, e)
+						log.Warnf("parse failed; not adding item {'%v' (%v)}: %v", xItemData.Title, hash, e)
 					}
 				}
 			}

@@ -48,6 +48,7 @@ type ItemData struct {
 	CDFilename   string // content-disposition filename
 	PubTimeStamp time.Time
 	Archived     bool
+	EpNum        int
 }
 
 type ItemXmlDBEntry struct {
@@ -69,7 +70,7 @@ func (idb ItemDBEntry) Format(fs fmt.State, c rune) {
 }
 
 // --------------------------------------------------------------------------
-func createNewItemEntry(feedcfg podconfig.FeedToml, hash string, xml *podutils.XItemData) (*Item, error) {
+func createNewItemEntry(feedcfg podconfig.FeedToml, hash string, xml *podutils.XItemData, epNum int) (*Item, error) {
 	// new entry, xml coming from feed directly
 
 	var (
@@ -86,6 +87,7 @@ func createNewItemEntry(feedcfg podconfig.FeedToml, hash string, xml *podutils.X
 	item.Hash = hash
 	item.XmlData.XItemData = *xml
 	item.PubTimeStamp = xml.Pubdate
+	item.EpNum = epNum
 
 	// verify hash
 	if cHash, err := calcHash(item.XmlData.Guid, item.XmlData.Enclosure.Url, feedcfg.UrlParse); err != nil {

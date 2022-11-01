@@ -16,9 +16,9 @@ type PodDBModel gorm.Model
 
 type direction bool
 
-const (
-	asc  direction = false
-	desc direction = true
+const ( // because constants should be capitalized, but I don't want to export these..
+	cASC  direction = false
+	cDESC direction = true
 )
 
 type PodDB struct {

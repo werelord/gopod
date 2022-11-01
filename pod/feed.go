@@ -1,8 +1,10 @@
 package pod
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -10,15 +12,13 @@ import (
 	"gopod/podutils"
 
 	log "github.com/sirupsen/logrus"
-	orderedmap "github.com/wk8/go-ordered-map/v2"
+	"golang.org/x/exp/slices"
 )
 
 // --------------------------------------------------------------------------
 type Feed struct {
 	// toml information, extracted from config
 	podconfig.FeedToml
-
-	// todo: archive flag
 
 	// internal, local to feed, not serialized (explicitly)
 	feedInternal
@@ -47,6 +47,7 @@ type FeedDBEntry struct {
 	PodDBModel
 	Hash         string `gorm:"uniqueIndex"`
 	DBShortname  string // just for db browsing
+	EpisodeCount int
 	XmlFeedData  FeedXmlDBEntry `gorm:"foreignKey:FeedId"`
 	ItemList     []*ItemDBEntry `gorm:"foreignKey:FeedId"`
 }
@@ -178,7 +179,7 @@ func (f Feed) generateHash() string {
 }
 
 // --------------------------------------------------------------------------
-func (f *Feed) loadDBFeedItems(numLatest int, includeXml bool) ([]*Item, error) {
+func (f *Feed) loadDBFeedItems(numItems int, includeXml bool, dtn direction) ([]*Item, error) {
 	var (
 		err       error
 		entryList []*ItemDBEntry
@@ -190,7 +191,7 @@ func (f *Feed) loadDBFeedItems(numLatest int, includeXml bool) ([]*Item, error) 
 
 	// load itemlist.. if numitems is negative, load everything..
 	// otherwise limit to numLatest
-	entryList, err = db.loadFeedItems(f.ID, numLatest, includeXml, desc)
+	entryList, err = db.loadFeedItems(f.ID, numItems, includeXml, dtn)
 	if err != nil {
 		f.log.Error("Failed to get item data from db: ", err)
 		return nil, err
@@ -276,7 +277,7 @@ func (f *Feed) Update() error {
 	} else {
 
 		var itemCount = podutils.Tern(config.ForceUpdate, -1, config.MaxDupChecks*2)
-		if itemList, err := f.loadDBFeedItems(itemCount, false); err != nil {
+		if itemList, err := f.loadDBFeedItems(itemCount, false, cDESC); err != nil {
 			f.log.Error("failed to load item entries: ", err)
 			return err
 		} else {
@@ -315,8 +316,8 @@ func (f *Feed) Update() error {
 
 	// todo: break this up some more
 
-	var itemList *orderedmap.OrderedMap[string, podutils.XItemData]
-	newXmlData, itemList, err = podutils.ParseXml(body, f)
+	var itemPairList []podutils.ItemPair
+	newXmlData, itemPairList, err = podutils.ParseXml(body, f)
 	if err != nil {
 		if errors.Is(err, podutils.ParseCanceledError{}) {
 			f.log.Info("parse cancelled: ", err)
@@ -344,17 +345,18 @@ func (f *Feed) Update() error {
 		f.log.Warnf("Feed url possibly changing: '%v':'%v'", f.Url, f.XmlFeedData.NewFeedUrl)
 	}
 
-	if itemList.Len() == 0 {
+	if len(itemPairList) == 0 {
 		f.log.Info("no items found to process")
 		return nil
 	}
 
-	// maintain order on pairs; go from oldest to newest (each item moved to front)
-	for pair := itemList.Newest(); pair != nil; pair = pair.Prev() {
+	// list comes out newest (top of xml feed) to oldest.. reverse that,
+	// go oldest to newest, to maintain item count
+	for i := len(itemPairList) - 1; i >= 0; i-- {
 
 		var (
-			hash      = pair.Key
-			xmldata   = pair.Value
+			hash      = itemPairList[i].Hash
+			xmldata   = itemPairList[i].ItemData
 			itemEntry *Item
 			exists    bool
 		)
@@ -369,11 +371,14 @@ func (f *Feed) Update() error {
 
 			// replace the existing xml data
 			// todo: deep copy comparison
-			itemEntry.updateXmlData(hash, &xmldata)
+			itemEntry.updateXmlData(hash, xmldata)
 
-		} else if itemEntry, err = createNewItemEntry(f.FeedToml, hash, &xmldata); err != nil {
+		} else if itemEntry, err = createNewItemEntry(f.FeedToml, hash, xmldata, f.EpisodeCount+1); err != nil {
 			f.log.Error("failed creating new item entry; skipping: ", err)
 			continue
+		} else {
+			// new item added; save the episode count
+			f.EpisodeCount++
 		}
 
 		f.log.Infof("item added: :%+v", itemEntry)
@@ -382,8 +387,6 @@ func (f *Feed) Update() error {
 		f.itemMap[hash] = itemEntry
 
 		// add it to the new items needing processing
-		// warning; still add newest to oldest, due to skip remaining stuff..
-		// at least until archive flag is set
 		newItems = append([]*Item{itemEntry}, newItems...)
 	}
 
@@ -419,6 +422,7 @@ func (f *Feed) CheckDownloads() error {
 	var (
 		itemList  []*Item
 		dirtyList = make([]*Item, 0)
+		filelist  = make(map[string]*Item, 0)
 		err       error
 	)
 
@@ -427,15 +431,14 @@ func (f *Feed) CheckDownloads() error {
 		return err
 	} else {
 		// load all items (will be sorted desc); we do want item xml
-		if itemList, err = f.loadDBFeedItems(-1, true); err != nil {
+		if itemList, err = f.loadDBFeedItems(-1, true, cASC); err != nil {
 			f.log.Error("failed to load item entries: ", err)
 			return err
 		}
 	}
-	f.log.Debug("Feed loaded from db for update: ", f.Shortname)
+	f.log.Debug("Feed loaded from db for check download")
 
-	// todo:
-	// check download exist
+	// todo: check filename collision
 
 	for _, item := range itemList {
 		// check item hashes
@@ -462,6 +465,34 @@ func (f *Feed) CheckDownloads() error {
 		if err != nil {
 			f.log.Error("Error checking file exists: ", err)
 			continue
+		}
+
+		// check filename collision
+		if existItem, exists := filelist[item.Filename]; exists {
+			f.log.Warnf("filename collision found: '%v':'%v' ", item, existItem)
+
+			// write the file to output for comnparison
+			file1path := filepath.Join(config.WorkspaceDir, ".collision", "one", item.Filename+".txt")
+			file2path := filepath.Join(config.WorkspaceDir, ".collision", "two", item.Filename+".txt")
+			podutils.MkdirAll(filepath.Dir(file1path), filepath.Dir(file2path))
+			file1, err := os.OpenFile(file1path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+			if err != nil {
+				f.log.Error(err)
+			}
+			file2, err := os.OpenFile(file2path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+			if err != nil {
+				f.log.Error(err)
+			}
+			defer file1.Close()
+			defer file2.Close()
+			itembytes, _ := json.MarshalIndent(item, "", "   ")
+			existbytes, _ := json.MarshalIndent(existItem, "", "   ")
+			file1.Write(itembytes)
+			file2.Write(existbytes)
+
+		} else {
+			// save the reference, for subsequent checks
+			filelist[item.Filename] = item
 		}
 
 		if config.SetArchive && fileExists == false {

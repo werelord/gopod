@@ -581,7 +581,7 @@ func TestPodDB_loadFeedItems(t *testing.T) {
 			gmock.openErr = tt.p.openErr
 			gmock.mockdb.termErr = tt.p.termErr
 
-			var direction = podutils.Tern(tt.p.asc == true, asc, desc)
+			var direction = podutils.Tern(tt.p.asc == true, cASC, cDESC)
 
 			res, err := poddb.loadFeedItems(tt.p.feedId, tt.p.numItems, tt.p.includeXml, direction)
 			testutils.AssertErrContains(t, tt.e.errStr, err)

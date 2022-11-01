@@ -11,7 +11,6 @@ require (
 )
 
 require (
-	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
@@ -28,7 +27,6 @@ require (
 	github.com/go-test/deep v1.0.8
 	github.com/google/uuid v1.3.0
 	github.com/schollz/progressbar/v3 v3.11.0
-	github.com/wk8/go-ordered-map/v2 v2.0.0
 	golang.org/x/exp v0.0.0-20221012211006-4de253d81b95
 	golang.org/x/sys v0.0.0-20221013171732-95e765b1cc43 // indirect
 )

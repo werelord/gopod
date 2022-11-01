@@ -203,8 +203,13 @@ func FileExists(filename string) (bool, error) {
 
 // --------------------------------------------------------------------------
 // simply a shortcut to os.MkdirAll with permissions
-func MkdirAll(path string) error {
-	return osimpl.MkdirAll(path, 0666)
+func MkdirAll(pathList ...string) error {
+	for _, path := range pathList {
+		if err := osimpl.MkdirAll(path, 0666); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func CreateTemp(dir, pattern string) (*os.File, error) {
@@ -216,4 +221,3 @@ func Rename(oldpath, newpath string) error {
 func Chtimes(path string, access time.Time, modification time.Time) error {
 	return osimpl.Chtimes(path, access, modification)
 }
-

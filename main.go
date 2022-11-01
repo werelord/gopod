@@ -89,8 +89,8 @@ func main() {
 			log.Error("failed to create new feed: ", err)
 			continue
 		}
-		feedMap[f.Shortname] = f
-	}
+			feedMap[f.Shortname] = f
+		}
 
 	//------------------------------------- DEBUG -------------------------------------
 	//	const RunTest = true
@@ -139,10 +139,8 @@ func main() {
 // --------------------------------------------------------------------------
 func RunTest(config podconfig.Config, feedMap map[string]*pod.Feed) (exit bool) {
 	if config.Debug && false {
-		//convertdb(feedMap)
-		//checkdb(feedMap)
-		//checkHashes(feedMap)
-		testConflict(feedMap)
+
+		migrateCount(feedMap)
 		return true
 	}
 	return false
