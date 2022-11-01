@@ -45,10 +45,10 @@ type feedInternal struct {
 type FeedDBEntry struct {
 	// anything that needs to be persisted between runs, go here
 	PodDBModel
-	Hash        string         `gorm:"uniqueIndex"`
-	DBShortname string         // just for db browsing
-	XmlFeedData FeedXmlDBEntry `gorm:"foreignKey:FeedId"`
-	ItemList    []*ItemDBEntry `gorm:"foreignKey:FeedId"`
+	Hash         string `gorm:"uniqueIndex"`
+	DBShortname  string // just for db browsing
+	XmlFeedData  FeedXmlDBEntry `gorm:"foreignKey:FeedId"`
+	ItemList     []*ItemDBEntry `gorm:"foreignKey:FeedId"`
 }
 
 type FeedXmlDBEntry struct {
@@ -629,10 +629,6 @@ func (f *Feed) processNew(newItems []*Item) []error {
 		return nil
 	}
 
-	//------------------------------------- DEBUG -------------------------------------
-	// todo: skipRemaining can be removed when archived flag is set (downloaded == true && fileExists == false)
-	var skipRemaining = false
-	//------------------------------------- DEBUG -------------------------------------
 	// todo: move download handling within item
 	for _, item := range newItems {
 		f.log.Debugf("processing new item: {%v %v}", item.Filename, item.Hash)
@@ -646,31 +642,16 @@ func (f *Feed) processNew(newItems []*Item) []error {
 			errList = append(errList, err)
 		}
 
-		//------------------------------------- DEBUG -------------------------------------
-		if config.Debug && skipRemaining {
-			f.log.Debug("skip remaining set; previously downloaded items.. making sure downloaded == true")
-			item.Downloaded = true
-			continue
-		}
-		//------------------------------------- DEBUG -------------------------------------
+		// todo: check downloaded & archive flag
 
 		if item.Downloaded == true {
-			f.log.Debug("skipping entry; file already downloaded")
+			f.log.Warn("skipping entry; file already downloaded.. possible filename collision?")
 			continue
 		} else if fileExists == true {
-			f.log.Debug("downloaded == false, but file already exists.. updating itemdata")
-			item.Downloaded = true
-
-			//------------------------------------- DEBUG -------------------------------------
-			if config.Debug {
-				f.log.Debug("debug setup, setting skip remaining to true")
-				skipRemaining = true
-			}
-			//------------------------------------- DEBUG -------------------------------------
-
+			f.log.Warn("downloaded == false, but file already exists.. possible filename collision?")
+			//item.Downloaded = true
 			continue
 		}
-
 		if config.Simulate {
 			f.log.Info("skipping downloading file due to sim flag")
 			continue
