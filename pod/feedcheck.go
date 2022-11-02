@@ -2,6 +2,7 @@ package pod
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"gopod/podutils"
 	"os"
@@ -10,15 +11,32 @@ import (
 	"github.com/go-test/deep"
 )
 
+type ActionTakenError struct{ actionTaken string }
+
+func (r ActionTakenError) Error() string        { return r.actionTaken }
+func (r ActionTakenError) Is(target error) bool { return target == ActionTakenError{} }
+
+type fileCheckStatus struct {
+	feed          *Feed
+	fileExistsMap map[string]bool
+
+	itemList  []*Item
+	dirtyList []*Item
+}
+
+// todo: additional command instead of option, based on how I'm handling shit here..
+
 // --------------------------------------------------------------------------
 func (f *Feed) CheckDownloads() error {
 
+	var fcs = fileCheckStatus{
+		fileExistsMap: make(map[string]bool),
+		dirtyList:     make([]*Item, 0),
+	}
+
 	// make sure db is loaded; don't need xml for this
 	var (
-		itemList  []*Item
-		dirtyList = make([]*Item, 0)
-		filelist  = make(map[string]*Item, 0)
-		err       error
+		err error
 	)
 
 	if err = f.LoadDBFeed(false); err != nil {
@@ -26,45 +44,108 @@ func (f *Feed) CheckDownloads() error {
 		return err
 	} else {
 		// load all items (will be sorted desc); we do want item xml
-		if itemList, err = f.loadDBFeedItems(-1, true, cASC); err != nil {
+		if fcs.itemList, err = f.loadDBFeedItems(-1, true, cASC); err != nil {
 			f.log.Error("failed to load item entries: ", err)
 			return err
 		}
 	}
 	f.log.Debug("Feed loaded from db for check download")
 
-	// todo: check filename collision
+	fcs.feed = f
 
-	for _, item := range itemList {
+	if err := fcs.checkHashes(); err != nil {
+		f.log.Error("error in checking hashes: ", err)
+		return err
+	}
+	if err := fcs.checkCollisions(); err != nil {
+		if errors.Is(err, ActionTakenError{}) {
+			return nil
+		}
+		f.log.Error("error in checking collisions: ", err)
+		return err
+	}
+	if err := fcs.checkArchiveStatus(); err != nil {
+		if errors.Is(err, ActionTakenError{}) {
+			return nil
+		}
+		f.log.Error("error in checking archive: ", err)
+		return err
+	}
+
+	for _, item := range fcs.itemList {
 		// check item hashes
 		var (
-			verifyHash  string
-			filePathStr string
 			fileExists  bool
 			genFilename string
 			err         error
 		)
 
-		verifyHash, err = calcHash(item.XmlData.Guid, item.XmlData.Enclosure.Url, f.UrlParse)
+		// check filename generation, in case shit changed.. only check non-archived (as to the arcane rules initially set up)
+		if item.Archived == false {
+
+			if genFilename, err = item.generateFilename(f.FeedToml); err != nil {
+				f.log.Error("error generating filename: ", err)
+				continue
+			}
+			if genFilename != item.Filename {
+				if config.DoRename == false {
+					f.log.Warnf("filename mismatch; item.Filename: '%v', genFilename: '%v'", item.Filename, genFilename)
+				} else {
+
+					if fileExists == false {
+						f.log.Warnf("cannot rename file '%v'; file does not exist.. skipping rename", item.Filename)
+					} else if err = podutils.Rename(filepath.Join(f.mp3Path, item.Filename),
+						filepath.Join(f.mp3Path, genFilename)); err != nil {
+
+						f.log.Warnf("error in renaming file '%v'; skipping commit: %v", item.Filename, err)
+					} else {
+						// rename successful, commit the change
+
+						item.Filename = genFilename
+						fcs.dirtyList = append(fcs.dirtyList, item)
+					}
+
+				}
+			}
+		}
+	}
+
+	if len(fcs.dirtyList) > 0 {
+		f.saveDBFeed(nil, fcs.dirtyList)
+	}
+
+	return nil
+}
+
+// --------------------------------------------------------------------------
+func (fcs *fileCheckStatus) checkHashes() error {
+
+	var log = fcs.feed.log
+	for _, item := range fcs.itemList {
+		var verifyHash, err = calcHash(item.XmlData.Guid, item.XmlData.Enclosure.Url, fcs.feed.UrlParse)
 		if err != nil {
-			f.log.Errorf("error calculating hash: %v", err)
+			log.Errorf("error calculating hash: %v", err)
 			return err
 		}
 		if verifyHash != item.Hash {
-			f.log.Warnf("hash mismatch: calc:'%v', stored:'%v'", verifyHash, item.Hash)
+			log.Warnf("hash mismatch: calc:'%v', stored:'%v'", verifyHash, item.Hash)
 		}
+	}
+	return nil
+}
 
-		// check download exists
-		filePathStr = filepath.Join(f.mp3Path, item.Filename)
-		fileExists, err = podutils.FileExists(filePathStr)
-		if err != nil {
-			f.log.Error("Error checking file exists: ", err)
-			continue
-		}
+// --------------------------------------------------------------------------
+func (fcs *fileCheckStatus) checkCollisions() error {
 
+	var (
+		filelist = make(map[string]*Item, 0)
+		log      = fcs.feed.log
+	)
+
+	for _, item := range fcs.itemList {
 		// check filename collision
 		if existItem, exists := filelist[item.Filename]; exists {
-			f.log.Warnf("filename collision found: '%v':'%v' ", item, existItem)
+			log.Warnf("filename collision found: '%v':'%v' ", item, existItem)
 
 			// display comparision on collision
 			for _, diff := range deep.Equal(item, existItem) {
@@ -78,15 +159,15 @@ func (f *Feed) CheckDownloads() error {
 				fmt.Printf("Which to delete:\n\t'%v' (1)\n\t'%v' (2)\n\tSkip (no entry)\n\t(1|2|<newline>)>", existItem.ID, item.ID)
 				scanner.Scan()
 				if scanner.Err() != nil {
-					f.log.Error("error in scanning; skipping by default: ", err)
+					log.Error("error in scanning; skipping by default: ", scanner.Err())
 				} else {
 					switch scanner.Text() {
 					case "1":
-						f.log.Debugf("deleting existing item: '%v'", existItem.ID)
+						log.Debugf("deleting existing item: '%v'", existItem.ID)
 					case "2":
-						f.log.Debugf("deleting current item: '%v'", item.ID)
+						log.Debugf("deleting current item: '%v'", item.ID)
 					default:
-						f.log.Debug("Skipping, no entry detected")
+						log.Debug("Skipping collision; no action taken")
 					}
 				}
 			}
@@ -114,59 +195,71 @@ func (f *Feed) CheckDownloads() error {
 			// save the reference, for subsequent checks
 			filelist[item.Filename] = item
 		}
+	}
 
-		if config.SetArchive && fileExists == false {
-			f.log.Infof("setting '%v' as archived", item.Filename)
+	if config.DoCollision {
+		// todo: do the delete motherfucker
+		return ActionTakenError{actionTaken: "filename collision handling"}
+	}
+	return nil
+}
+
+// --------------------------------------------------------------------------
+func (fcs *fileCheckStatus) checkArchiveStatus() error {
+
+	var (
+		log = fcs.feed.log
+	)
+
+	for _, item := range fcs.itemList {
+
+		var fileExists = fcs.fileExists(item)
+		if config.DoArchive && fileExists == false {
+			log.Infof("setting '%v' as archived", item.Filename)
 			item.Archived = true
-			dirtyList = append(dirtyList, item)
+			fcs.dirtyList = append(fcs.dirtyList, item)
 		}
 
 		// logging mismatched file, in case mismatch still exists
 		if fileExists == item.Archived {
-			f.log.Warnf("%v, archive: %v, exists:%v", filePathStr, item.Archived, fileExists)
+			log.Warnf("%v, archive: %v, exists:%v", item.Filename, item.Archived, fileExists)
 		}
 
 		if item.Archived == false {
 			if item.Downloaded == false {
-				f.log.Warnf("File not downloaded: '%v'", item.Filename)
+				log.Warnf("File not downloaded: '%v'", item.Filename)
 			} else if fileExists == false {
-				f.log.Warnf("file downloaded, but not found: '%v'", item.Filename)
-			}
-		}
-
-		// check filename generation, in case shit changed.. only check non-archived (as to the arcane rules initially set up)
-		if item.Archived == false {
-
-			if genFilename, err = item.generateFilename(f.FeedToml); err != nil {
-				f.log.Error("error generating filename: ", err)
-				continue
-			}
-			if genFilename != item.Filename {
-				if config.DoRename == false {
-					f.log.Warnf("filename mismatch; item.Filename: '%v', genFilename: '%v'", item.Filename, genFilename)
-				} else {
-
-					if fileExists == false {
-						f.log.Warnf("cannot rename file '%v'; file does not exist.. skipping rename", item.Filename)
-					} else if err = podutils.Rename(filepath.Join(f.mp3Path, item.Filename),
-						filepath.Join(f.mp3Path, genFilename)); err != nil {
-
-						f.log.Warnf("error in renaming file '%v'; skipping commit: %v", item.Filename, err)
-					} else {
-						// rename successful, commit the change
-
-						item.Filename = genFilename
-						dirtyList = append(dirtyList, item)
-					}
-
-				}
+				log.Warnf("file downloaded, but not found: '%v'", item.Filename)
 			}
 		}
 	}
 
-	if len(dirtyList) > 0 {
-		f.saveDBFeed(nil, dirtyList)
+	if config.DoArchive {
+		if len(fcs.dirtyList) > 0 {
+			if err := fcs.feed.saveDBFeed(nil, fcs.dirtyList); err != nil {
+				return err
+			}
+		}
+		return ActionTakenError{actionTaken: "set archive"}
 	}
 
 	return nil
+}
+
+// --------------------------------------------------------------------------
+func (fcs *fileCheckStatus) fileExists(item *Item) bool {
+
+	// check download exists
+	if status, ok := fcs.fileExistsMap[item.Filename]; ok {
+		return status
+	} else {
+		// cache the result
+		var filePathStr = filepath.Join(fcs.feed.mp3Path, item.Filename)
+		var fileExists, err = podutils.FileExists(filePathStr)
+		if err != nil {
+			fcs.feed.log.Error("Error checking file exists: ", err)
+		}
+		fcs.fileExistsMap[item.Filename] = fileExists
+		return fileExists
+	}
 }

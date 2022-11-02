@@ -23,6 +23,7 @@ func TestInitCommandLine(t *testing.T) {
 		"--archive",
 		"--rename",
 		"--collision",
+		"--savecollision",
 	}
 
 	type args struct {
@@ -51,21 +52,21 @@ func TestInitCommandLine(t *testing.T) {
 		// will make this test fail to compile
 		{"global false", args{args: []string{"update"}},
 			expect{cmdline: CommandLine{"defaultConfig", Update, "", "",
-				CommandLineOptions{false, UpdateOpt{false, false, false}, CheckDownloadOpt{false, false, false}}}},
+				CommandLineOptions{false, UpdateOpt{false, false, false}, CheckDownloadOpt{false, false, false, false}}}},
 		},
 		{"global true", args{args: []string{"update", "--feed=foo", "--debug", "--proxy=barfoo"}},
 			expect{cmdline: CommandLine{"defaultConfig", Update, "foo", "barfoo",
-				CommandLineOptions{true, UpdateOpt{false, false, false}, CheckDownloadOpt{false, false, false}}}},
+				CommandLineOptions{true, UpdateOpt{false, false, false}, CheckDownloadOpt{false, false, false, false}}}},
 		},
 
 		// flags dependent on command, regardless on whether they're on the commandline or not
 		{"update dependant", args{args: CopyAndAppend([]string{"update"}, allFlags...)},
 			expect{cmdline: CommandLine{"barfoo.toml", Update, "foo", "barfoo",
-				CommandLineOptions{true, UpdateOpt{true, true, true}, CheckDownloadOpt{false, false, false}}}},
+				CommandLineOptions{true, UpdateOpt{true, true, true}, CheckDownloadOpt{false, false, false, false}}}},
 		},
 		{"check downloads dependant", args{args: CopyAndAppend([]string{"checkdownloads"}, allFlags...)},
 			expect{cmdline: CommandLine{"barfoo.toml", CheckDownloaded, "foo", "barfoo",
-				CommandLineOptions{true, UpdateOpt{false, false, false}, CheckDownloadOpt{true, true, true}}}},
+				CommandLineOptions{true, UpdateOpt{false, false, false}, CheckDownloadOpt{true, true, true, true}}}},
 		},
 	}
 	for _, tt := range tests {
