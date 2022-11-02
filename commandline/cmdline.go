@@ -59,8 +59,9 @@ type UpdateOpt struct {
 
 // check downloads specific
 type CheckDownloadOpt struct {
-	SetArchive bool
-	DoRename   bool
+	SetArchive  bool
+	DoRename    bool
+	DoCollision bool
 }
 
 // --------------------------------------------------------------------------
@@ -138,6 +139,8 @@ func (c *CommandLine) buildOptions(defaultConfig string) *getoptions.GetOpt {
 		opt.Description("set missing downloads to archived"))
 	checkcommand.BoolVar(&c.DoRename, "rename", false,
 		opt.Description("perform rename on files dependant on Filename parse (useful when parse value changes"))
+	checkcommand.BoolVar(&c.DoCollision, "collision", false, opt.Alias("coll"),
+		opt.Description("Collision handling; will promt for which item to keep"))
 	checkcommand.SetCommandFn(c.generateCmdFunc(CheckDownloaded))
 
 	opt.HelpCommand("help", opt.Alias("h", "?"))
