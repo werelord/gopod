@@ -22,7 +22,7 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml) (string, error) {
 	// check to see if we neeed to parse.. simple search/replace
 
 	// verify that export data is not null
-	
+
 	// todo: need to check for filename collisions!! fucking shit
 
 	if cfg.FilenameParse == "" {
@@ -48,6 +48,7 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml) (string, error) {
 	newstr = strings.Replace(newstr, "#shortname#", cfg.Shortname, 1)
 	newstr = i.replaceLinkFinalPath(newstr, defaultReplacement)
 	newstr = i.replaceEpisode(newstr, defaultReplacement, cfg)
+	newstr = i.replaceCount(newstr, defaultReplacement, cfg)
 	newstr = strings.Replace(newstr, "#season#", i.XmlData.SeasonStr, 1)
 	newstr = strings.Replace(newstr, "#date#", defaultReplacement, 1)
 	if newstr, err = i.replaceTitleRegex(newstr, cfg.Regex); err != nil {
@@ -90,11 +91,32 @@ func (i Item) replaceEpisode(str, defaultRep string, cfg podconfig.FeedToml) str
 
 		if epStr == "" {
 			epStr = defaultRep
-		} else if len(epStr) < padLen {
+		} else {
 			// pad string with zeros minus length
-			epStr = strings.Repeat("0", padLen-len(epStr)) + epStr
+			epStr = fmt.Sprintf("%0*s", padLen, epStr)
 		}
 		str = strings.Replace(str, "#episode#", epStr, 1)
+	}
+	return str
+}
+
+// --------------------------------------------------------------------------
+func (i Item) replaceCount(str, defaultRep string, cfg podconfig.FeedToml) string {
+	if strings.Contains(str, "#count#") {
+		// default len of 3 unless otherwise defined
+
+		var (
+			countStr string
+			padLen   = podutils.Tern(cfg.EpisodePad > 0, cfg.EpisodePad, 3)
+		)
+
+		if i.EpNum < 0 { // because episode #s may be zero indexed..
+			countStr = defaultRep
+		} else {
+			countStr = fmt.Sprintf("%0*d", padLen, i.EpNum)
+		}
+
+		str = strings.Replace(str, "#count#", countStr, 1)
 	}
 	return str
 }
