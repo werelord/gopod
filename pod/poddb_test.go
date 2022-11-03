@@ -11,13 +11,17 @@ import (
 
 	"github.com/go-test/deep"
 	"golang.org/x/exp/slices"
-	"gorm.io/driver/sqlite"
+
+	"github.com/glebarez/sqlite"
+	//"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 // mostly integration tests
 
-const inMemoryPath = "file::memory:?cache=shared"
+// path changed using pure go sqlite driver
+// const inMemoryPath = "file::memory:?cache=shared"
+const inMemoryPath = ":memory:"
 
 type mockGorm struct {
 	// todo: what do we need

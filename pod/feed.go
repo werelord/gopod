@@ -655,10 +655,10 @@ func (f *Feed) MigrateCount() {
 	}
 	f.log.Debug("Feed loaded from db")
 
-	if f.EpisodeCount > 0 {
-		log.Debug("skip processing; already committed")
-		return
-	}
+	// if f.EpisodeCount > 0 {
+	// 	log.Debug("skip processing; already committed")
+	// 	return
+	// }
 
 	// make logfile of potential changes
 	file, err := os.OpenFile(filepath.Join(config.WorkspaceDir, ".count", f.Shortname+".txt"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)

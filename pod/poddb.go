@@ -4,7 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"gorm.io/driver/sqlite"
+	//"gorm.io/driver/sqlite"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
@@ -193,7 +194,7 @@ func (pdb PodDB) deleteFeedItems(list []*ItemDBEntry) error {
 			if item.ID == 0 {
 				return fmt.Errorf("item missing ID; unable to delete: %v", item)
 			} else if item.XmlData.ID == 0 {
-				log.Warn("attempting to delete item id '%v', but xml ID is 0; will leave orphaned data")
+				log.Warnf("attempting to delete item id '%v', but xml ID is 0; will leave orphaned data", item.ID)
 			}
 		}
 	}
