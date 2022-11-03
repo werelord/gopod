@@ -182,6 +182,45 @@ func (pdb PodDB) saveFeed(feed *FeedDBEntry) error {
 	return res.Error
 }
 
+func (pdb PodDB) deleteFeedItems(list []*ItemDBEntry) error {
+	if pdb.path == "" {
+		return errors.New("poddb is not initialized; call NewDB() first")
+	} else if len(list) == 0 {
+		log.Warn("item list for deletion is empty; doing nothing")
+		return nil
+	} else {
+		for _, item := range list {
+			if item.ID == 0 {
+				return fmt.Errorf("item missing ID; unable to delete: %v", item)
+			} else if item.XmlData.ID == 0 {
+				log.Warn("attempting to delete item id '%v', but xml ID is 0; will leave orphaned data")
+			}
+		}
+	}
+
+	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
+	if err != nil {
+		return fmt.Errorf("error opening db: %w", err)
+	}
+
+	// attempt with primary key
+	for _, item := range list {
+		var res = db. /*.Debug()*/ Delete(item)
+		if res.Error != nil {
+			return res.Error
+		}
+		//log.Tracef("deleted record; row affedcted: %v", res.RowsAffected)
+		res = db. /*.Debug()*/ Delete(&item.XmlData)
+		if res.Error != nil {
+			return res.Error
+		}
+		//log.Tracef("deleted record; row affedcted: %v", res.RowsAffected)
+
+	}
+
+	return nil
+}
+
 // --------------------------------------------------------------------------
 // func (pdb PodDB) saveItemEntries(entrylist []*ItemDBEntry) error {
 // 	// should save item xml, if set

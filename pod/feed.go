@@ -267,6 +267,21 @@ func (f Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error 
 }
 
 // --------------------------------------------------------------------------
+func (f Feed) deleteFeedItems(list []*Item) error {
+	if db == nil {
+		return errors.New("db is nil")
+	}
+	f.log.Debugf("deleting items; len: %v", len(list))
+	// anything else needed here??
+	var dbEntryList = make([]*ItemDBEntry, 0, len(list))
+	for _, item := range list {
+		dbEntryList = append(dbEntryList, &item.ItemDBEntry)
+	}
+
+	return db.deleteFeedItems(dbEntryList)
+}
+
+// --------------------------------------------------------------------------
 func (f *Feed) Update() error {
 
 	// make sure db is loaded
@@ -584,3 +599,110 @@ func (f *Feed) processNew(newItems []*Item) []error {
 // 	}
 // 	return nil
 // }
+
+func (f *Feed) MigrateCount() {
+
+	var (
+		itemList  []*Item
+		skiplist  = make([]int, 0)
+		duplicate = make(map[string]string, 0)
+		// filelist = make(map[string]string, 0)
+	)
+
+	var addDup = func(s ...string) {
+		for _, str := range s {
+			duplicate[str] = str
+		}
+	}
+
+	var basecount int
+	if f.Shortname == "twit" {
+		basecount = 834
+	} else if f.Shortname == "twig" {
+		basecount = 623
+	} else if f.Shortname == "russo" {
+		addDup("russo.ep262.20200923_134051.mp3")
+		basecount = 106
+	} else if f.Shortname == "adsp" {
+		basecount = -1
+	} else if f.Shortname == "cppchat" {
+		basecount = 25
+	} else if f.Shortname == "corecursive" {
+		basecount = 4
+		skiplist = append(skiplist, 8, 11, 20, 31, 44)
+	} else if f.Shortname == "32thoughts" {
+		basecount = 156 // because shit
+	} else if f.Shortname == "dfo" {
+		basecount = -1
+		skiplist = append(skiplist, 7)
+	} else if f.Shortname == "exponent" {
+		addDup("exponent_17_final-2.mp3")
+	} else if f.Shortname == "tw" {
+		basecount = -1
+	} else if f.Shortname == "twoscomp" {
+		basecount = -1
+	}
+
+	if err := f.LoadDBFeed(false); err != nil {
+		f.log.Error("failed to load feed data from db: ", err)
+		return
+	} else {
+		// load all items (will be sorted desc); we do want item xml
+		if itemList, err = f.loadDBFeedItems(-1, true, cASC); err != nil {
+			f.log.Error("failed to load item entries: ", err)
+			return
+		}
+	}
+	f.log.Debug("Feed loaded from db")
+
+	if f.EpisodeCount > 0 {
+		log.Debug("skip processing; already committed")
+		return
+	}
+
+	// make logfile of potential changes
+	file, err := os.OpenFile(filepath.Join(config.WorkspaceDir, ".count", f.Shortname+".txt"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		f.log.Error(err)
+		return
+	}
+	defer file.Close()
+
+	f.EpisodeCount = basecount
+	var maxlen = 40
+	var max = func(x, y int) int {
+		if x > y {
+			return x
+		}
+		return y
+	}
+
+	for _, item := range itemList {
+		if _, exists := duplicate[item.Filename]; exists == false {
+			f.EpisodeCount++
+		}
+		for slices.Contains(skiplist, f.EpisodeCount) {
+			f.EpisodeCount++
+		}
+		item.EpNum = f.EpisodeCount
+
+		// log the shit
+		maxlen = max(maxlen, len(item.Filename))
+		stg := fmt.Sprintf("%*s : eps %3s : cnt %3v : '%v'\n",
+			maxlen,
+			item.Filename,
+			item.XmlData.EpisodeStr,
+			f.EpisodeCount,
+			item.XmlData.Title)
+		//fmt.Println(stg)
+		if _, err := file.WriteString(stg); err != nil {
+			log.Error(err)
+		}
+
+		// todo: check filename collisions
+	}
+
+	f.saveDBFeed(nil, itemList)
+
+	f.log.Debug("done")
+}

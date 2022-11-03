@@ -29,6 +29,7 @@ type gormDBInterface interface {
 	Order(value any) gormDBInterface
 	Limit(limit int) gormDBInterface
 	Session(config *gorm.Session) gormDBInterface
+	Debug() gormDBInterface
 
 	// finisher methods, return gorm.DB directly (no more chaining)
 	AutoMigrate(dst ...any) error
@@ -36,6 +37,7 @@ type gormDBInterface interface {
 	First(dest any, conds ...any) *gorm.DB
 	Find(dest any, conds ...any) *gorm.DB
 	Save(value any) *gorm.DB
+	Delete(value any, conds ...any) *gorm.DB
 }
 type gormDBImpl struct {
 	*gorm.DB
@@ -59,6 +61,9 @@ func (gdbi *gormDBImpl) Limit(limit int) gormDBInterface {
 func (gdbi *gormDBImpl) Session(config *gorm.Session) gormDBInterface {
 	return &gormDBImpl{gdbi.DB.Session(config)}
 }
+func (gdbi *gormDBImpl) Debug() gormDBInterface {
+	return &gormDBImpl{gdbi.DB.Debug()}
+}
 
 func (gdbi *gormDBImpl) FirstOrCreate(dest any, conds ...any) *gorm.DB {
 	return gdbi.DB.FirstOrCreate(dest, conds...)
@@ -71,4 +76,7 @@ func (gdbi *gormDBImpl) Find(dest any, conds ...any) *gorm.DB {
 }
 func (gdbi *gormDBImpl) Save(value any) *gorm.DB {
 	return gdbi.DB.Save(value)
+}
+func (gdbi *gormDBImpl) Delete(value any, conds ...any) *gorm.DB {
+	return gdbi.DB.Delete(value, conds...)
 }

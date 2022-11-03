@@ -148,6 +148,14 @@ func (mgdb *mockGormDB) Session(config *gorm.Session) gormDBInterface {
 	}
 	return &newdb
 }
+func (mgdb *mockGormDB) Debug() gormDBInterface {
+	// not logging this in callstack.. fuck that
+	var newdb = mockGormDB{
+		termErr: mgdb.termErr,
+		DB:      mgdb.DB.Debug(),
+	}
+	return &newdb
+}
 
 type stackType string
 

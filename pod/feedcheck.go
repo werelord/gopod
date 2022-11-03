@@ -74,7 +74,7 @@ func (f *Feed) CheckDownloads() error {
 		if errors.Is(err, ActionTakenError{}) {
 			return nil
 		}
-		f.log.Error("error in checking archive: ", err)
+		f.log.Error("error in checking filename generation: ", err)
 		return err
 	}
 
@@ -121,18 +121,18 @@ func (fcs *fileCheckStatus) checkCollisions() error {
 			// todo: separate out into separate package??
 			if config.DoCollision {
 				scanner := bufio.NewScanner(os.Stdin)
-				fmt.Printf("Which to delete:\n\t'%v' (1)\n\t'%v' (2)\n\tSkip (no entry)\n\t(1|2|<newline>)>", existItem.ID, item.ID)
+				fmt.Printf("Which to keep:\n\t'%v' (1)\n\t'%v' (2)\n\tSkip (no entry)\n\t(1|2|<skip>)> ", existItem.ID, item.ID)
 				scanner.Scan()
 				if scanner.Err() != nil {
 					log.Error("error in scanning; skipping by default: ", scanner.Err())
 				} else {
 					switch scanner.Text() {
 					case "1":
-						log.Debugf("deleting existing item: '%v'", existItem.ID)
-						deleteList = append(deleteList, existItem)
-					case "2":
 						log.Debugf("deleting current item: '%v'", item.ID)
 						deleteList = append(deleteList, item)
+					case "2":
+						log.Debugf("deleting existing item: '%v'", existItem.ID)
+						deleteList = append(deleteList, existItem)
 					default:
 						log.Debug("Skipping collision; no action taken")
 					}
@@ -170,7 +170,9 @@ func (fcs *fileCheckStatus) checkCollisions() error {
 
 	if config.DoCollision {
 		if len(deleteList) > 0 {
-			log.Debug("TODO: delete here")
+			fcs.feed.deleteFeedItems(deleteList)
+		} else {
+			log.Info("No collisions found, nothing to delete")
 		}
 		return ActionTakenError{actionTaken: "filename collision handling"}
 	}
