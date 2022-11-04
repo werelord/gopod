@@ -56,6 +56,10 @@ func (f *Feed) CheckDownloads() error {
 		f.log.Error("error in checking hashes: ", err)
 		return err
 	}
+	if err := fcs.checkGuids(); err != nil {
+		f.log.Error("error in checking guids: ", err)
+		return err
+	}
 	if err := fcs.checkCollisions(); err != nil {
 		if errors.Is(err, ActionTakenError{}) {
 			return nil
@@ -99,10 +103,26 @@ func (fcs *fileCheckStatus) checkHashes() error {
 }
 
 // --------------------------------------------------------------------------
+func (fcs *fileCheckStatus) checkGuids() error {
+	var (
+		log     = fcs.feed.log
+		guidmap = make(map[string]*Item, len(fcs.itemList))
+	)
+	for _, item := range fcs.itemList {
+		if existItem, exists := guidmap[item.XmlData.Guid]; exists {
+			log.Warnf("guid collision found (%v); existing: %v, current: %v", item.XmlData.Guid, existItem.ID, item.ID)
+		} else {
+			guidmap[item.XmlData.Guid] = item
+		}
+	}
+	return nil
+}
+
+// --------------------------------------------------------------------------
 func (fcs *fileCheckStatus) checkCollisions() error {
 
 	var (
-		filelist   = make(map[string]*Item, 0)
+		filelist   = make(map[string]*Item, len(fcs.itemList))
 		log        = fcs.feed.log
 		deleteList = make([]*Item, 0)
 	)
