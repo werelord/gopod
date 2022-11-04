@@ -89,8 +89,8 @@ func main() {
 			log.Error("failed to create new feed: ", err)
 			continue
 		}
-			feedMap[f.Shortname] = f
-		}
+		feedMap[f.Shortname] = f
+	}
 
 	//------------------------------------- DEBUG -------------------------------------
 	//	const RunTest = true
@@ -140,7 +140,7 @@ func main() {
 func RunTest(config podconfig.Config, feedMap map[string]*pod.Feed) (exit bool) {
 	if config.Debug && false {
 
-		migrateCount(feedMap)
+		doMigrate(feedMap)
 		return true
 	}
 	return false
@@ -148,7 +148,12 @@ func RunTest(config podconfig.Config, feedMap map[string]*pod.Feed) (exit bool) 
 
 // --------------------------------------------------------------------------
 func SetupDB(cfg podconfig.Config) (*pod.PodDB, error) {
-	var dbpath = filepath.Join(defaultworking, "gopod_TEST.db")
+	var dbpath string
+	if cfg.Debug {
+		dbpath = filepath.Join(defaultworking, ".db", "gopod_TEST.db")
+	} else {
+		dbpath = filepath.Join(defaultworking, ".db", "gopod.db")
+	}
 
 	if db, err := pod.NewDB(dbpath); err != nil {
 		return nil, err

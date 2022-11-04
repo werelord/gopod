@@ -16,17 +16,17 @@
                 // global args
                 //"--help",
                 //"--config", "master.toml",
-                //"--feed=pross",
+                //"--feed=tgg",
                 //"--proxy", "http://localhost:8888",
 
                 // update commands
-                //"update",
+                "update",
                 //"--force",
                 //"--use-recent",
                 //"--simulate",
 
                 // check commands
-                "checkdownloads",
+                //"checkdownloads",
                 //"--archive",
                 //"--rename",
                 //"--coll",

@@ -42,6 +42,8 @@ func NewDB(path string) (*PodDB, error) {
 	var poddb = PodDB{path: path, config: defaultConfig}
 	if db, err := gImpl.Open(sqlite.Open(poddb.path), &poddb.config); err != nil {
 		return nil, fmt.Errorf("error opening db: %w", err)
+
+		// todo: pull the db version from the db; if changes, do migration
 	} else if err = db.AutoMigrate(
 		&FeedDBEntry{},
 		&FeedXmlDBEntry{},
@@ -181,6 +183,36 @@ func (pdb PodDB) saveFeed(feed *FeedDBEntry) error {
 
 	log.Debugf("rows affected: %v", res.RowsAffected)
 	return res.Error
+}
+
+//--------------------------------------------------------------------------
+func (pdb PodDB) saveItems(itemlist []*ItemDBEntry) error {
+	if pdb.path == "" {
+		return errors.New("poddb is not initialized; call NewDB() first")
+	} else if len(itemlist) == 0 {
+		return errors.New("item entry list is empty")
+	}
+	// check for hash & id
+	for _, entry := range itemlist {
+		if entry.FeedId == 0 {
+			return fmt.Errorf("entry '%v' feed id is zero", entry.Filename)
+		} else if entry.Hash == "" {
+			return fmt.Errorf("entry '%v' hash is empty", entry.Filename)
+		} else if entry.Guid == "" {
+			return fmt.Errorf("entry '%v' guid is empty", entry.Filename)
+		}
+	}
+
+	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
+	if err != nil {
+		return fmt.Errorf("error opening db: %w", err)
+	}
+
+	// save items
+	var res = db.Session(&gorm.Session{FullSaveAssociations: true}).Save(itemlist)
+	log.Debugf("rows affected: %v", res.RowsAffected)
+	return res.Error
+
 }
 
 func (pdb PodDB) deleteFeedItems(list []*ItemDBEntry) error {

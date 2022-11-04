@@ -44,6 +44,7 @@ type ItemDBEntry struct {
 type ItemData struct {
 	Filename     string
 	Url          string
+	Guid         string
 	Downloaded   bool
 	CDFilename   string // content-disposition filename
 	PubTimeStamp time.Time

@@ -230,19 +230,11 @@ func (f Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error 
 		f.XmlFeedData.XChannelData = *newxml
 	}
 
-	// TODO: separate new item saving into separate function; allows saving items without "saving" feed
 	if len(newitems) > 0 {
-		f.ItemList = make([]*ItemDBEntry, 0, len(newitems))
-		for _, item := range newitems {
-			if item.Hash == "" {
-				return fmt.Errorf("hash is empty for item: %v", item.Filename)
-			}
-			if item.FeedId > 0 && item.FeedId != f.ID {
-				return fmt.Errorf("item feed id is set(%v), and does not match feed id (%v): %v", item.FeedId, f.ID, item.Filename)
-			} else if item.FeedId == 0 {
-				item.FeedId = f.ID
-			}
-			f.ItemList = append(f.ItemList, &item.ItemDBEntry)
+		if entryList, err := f.genItemDBEntryList(newitems); err != nil {
+			return err
+		} else {
+			f.ItemList = entryList
 		}
 	}
 
@@ -251,12 +243,61 @@ func (f Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error 
 		return err
 	}
 
-	f.log.Infof("{%v} feed saved, id: %v, xml id: %v", f.Shortname, f.ID, f.XmlFeedData.ID)
+	f.log.Tracef("{%v} feed saved, id: %v, xml id: %v", f.Shortname, f.ID, f.XmlFeedData.ID)
 	for _, i := range f.ItemList {
-		f.log.Infof("{%v} item saved, id: %v, xmlId: %v", i.Filename, i.ID, i.XmlData.ID)
+		f.log.Tracef("{%v} item saved, id: %v, xmlId: %v", i.Filename, i.ID, i.XmlData.ID)
 	}
 
 	return nil
+}
+
+// --------------------------------------------------------------------------
+func (f *Feed) saveDBFeedItems(itemlist []*Item) error {
+	// make sure we have an ID.. in loading, if this is a new feed, we're creating via FirstOrCreate
+	if f.ID == 0 {
+		return errors.New("unable to save to db; feed id is zero")
+	} else if len(itemlist) == 0 {
+		f.log.Warn("not saving items; length is zero")
+		return nil
+	}
+	f.log.Infof("Saving db items, itemCount:%v", len(itemlist))
+
+	if config.Simulate {
+		f.log.Info("skipping saving database due to sim flag")
+		return nil
+	}
+
+	if commitList, err := f.genItemDBEntryList(itemlist); err != nil {
+		return err
+	} else if err := db.saveItems(commitList); err != nil {
+		return err
+	}
+	return nil
+}
+
+// --------------------------------------------------------------------------
+func (f *Feed) genItemDBEntryList(itemlist []*Item) ([]*ItemDBEntry, error) {
+
+	if f.ID == 0 {
+		return nil, errors.New("unable to save to db; feed id is zero")
+	} else if len(itemlist) == 0 {
+		return nil, errors.New("empty list")
+	}
+	var ret = make([]*ItemDBEntry, 0, len(itemlist))
+
+	for _, item := range itemlist {
+		if item.Hash == "" {
+			return nil, fmt.Errorf("hash is empty for item: %v", item.Filename)
+		}
+		if item.FeedId > 0 && item.FeedId != f.ID {
+			return nil, fmt.Errorf("item feed id is set(%v), and does not match feed id (%v): %v", item.FeedId, f.ID, item.Filename)
+		} else /*if item.FeedId == 0 */ {
+			item.FeedId = f.ID
+		}
+		ret = append(ret, &item.ItemDBEntry)
+	}
+
+	return ret, nil
 }
 
 // --------------------------------------------------------------------------
@@ -277,23 +318,50 @@ func (f Feed) deleteFeedItems(list []*Item) error {
 // --------------------------------------------------------------------------
 func (f *Feed) Update() error {
 
+	var (
+		filelist map[string]*Item
+		guidlist map[string]*Item
+	)
+
 	// make sure db is loaded
 	if err := f.LoadDBFeed(true); err != nil {
 		f.log.Error("failed to load feed data from db: ", err)
 		return err
 	} else {
 
-		var itemCount = podutils.Tern(config.ForceUpdate, -1, config.MaxDupChecks*2)
-		if itemList, err := f.loadDBFeedItems(itemCount, false, cDESC); err != nil {
+		// because we're doing filename collisions and guid collisions, grab all items
+		if itemList, err := f.loadDBFeedItems(-1, false, cDESC); err != nil {
 			f.log.Error("failed to load item entries: ", err)
 			return err
 		} else {
 			// associate items into map for update hashes
+			filelist = make(map[string]*Item, len(itemList))
+			guidlist = make(map[string]*Item, len(itemList))
+
 			for _, item := range itemList {
-				if _, exists := f.itemMap[item.Hash]; exists == true {
+				if _, exists := f.itemMap[item.Hash]; exists {
 					f.log.Warn("Duplicate item found; wtf")
 				}
 				f.itemMap[item.Hash] = item
+
+				// file name checking
+				if _, exists := filelist[item.Filename]; exists {
+					err := fmt.Errorf("duplicate filename '%v' found; need to run checkDownloads", item.Filename)
+					f.log.Error(err)
+					return err
+				} else {
+					filelist[item.Filename] = item
+				}
+
+				// guid checking
+				if _, exists := guidlist[item.Guid]; exists {
+					err := fmt.Errorf("duplicate guid '%v' found; need to run checkDownloads", item.Guid)
+					f.log.Error(err)
+					return err
+				} else {
+					filelist[item.Guid] = item
+				}
+
 			}
 		}
 	}
@@ -569,26 +637,3 @@ func (f *Feed) processNew(newItems []*Item) []error {
 	f.log.Info("all new downloads completed")
 	return errList
 }
-
-// --------------------------------------------------------------------------
-// func (f *Feed) saveDBItems(itemList []*Item) error {
-
-// 	// loop thru new items, saving xml
-// 	if len(itemList) == 0 {
-// 		f.log.Info("nothing to insert into db; item list is empty")
-// 		return nil
-// 	}
-
-// 	var dbEntries = make([]*ItemDBEntry, 0, len(itemList))
-// 	for _, item := range itemList {
-// 		// if these are new items, make sure feed id is set
-// 		item.FeedId = f.ID
-// 		dbEntries = append(dbEntries, &item.ItemDBEntry)
-// 	}
-
-// 	// will save xml if set in the entry as well
-// 	if err := db.saveItemEntries(dbEntries); err != nil {
-// 		return err
-// 	}
-// 	return nil
-// }
