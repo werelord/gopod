@@ -654,14 +654,22 @@ func (f *Feed) processNew(newItems []*Item) []error {
 			continue
 		}
 
-		// todo: check downloaded & archive flag
-
 		if item.Downloaded == true {
-			f.log.Warn("skipping entry; file already downloaded.. possible filename collision?")
-			continue
+			f.log.Warnf("item downloaded '%v', archived: '%v', fileExists: '%v'", item.Downloaded, item.Archived, fileExists)
+			if fileExists == false {
+				if item.Archived == true {
+					f.log.Info("skipping download due to archived flag")
+					continue
+				} else {
+					f.log.Warn("downloading item; archive flag not set")
+				}
+			} else {
+				f.log.Warn("skipping download; file already downloaded.. ")
+				continue
+			}
 		} else if fileExists == true {
-			f.log.Warn("downloaded == false, but file already exists.. possible filename collision?")
-			//item.Downloaded = true
+			f.log.Warnf("item downloaded '%v', archived: '%v', fileExists: '%v'", item.Downloaded, item.Archived, fileExists)
+			f.log.Warn("file already exists.. possible filename collision? skipping download")
 			continue
 		}
 		if config.Simulate {
