@@ -7,34 +7,48 @@ import (
 	"gopod/testutils"
 	"testing"
 	"time"
+
+	"golang.org/x/exp/slices"
 )
 
 func TestItem_generateFilename(t *testing.T) {
 
-	var testTime = time.Now()
+	var (
+		testTime    = time.Now()
+		testTimeRep = testTime.AddDate(0, 0, -7)
+		defstr      = testTime.Format(podutils.TimeFormatStr)
 
-	var testTimeRep = testTime.AddDate(0, 0, -7)
-	var defstr = testTime.Format(podutils.TimeFormatStr)
+		regex = "\\((VOY|DS9|Voyager)? ?(S[0-9]E[0-9]+ ?&? ?[0-9]*)\\)"
 
-	var regex = "\\((VOY|DS9|Voyager)? ?(S[0-9]E[0-9]+ ?&? ?[0-9]*)\\)"
+		noCollFunc   = func(string) bool { return false }
+		allCollFunc  = func(string) bool { return true }
+		collFooList  = []string{"foo.bar", "fooA.bar", "fooB.bar", "fooC.bar"}
+		specificColl = func(s string) bool {
+			return slices.Contains(collFooList, s)
+		}
+	)
 
 	type cfgarg struct {
 		shortname string
 		regex     string
 		parse     string
+		collFunc  func(string) bool
 	}
 	type itemarg struct {
-		url         string
-		xLink       string
-		epStr       string
-		sesnStr     string
-		title       string
-		defaultTime time.Time
+		url          string
+		xLink        string
+		epStr        string
+		itemcount    int
+		sesnStr      string
+		title        string
+		defaultTime  time.Time
+		filenameXtra string
 	}
 	type exp struct {
-		filename string
-		errStr   string
-		//wantErr bool
+		filename       string
+		extra          string
+		collFuncCalled bool
+		errStr         string
 	}
 	tests := []struct {
 		name string
@@ -49,6 +63,10 @@ func TestItem_generateFilename(t *testing.T) {
 		{"linkFinalpath", cfgarg{parse: "foo#linkfinalpath#bar"}, itemarg{xLink: "https://foo.bar/83"},
 			exp{filename: "foo83bar"}},
 		{"linkFinalpath missing", cfgarg{parse: "foo#linkfinalpath#bar"}, itemarg{},
+			exp{filename: "foo" + defstr + "bar"}},
+		{"count", cfgarg{parse: "foo#count#bar"}, itemarg{itemcount: 42},
+			exp{filename: "foo042bar"}},
+		{"negative count", cfgarg{parse: "foo#count#bar"}, itemarg{itemcount: -1},
 			exp{filename: "foo" + defstr + "bar"}},
 		{"episode string", cfgarg{parse: "foo#episode#bar"}, itemarg{epStr: "42"},
 			exp{filename: "foo042bar"}},
@@ -68,21 +86,44 @@ func TestItem_generateFilename(t *testing.T) {
 			exp{filename: "fooVOYS4E15bar"}},
 		{"url filename", cfgarg{parse: "foo#urlfilename#"}, itemarg{url: "http://foo.bar/meh.mp3"},
 			exp{filename: "foomeh.mp3"}},
+
+		{"no collisions", cfgarg{collFunc: noCollFunc, parse: "foobar.mp3"}, itemarg{},
+			exp{filename: "foobar.mp3", collFuncCalled: true}},
+		{"all collisions", cfgarg{collFunc: allCollFunc, parse: "foobar.mp3"}, itemarg{},
+			exp{errStr: "still collides", collFuncCalled: true}},
+		{"specific collision", cfgarg{parse: "foo.bar", collFunc: specificColl}, itemarg{},
+			exp{filename: "fooD.bar", extra: "D", collFuncCalled: true}},
+		{"specific collision from url", cfgarg{collFunc: specificColl}, itemarg{url: "http://foo.com/foo.bar"},
+			exp{filename: "fooD.bar", extra: "D", collFuncCalled: true}},
+		{"extra already defined", cfgarg{collFunc: allCollFunc, parse: "foobar.mp3"}, itemarg{filenameXtra: "Z"},
+			exp{filename: "foobarZ.mp3", extra: "Z", collFuncCalled: false}},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
 			var item = Item{}
 			item.Url = tt.i.url
+			item.EpNum = tt.i.itemcount
 			item.XmlData.Title = tt.i.title
 			item.XmlData.Link = tt.i.xLink
 			item.XmlData.EpisodeStr = tt.i.epStr
 			item.XmlData.SeasonStr = tt.i.sesnStr
+			item.FilenameXta = tt.i.filenameXtra
 
 			var cfg = podconfig.FeedToml{}
 			cfg.Shortname = tt.c.shortname
 			cfg.FilenameParse = tt.c.parse
 			cfg.Regex = tt.c.regex
+
+			var collFuncCalled bool
+			var collfuncHolder func(string) bool
+			if tt.c.collFunc != nil {
+				collfuncHolder = func(s string) bool {
+					collFuncCalled = true
+					return tt.c.collFunc(s)
+				}
+			}
 
 			if tt.i.defaultTime.IsZero() == false {
 				var oldTimeNow = timeNow
@@ -92,13 +133,17 @@ func TestItem_generateFilename(t *testing.T) {
 				item.XmlData.Pubdate = testTime
 			}
 
-			filename, err := item.generateFilename(cfg)
+			filename, extra, err := item.generateFilename(cfg, collfuncHolder)
 
 			// make sure generate filename does not set the filename
 			testutils.Assert(t, item.Filename == "", fmt.Sprintf("expecting item.Filename to be blank, got '%v'", item.Filename))
 
 			testutils.AssertErrContains(t, tt.e.errStr, err)
 			testutils.AssertEquals(t, tt.e.filename, filename)
+			testutils.AssertEquals(t, tt.e.extra, extra)
+			testutils.Assert(t, collFuncCalled == tt.e.collFuncCalled,
+				fmt.Sprintf("expected collision func called to be %v, got %v", tt.e.collFuncCalled, collFuncCalled))
+
 		})
 	}
 }
@@ -158,6 +203,38 @@ func TestItem_replaceEpisode(t *testing.T) {
 
 			var cfg = podconfig.FeedToml{EpisodePad: tt.p.padlen}
 			got := item.replaceEpisode(tt.p.str, tt.p.defaultRep, cfg)
+			testutils.AssertEquals(t, tt.want, got)
+
+		})
+	}
+}
+
+func TestItem_replaceCount(t *testing.T) {
+	type args struct {
+		str        string
+		itemcount  int
+		defaultRep string
+		padlen     int
+	}
+	tests := []struct {
+		name string
+		p    args
+		want string
+	}{
+		{"empty string", args{itemcount: 42, defaultRep: "defstr"}, ""},
+		{"no replacement", args{str: "foobar", itemcount: 42, defaultRep: "defstr"}, "foobar"},
+		{"negative count", args{itemcount: -1, str: "foo#count#bar", defaultRep: "defstr"}, "foodefstrbar"},
+		{"normal pad length", args{str: "foo#count#bar", itemcount: 42, defaultRep: "defstr"}, "foo042bar"},
+		{"diff pad length", args{str: "foo#count#bar", itemcount: 42, defaultRep: "defstr", padlen: 6}, "foo000042bar"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			var item = Item{}
+			item.EpNum = tt.p.itemcount
+
+			var cfg = podconfig.FeedToml{EpisodePad: tt.p.padlen}
+			got := item.replaceCount(tt.p.str, tt.p.defaultRep, cfg)
 			testutils.AssertEquals(t, tt.want, got)
 
 		})
@@ -270,6 +347,50 @@ func TestItem_replaceUrlFilename(t *testing.T) {
 			testutils.AssertEquals(t, tt.e.want, got)
 			testutils.Assert(t, cleanCalled == tt.e.cleanCalled, "clean called incorrect")
 
+		})
+	}
+}
+
+func TestItem_checkFilenameCollisions(t *testing.T) {
+
+	var (
+		noCollFunc   = func(string) bool { return false }
+		allCollFunc  = func(string) bool { return true }
+		collFooList  = []string{"foo.bar", "fooA.bar", "fooB.bar", "fooC.bar"}
+		specificColl = func(s string) bool {
+			return slices.Contains(collFooList, s)
+		}
+	)
+
+	type arg struct {
+		collFunc     func(string) bool
+		filenameXtra string
+	}
+	type exp struct {
+		filename string
+		extra    string
+		errStr   string
+	}
+	tests := []struct {
+		name string
+		p    arg
+		e    exp
+	}{
+		{"no collisions", arg{collFunc: noCollFunc}, exp{filename: "foo.bar"}},
+		{"all collisions", arg{collFunc: allCollFunc}, exp{errStr: "still collides"}},
+		{"specific collision", arg{collFunc: specificColl}, exp{filename: "fooD.bar", extra: "D"}},
+		{"collision func nil", arg{}, exp{filename: "foo.bar"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var item = Item{}
+			item.FilenameXta = tt.p.filenameXtra
+
+			filename, extra, err := item.checkFilenameCollisions("foo.bar", tt.p.collFunc)
+
+			testutils.AssertErrContains(t, tt.e.errStr, err)
+			testutils.AssertEquals(t, tt.e.filename, filename)
+			testutils.AssertEquals(t, tt.e.extra, extra)
 		})
 	}
 }

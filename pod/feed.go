@@ -209,7 +209,7 @@ func (f *Feed) loadDBFeedItems(numItems int, includeXml bool, dtn direction) ([]
 }
 
 // --------------------------------------------------------------------------
-func (f Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error {
+func (f *Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error {
 
 	// make sure we have an ID.. in loading, if this is a new feed, we're creating via FirstOrCreate
 	if f.ID == 0 {
@@ -361,18 +361,26 @@ func (f *Feed) Update() error {
 				} else {
 					filelist[item.Guid] = item
 				}
-
 			}
 		}
 	}
 
+	// collision function, for checking whether a generated filename collides with an existing filename
+	// passed into item for filename generation
+	var collFunc = func(file string) bool {
+		_, exists := filelist[file]
+		return exists
+	}
+
+
 	f.log.Debug("Feed loaded from db for update: ", f.Shortname)
 
 	var (
-		body       []byte
-		err        error
-		newXmlData *podutils.XChannelData
-		newItems   []*Item
+		body         []byte
+		err          error
+		itemPairList []podutils.ItemPair
+		newXmlData   *podutils.XChannelData
+		newItems     []*Item
 	)
 
 	if config.UseMostRecentXml {
@@ -391,7 +399,6 @@ func (f *Feed) Update() error {
 
 	// todo: break this up some more
 
-	var itemPairList []podutils.ItemPair
 	newXmlData, itemPairList, err = podutils.ParseXml(body, f)
 	if err != nil {
 		if errors.Is(err, podutils.ParseCanceledError{}) {
@@ -446,9 +453,12 @@ func (f *Feed) Update() error {
 
 			// replace the existing xml data
 			// todo: deep copy comparison
-			itemEntry.updateXmlData(hash, xmldata)
+			if err := itemEntry.updateXmlData(hash, xmldata); err != nil {
+				f.log.Error("failed updating xml data: ", err)
+				continue
+			}
 
-		} else if itemEntry, err = createNewItemEntry(f.FeedToml, hash, xmldata, f.EpisodeCount+1); err != nil {
+		} else if itemEntry, err = createNewItemEntry(f.FeedToml, hash, xmldata, f.EpisodeCount+1, collFunc); err != nil {
 			f.log.Error("failed creating new item entry; skipping: ", err)
 			continue
 		} else {

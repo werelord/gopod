@@ -7,6 +7,7 @@ import (
 	"gopod/podutils"
 	"net/url"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -18,48 +19,61 @@ var cleanFilename = podutils.CleanFilename
 var timeNow = time.Now
 
 // --------------------------------------------------------------------------
-func (i *Item) generateFilename(cfg podconfig.FeedToml) (string, error) {
+func (i *Item) generateFilename(cfg podconfig.FeedToml, collFunc func(string) bool) (string, string, error) {
 	// check to see if we neeed to parse.. simple search/replace
 
 	// verify that export data is not null
 
 	// todo: need to check for filename collisions!! fucking shit
 
-	if cfg.FilenameParse == "" {
-		// fallthru to default
-		var filename = path.Base(i.Url)
-		//log.Debug("using default filename (no parsing): ", filename)
-		return filename, nil
-	}
-
 	var (
-		newstr             = cfg.FilenameParse
-		defaultReplacement string
-		err                error
+		filename       = cfg.FilenameParse
+		extra          string
+		defReplacement string
+		err            error
 	)
 
-	if i.XmlData.Pubdate.IsZero() {
-		log.Warn("Pubdate not set; default replacement set to Now()")
-		defaultReplacement = timeNow().Format(podutils.TimeFormatStr)
+	if cfg.FilenameParse == "" {
+		// fallthru to default
+		filename = path.Base(i.Url)
+		//log.Debug("using default filename (no parsing): ", filename)
+
 	} else {
-		defaultReplacement = i.XmlData.Pubdate.Format(podutils.TimeFormatStr)
+
+		if i.XmlData.Pubdate.IsZero() {
+			log.Warn("Pubdate not set; default replacement set to Now()")
+			defReplacement = timeNow().Format(podutils.TimeFormatStr)
+		} else {
+			defReplacement = i.XmlData.Pubdate.Format(podutils.TimeFormatStr)
+		}
+
+		filename = strings.Replace(filename, "#shortname#", cfg.Shortname, 1)
+		filename = i.replaceLinkFinalPath(filename, defReplacement)
+		filename = i.replaceEpisode(filename, defReplacement, cfg)
+		filename = i.replaceCount(filename, defReplacement, cfg)
+		filename = strings.Replace(filename, "#season#", i.XmlData.SeasonStr, 1)
+		filename = strings.Replace(filename, "#date#", defReplacement, 1)
+		if filename, err = i.replaceTitleRegex(filename, cfg.Regex); err != nil {
+			log.Error("failed parsing title:", err)
+			return "", "", err
+		}
+		filename = i.replaceUrlFilename(filename, cfg)
 	}
 
-	newstr = strings.Replace(newstr, "#shortname#", cfg.Shortname, 1)
-	newstr = i.replaceLinkFinalPath(newstr, defaultReplacement)
-	newstr = i.replaceEpisode(newstr, defaultReplacement, cfg)
-	newstr = i.replaceCount(newstr, defaultReplacement, cfg)
-	newstr = strings.Replace(newstr, "#season#", i.XmlData.SeasonStr, 1)
-	newstr = strings.Replace(newstr, "#date#", defaultReplacement, 1)
-	if newstr, err = i.replaceTitleRegex(newstr, cfg.Regex); err != nil {
-		log.Error("failed parsing title:", err)
-		return "", err
+	if i.FilenameXta != "" {
+		// filename collisions have already been handled, and the extra already exists..
+		// insert the extra into the filename
+		ext := filepath.Ext(filename)
+		base := filename[:len(filename)-len(ext)]
+		filename = fmt.Sprintf("%s%s%s", base, i.FilenameXta, ext)
+		// return extra in case its needed
+		extra = i.FilenameXta
+	} else if filename, extra, err = i.checkFilenameCollisions(filename, collFunc); err != nil {
+		log.Error("error in checking filename collision: ", err)
+		return "", "", err
 	}
-	newstr = i.replaceUrlFilename(newstr, cfg)
 
-	// complete
-
-	return newstr, nil
+	return filename, extra, nil
 }
 
 // --------------------------------------------------------------------------
@@ -180,4 +194,40 @@ func (i Item) replaceUrlFilename(str string, cfg podconfig.FeedToml) string {
 		str = strings.Replace(str, "#urlfilename#", urlfilename, 1)
 	}
 	return str
+}
+
+// --------------------------------------------------------------------------
+func (i Item) checkFilenameCollisions(fname string, collFunc func(string) bool) (string, string, error) {
+
+	var (
+		filename = fname
+		extra    string
+	)
+
+	if collFunc != nil && collFunc(filename) {
+		// check for collisions
+		log.Infof("filename collision found on %q; trying alternatives", filename)
+		// filename collision detected; start iterating thru alternates (saving alternate string
+		// for future generation checks) until one passes
+		// if we go beyond this, we're in trouble
+		for _, r := range "ABCDEFGHIJKL" {
+			ext := filepath.Ext(filename)
+			base := filename[:len(filename)-len(ext)]
+			newfilename := fmt.Sprintf("%s%s%s", base, string(r), ext)
+			if collFunc(newfilename) == false {
+				filename = newfilename
+				extra = string(r)
+				break
+			}
+		}
+
+		// do one more check for sanity
+		if collFunc(filename) {
+			err := fmt.Errorf("filename '%s' still collides; something is seriously wrong", filename)
+			log.Error(err)
+			return "", "", err
+		}
+	}
+
+	return filename, extra, nil
 }

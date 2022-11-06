@@ -43,6 +43,7 @@ type ItemDBEntry struct {
 
 type ItemData struct {
 	Filename     string
+	FilenameXta  string
 	Url          string
 	Guid         string
 	Downloaded   bool
@@ -71,11 +72,15 @@ func (idb ItemDBEntry) Format(fs fmt.State, c rune) {
 }
 
 // --------------------------------------------------------------------------
-func createNewItemEntry(feedcfg podconfig.FeedToml, hash string, xml *podutils.XItemData, epNum int) (*Item, error) {
+func createNewItemEntry(
+	feedcfg podconfig.FeedToml, hash string, xml *podutils.XItemData,
+	epNum int, collFunc func(string) bool) (*Item, error) {
 	// new entry, xml coming from feed directly
 
 	var (
-		err error
+		err      error
+		filename string
+		extra    string
 	)
 
 	if xml == nil {
@@ -86,6 +91,7 @@ func createNewItemEntry(feedcfg podconfig.FeedToml, hash string, xml *podutils.X
 
 	item.parentShortname = feedcfg.Shortname
 	item.Hash = hash
+	item.Guid = xml.Guid
 	item.XmlData.XItemData = *xml
 	item.PubTimeStamp = xml.Pubdate
 	item.EpNum = epNum
@@ -101,13 +107,17 @@ func createNewItemEntry(feedcfg podconfig.FeedToml, hash string, xml *podutils.X
 	if item.Url, err = parseUrl(item.XmlData.Enclosure.Url, feedcfg.UrlParse); err != nil {
 		log.Error("failed parsing url: ", err)
 		return nil, err
-	} else if item.Filename, err = item.generateFilename(feedcfg); err != nil {
+	}
+
+	if filename, extra, err = item.generateFilename(feedcfg, collFunc); err != nil {
 		log.Error("failed to generate filename:", err)
 		// to make sure we can continue, shortname.uuid.mp3
 		item.Filename = feedcfg.Shortname + "." + strings.ReplaceAll(uuid.NewString(), "-", "") + ".mp3"
-	} else {
-		log.Debug("using generated filename: ", item.Filename)
 	}
+	// at this point, we should have a valid filename
+	item.Filename = filename
+	item.FilenameXta = extra
+	log.Debug("using generated filename: ", item.Filename)
 
 	item.log = log.WithField("item", item.Filename)
 
@@ -133,6 +143,7 @@ func loadFromDBEntry(parentCfg podconfig.FeedToml, entry *ItemDBEntry) (*Item, e
 			ItemDBEntry: *entry,
 			itemInternal: itemInternal{
 				parentShortname: parentCfg.Shortname,
+				log:             log.WithField("item", entry.Filename),
 			},
 		}
 	)
@@ -149,7 +160,7 @@ func loadFromDBEntry(parentCfg podconfig.FeedToml, entry *ItemDBEntry) (*Item, e
 	return &item, nil
 }
 
-// --------------------------------------------------------------------------
+//--------------------------------------------------------------------------
 // todo: future
 /*
 func (i *Item) LoadItemXml() error {
@@ -222,20 +233,22 @@ func calcHash(guid, url, urlparse string) (string, error) {
 }
 
 // --------------------------------------------------------------------------
-func (i *Item) updateXmlData(hash string, data *podutils.XItemData) {
+func (i *Item) updateXmlData(hash string, data *podutils.XItemData) error {
 
 	if i.Hash != hash {
-		i.log.Warn("Hashes do not match; something is wrong")
-		i.log.Warnf("itemhash:'%v' newhash:'%v'", i.Hash, hash)
+		err := fmt.Errorf("hashes do not match; something is wrong; itemhash:'%v' newhash:'%v'", i.Hash, hash)
+		i.log.Error(err)
+		return err
 	}
 
-	// for now, just set the xml data
-	// todo : deep compare??
+	// TODO: need to make sure xmldata is loaded, so we have the correct ID (and don't do a new insert)
+
 	i.XmlData.XItemData = *data
 
 	// if the url changes, this would be a new hash..
 	// if the guid changes it would be a new hash..
 	// no need to urlparse or regenerate filename
+	return nil
 }
 
 // --------------------------------------------------------------------------

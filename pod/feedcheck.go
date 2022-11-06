@@ -256,8 +256,8 @@ func (fcs *fileCheckStatus) checkGenFilename() error {
 				genFilename string
 				err         error
 			)
-
-			if genFilename, err = item.generateFilename(fcs.feed.FeedToml); err != nil {
+			// collision already handled, and filename extra should already be set.. just return
+			if genFilename, _, err = item.generateFilename(fcs.feed.FeedToml, nil); err != nil {
 				log.Error("error generating filename: ", err)
 				continue
 			}
