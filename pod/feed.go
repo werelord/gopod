@@ -221,6 +221,7 @@ func (f *Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error
 		f.log.Info("skipping saving database due to sim flag")
 		return nil
 	}
+	// inserting everything into feed db; by full assoc should save everything
 
 	// make sure hash and shortname is set
 	f.Hash = f.generateHash()
@@ -319,8 +320,8 @@ func (f Feed) deleteFeedItems(list []*Item) error {
 func (f *Feed) Update() error {
 
 	var (
-		filelist map[string]*Item
-		guidlist map[string]*Item
+		fileCollList map[string]*Item
+		guidCollList map[string]*Item
 	)
 
 	// make sure db is loaded
@@ -334,9 +335,9 @@ func (f *Feed) Update() error {
 			f.log.Error("failed to load item entries: ", err)
 			return err
 		} else {
-			// associate items into map for update hashes
-			filelist = make(map[string]*Item, len(itemList))
-			guidlist = make(map[string]*Item, len(itemList))
+			// associate items into map for update hashes.. assuming growing capacity by 10 or so..
+			fileCollList = make(map[string]*Item, len(itemList)+10)
+			guidCollList = make(map[string]*Item, len(itemList)+10)
 
 			for _, item := range itemList {
 				if _, exists := f.itemMap[item.Hash]; exists {
@@ -345,21 +346,21 @@ func (f *Feed) Update() error {
 				f.itemMap[item.Hash] = item
 
 				// file name checking
-				if _, exists := filelist[item.Filename]; exists {
+				if _, exists := fileCollList[item.Filename]; exists {
 					err := fmt.Errorf("duplicate filename '%v' found; need to run checkDownloads", item.Filename)
 					f.log.Error(err)
 					return err
 				} else {
-					filelist[item.Filename] = item
+					fileCollList[item.Filename] = item
 				}
 
 				// guid checking
-				if _, exists := guidlist[item.Guid]; exists {
+				if _, exists := guidCollList[item.Guid]; exists {
 					err := fmt.Errorf("duplicate guid '%v' found; need to run checkDownloads", item.Guid)
 					f.log.Error(err)
 					return err
 				} else {
-					filelist[item.Guid] = item
+					fileCollList[item.Guid] = item
 				}
 			}
 		}
@@ -368,10 +369,9 @@ func (f *Feed) Update() error {
 	// collision function, for checking whether a generated filename collides with an existing filename
 	// passed into item for filename generation
 	var collFunc = func(file string) bool {
-		_, exists := filelist[file]
+		_, exists := fileCollList[file]
 		return exists
 	}
-
 
 	f.log.Debug("Feed loaded from db for update: ", f.Shortname)
 
@@ -448,36 +448,68 @@ func (f *Feed) Update() error {
 			if config.ForceUpdate == false {
 				f.log.Warn("hash for new item already exists and --force is not set; something is seriously wrong")
 			}
-			// we don't necessarily want to create and replace;
-			// just update the new data in the existing entry
+			// we don't necessarily want to create and replace; just update the new data in the existing entry
 
-			// replace the existing xml data
-			// todo: deep copy comparison
+			// replace the existing xml data; make sure the previous is loaded for replacing the existing
+			if err := itemEntry.loadItemXml(db); err != nil {
+				f.log.Error("failed loading item xml: ", err)
+				continue
+			}
 			if err := itemEntry.updateXmlData(hash, xmldata); err != nil {
 				f.log.Error("failed updating xml data: ", err)
 				continue
+			}
+			// don't need to add it to itemmap, as it already is set
+			// same for guid (based on hash) and filename collision, since filename should remain the same
+			if itemEntry.Downloaded == false {
+				newItems = append(newItems, itemEntry)
+			}
+
+		} else if itemEntry, exists = guidCollList[xmldata.Guid]; exists {
+			// guid collision, with no hash collision.. means the url has changed..
+			f.log.WithFields(log.Fields{
+				"previousguid": itemEntry.Guid,
+				"newguid":      xmldata.Guid,
+				"oldhash":      itemEntry.Hash,
+				"newhash":      hash,
+			}).Infof("guid collision detected with no hash collision; likely new url for same item")
+
+			// hash will change.. filename might change if url is in filenameparse
+			// filename might change based on filenameparse.. xml definitely changed (diff url)
+			// pubtimestamp maybe change.. episode count should not change
+
+			// make sure the previous is loaded for replacing the existing
+			if err := itemEntry.loadItemXml(db); err != nil {
+				f.log.Error("failed loading item xml: ", err)
+				continue
+			} else if err := itemEntry.updateFromEntry(f.FeedToml, hash, xmldata, collFunc); err != nil {
+				f.log.Error("failed updating existing item entry; skipping: ", err)
+				continue
+			} else {
+				// add it to various lists
+				f.itemMap[hash] = itemEntry
+				fileCollList[itemEntry.Filename] = itemEntry
+				guidCollList[itemEntry.Guid] = itemEntry
+
+				newItems = append(newItems, itemEntry)
 			}
 
 		} else if itemEntry, err = createNewItemEntry(f.FeedToml, hash, xmldata, f.EpisodeCount+1, collFunc); err != nil {
 			f.log.Error("failed creating new item entry; skipping: ", err)
 			continue
 		} else {
-			// new item added; save the episode count
+			// new item from create entry; need to increment episode count
 			f.EpisodeCount++
+			f.itemMap[hash] = itemEntry
+			fileCollList[itemEntry.Filename] = itemEntry
+			guidCollList[itemEntry.Guid] = itemEntry
+			newItems = append(newItems, itemEntry)
 		}
 
 		f.log.Infof("item added: :%+v", itemEntry)
-
-		// add it to the entry list
-		f.itemMap[hash] = itemEntry
-
-		// add it to the new items needing processing
-		newItems = append([]*Item{itemEntry}, newItems...)
 	}
 
 	// todo: more error checking here
-	// todo: need to check filename collissions
-	// todo: check guid collisions, since fuckers just replace the url.. we can't trust these damn generators..
 
 	// process new entries
 	// todo: move this outside update (likely on goroutine implementation)
@@ -491,7 +523,6 @@ func (f *Feed) Update() error {
 	}
 
 	// save everything here, as processing is done.. any errors should have exited out at some point
-	// inserting everything into feed db; by assoc should save everything
 	if err = f.saveDBFeed(newXmlData, newItems); err != nil {
 		f.log.Error("saving db failed: ", err)
 		return err
@@ -610,7 +641,6 @@ func (f *Feed) processNew(newItems []*Item) []error {
 		return nil
 	}
 
-	// todo: move download handling within item
 	for _, item := range newItems {
 		f.log.Debugf("processing new item: {%v %v}", item.Filename, item.Hash)
 
@@ -619,8 +649,9 @@ func (f *Feed) processNew(newItems []*Item) []error {
 
 		fileExists, err := podutils.FileExists(podfile)
 		if err != nil {
-			f.log.Warn("error in FileExists: ", err)
+			f.log.Error("error in FileExists; not downloading: ", err)
 			errList = append(errList, err)
+			continue
 		}
 
 		// todo: check downloaded & archive flag

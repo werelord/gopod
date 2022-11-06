@@ -77,12 +77,6 @@ func createNewItemEntry(
 	epNum int, collFunc func(string) bool) (*Item, error) {
 	// new entry, xml coming from feed directly
 
-	var (
-		err      error
-		filename string
-		extra    string
-	)
-
 	if xml == nil {
 		return nil, errors.New("xml data cannot be nil")
 	}
@@ -90,7 +84,6 @@ func createNewItemEntry(
 	item := Item{}
 
 	item.parentShortname = feedcfg.Shortname
-	item.Hash = hash
 	item.Guid = xml.Guid
 	item.XmlData.XItemData = *xml
 	item.PubTimeStamp = xml.Pubdate
@@ -99,25 +92,31 @@ func createNewItemEntry(
 	// verify hash
 	if cHash, err := calcHash(item.XmlData.Guid, item.XmlData.Enclosure.Url, feedcfg.UrlParse); err != nil {
 		return nil, fmt.Errorf("error in calculating hash: %w", err)
-	} else if cHash != item.Hash {
-		return nil, fmt.Errorf("newly calculated hash don't match; paramHash:'%v' calcHash:'%v'", item.Hash, cHash)
+	} else if cHash != hash {
+		return nil, fmt.Errorf("newly calculated hash don't match; paramHash:'%v' calcHash:'%v'", hash, cHash)
+	} else {
+		item.Hash = cHash
 	}
 
 	// parse url
-	if item.Url, err = parseUrl(item.XmlData.Enclosure.Url, feedcfg.UrlParse); err != nil {
+	if cUrl, err := parseUrl(item.XmlData.Enclosure.Url, feedcfg.UrlParse); err != nil {
 		log.Error("failed parsing url: ", err)
 		return nil, err
+	} else {
+		item.Url = cUrl
 	}
 
-	if filename, extra, err = item.generateFilename(feedcfg, collFunc); err != nil {
+	// generate filename
+	if filename, extra, err := item.generateFilename(feedcfg, collFunc); err != nil {
 		log.Error("failed to generate filename:", err)
 		// to make sure we can continue, shortname.uuid.mp3
 		item.Filename = feedcfg.Shortname + "." + strings.ReplaceAll(uuid.NewString(), "-", "") + ".mp3"
+	} else {
+		// at this point, we should have a valid filename
+		item.Filename = filename
+		item.FilenameXta = extra
+		log.Debug("using generated filename: ", item.Filename)
 	}
-	// at this point, we should have a valid filename
-	item.Filename = filename
-	item.FilenameXta = extra
-	log.Debug("using generated filename: ", item.Filename)
 
 	item.log = log.WithField("item", item.Filename)
 
@@ -153,6 +152,8 @@ func loadFromDBEntry(parentCfg podconfig.FeedToml, entry *ItemDBEntry) (*Item, e
 		return nil, errors.New("failed loading item; hash is empty")
 	} else if item.Filename == "" {
 		return nil, errors.New("failed loading item; filename is empty (db corrupt?)")
+	} else if item.Guid == "" {
+		return nil, errors.New("failed loading item; guid is empty")
 	}
 
 	//log.Debugf("Item Loaded: %v", item)
@@ -160,29 +161,83 @@ func loadFromDBEntry(parentCfg podconfig.FeedToml, entry *ItemDBEntry) (*Item, e
 	return &item, nil
 }
 
-//--------------------------------------------------------------------------
-// todo: future
-/*
-func (i *Item) LoadItemXml() error {
-	if i.db == nil {
+// --------------------------------------------------------------------------
+func (i *Item) updateFromEntry(
+	feedcfg podconfig.FeedToml, hash string, xml *podutils.XItemData,
+	collFunc func(string) bool) error {
+	// almost the same as createNew, with changes:
+
+	// sanity checks
+	if xml == nil {
+		return errors.New("xml data cannot be nil")
+	} else if xml.Guid != i.Guid {
+		return errors.New("guid from xml doesn't match items; this should not happen")
+	} else if i.XmlData.ID == 0 {
+		return errors.New("xml ID is 0; make sure previous xml is loaded before updating")
+	} else if i.parentShortname != feedcfg.Shortname {
+		// parent shortname should not change
+		return errors.New("feed shortname does not match this item's parent shortname")
+	}
+
+	i.XmlData.XItemData = *xml
+	i.PubTimeStamp = xml.Pubdate
+	// episode count should not change
+
+	// filename collision detection should rename the filename; set downloaded to false
+	i.Downloaded = false
+
+	// verify hash; hash will change (old guid, new url)
+	if cHash, err := calcHash(xml.Guid, xml.Enclosure.Url, feedcfg.UrlParse); err != nil {
+		return fmt.Errorf("error in calculating hash: %w", err)
+	} else if cHash != hash {
+		return fmt.Errorf("newly calculated hash don't match; paramHash:'%v' calcHash:'%v'", hash, cHash)
+	} else {
+		i.Hash = cHash
+	}
+
+	// parse url
+	if cUrl, err := parseUrl(xml.Enclosure.Url, feedcfg.UrlParse); err != nil {
+		log.Error("failed parsing url: ", err)
+		return err
+	} else {
+		i.Url = cUrl
+	}
+
+	// generate filename
+	if filename, extra, err := i.generateFilename(feedcfg, collFunc); err != nil {
+		log.Error("failed to generate filename:", err)
+		// to make sure we can continue, shortname.uuid.mp3
+		i.Filename = feedcfg.Shortname + "." + strings.ReplaceAll(uuid.NewString(), "-", "") + ".mp3"
+	} else {
+		// at this point, we should have a valid filename
+		i.Filename = filename
+		i.FilenameXta = extra
+		log.Debug("using generated filename: ", i.Filename)
+	}
+
+	i.log = log.WithField("item", i.Filename)
+
+	// everything should be set
+	return nil
+}
+
+// --------------------------------------------------------------------------
+func (i *Item) loadItemXml(db *PodDB) error {
+	if i.XmlData.ID > 0 {
+		// already loaded
+		return nil
+	} else if db == nil {
 		return errors.New("db is nil")
 	}
 
-	var itemxml = podutils.XItemData{}
-	var entry = ItemXmlDBEntry{Hash: i.Hash, ItemXml: itemxml}
-
-	id, err := i.db.ItemXmlCollection().FetchByEntry(entry)
-	if err != nil {
-		i.log.Error("error fetching item xml: ", err)
+	if xmlEntry, err := db.loadItemXml(i.ID); err != nil {
 		return err
+	} else {
+		i.XmlData = *xmlEntry
 	}
-	i.dbXmlId = id
-	i.xmlData = &entry.ItemXml
 
 	return nil
-
 }
-*/
 
 // --------------------------------------------------------------------------
 func parseUrl(urlstr, urlparse string) (string, error) {
@@ -239,9 +294,11 @@ func (i *Item) updateXmlData(hash string, data *podutils.XItemData) error {
 		err := fmt.Errorf("hashes do not match; something is wrong; itemhash:'%v' newhash:'%v'", i.Hash, hash)
 		i.log.Error(err)
 		return err
+	} else if i.XmlData.ID == 0 {
+		err := fmt.Errorf("unable to update xml data; xml data id is zero")
+		i.log.Error(err)
+		return err
 	}
-
-	// TODO: need to make sure xmldata is loaded, so we have the correct ID (and don't do a new insert)
 
 	i.XmlData.XItemData = *data
 

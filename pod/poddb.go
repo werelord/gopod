@@ -153,6 +153,27 @@ func (pdb PodDB) loadFeedItems(feedId uint, numItems int, includeXml bool, dtn d
 	return itemList, nil
 }
 
+//--------------------------------------------------------------------------
+func (pdb PodDB) loadItemXml(itemId uint) (*ItemXmlDBEntry, error) {
+	if pdb.path == "" {
+		return nil, errors.New("poddb is not initialized; call NewDB() first")
+	} else if itemId == 0 {
+		return nil, errors.New("feed id cannot be zero")
+	}
+	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
+	if err != nil {
+		return nil, fmt.Errorf("error opening db: %w", err)
+	}
+	var xmlEntry ItemXmlDBEntry
+
+	var res = db.Where(&ItemXmlDBEntry{ItemId: itemId}).First(&xmlEntry)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	log.Tracef("xml found, id: %v", xmlEntry.ID)
+	return &xmlEntry, nil
+}
+
 // --------------------------------------------------------------------------
 func (pdb PodDB) saveFeed(feed *FeedDBEntry) error {
 	// should save feed xml, if set
@@ -215,6 +236,7 @@ func (pdb PodDB) saveItems(itemlist []*ItemDBEntry) error {
 
 }
 
+//--------------------------------------------------------------------------
 func (pdb PodDB) deleteFeedItems(list []*ItemDBEntry) error {
 	if pdb.path == "" {
 		return errors.New("poddb is not initialized; call NewDB() first")
