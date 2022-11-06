@@ -21,8 +21,7 @@ import (
 
 // --------------------------------------------------------------------------
 var (
-	runTimestamp   time.Time
-	defaultworking = filepath.FromSlash("e:\\gopod\\")
+	runTimestamp time.Time
 )
 
 // --------------------------------------------------------------------------
@@ -46,7 +45,7 @@ func main() {
 	)
 
 	// todo: flag to check item entries that aren't downloaded
-	if cmdline, err = commandline.InitCommandLine(filepath.Join(defaultworking, "master.toml"), os.Args[1:]); err != nil {
+	if cmdline, err = commandline.InitCommandLine(os.Args[1:]); err != nil {
 		// if help called, no errors to output
 		if errors.Is(err, getoptions.ErrorHelpCalled) == false {
 			fmt.Println("failed to init commandline:", err)
@@ -95,7 +94,7 @@ func main() {
 	//------------------------------------- DEBUG -------------------------------------
 	//	const RunTest = true
 	if config.Debug && RunTest(*config, feedMap) {
-		// runtest run, exit
+		// runtest was run, exit
 		return
 	}
 	//------------------------------------- DEBUG -------------------------------------
@@ -148,12 +147,8 @@ func RunTest(config podconfig.Config, feedMap map[string]*pod.Feed) (exit bool) 
 
 // --------------------------------------------------------------------------
 func SetupDB(cfg podconfig.Config) (*pod.PodDB, error) {
-	var dbpath string
-	if cfg.Debug {
-		dbpath = filepath.Join(defaultworking, ".db", "gopod_TEST.db")
-	} else {
-		dbpath = filepath.Join(defaultworking, ".db", "gopod.db")
-	}
+	// dbpath := filepath.Join(cfg.WorkspaceDir, ".db",  podutils.Tern(cfg.Debug, "gopod_TEST.db", "gopod.db"))
+	dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod.db")
 
 	if db, err := pod.NewDB(dbpath); err != nil {
 		return nil, err

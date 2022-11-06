@@ -15,7 +15,7 @@
             "args": [
                 // global args
                 //"--help",
-                //"--config", "master.toml",
+                "--config", "e:\\gopod\\master.toml",
                 //"--feed=tgg",
                 //"--proxy", "http://localhost:8888",
 

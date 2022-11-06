@@ -1,10 +1,11 @@
 package commandline
 
 import (
-	"errors"
 	"fmt"
 	. "gopod/podutils"
 	"gopod/testutils"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -26,6 +27,9 @@ func TestInitCommandLine(t *testing.T) {
 		"--savecollision",
 	}
 
+	ex, _ := os.Executable()
+	var barFooConfig = filepath.Join(filepath.Dir(ex), "barfoo.toml")
+
 	type args struct {
 		args     []string
 		blankCfg bool
@@ -41,31 +45,33 @@ func TestInitCommandLine(t *testing.T) {
 		expect expect
 	}{
 		// errors
-		{"unknown command", args{args: []string{"foobar"}}, expect{errStr: "command not recognized"}},
-		{"blank config", args{args: []string{"update"}, blankCfg: true}, expect{errStr: "config cannot be blank"}},
-		{"config not exist", args{args: []string{"update"}, cfgDNE: true}, expect{errStr: "cannot find config file"}},
-		{"empty args", args{args: []string{}}, expect{errStr: "command not recognized"}},
+		{"unknown command", args{args: []string{"foobar", "--config", "barfoo.toml"}}, expect{errStr: "command not recognized"}},
+		{"blank config", args{args: []string{"update"}, blankCfg: true}, expect{errStr: "config required"}},
+		{"config not exist", args{args: []string{"update", "--config", "barfoo.toml"}, cfgDNE: true},
+			expect{errStr: "cannot find config file"}},
+		{"empty args", args{args: []string{}}, expect{errStr: "config required"}},
+		{"empty args (minus config)", args{args: []string{"--config", "barfoo.toml"}}, expect{errStr: "command not recognized"}},
 		{"help called", args{args: []string{"help"}}, expect{errStr: "help called"}},
 		{"help command called", args{args: []string{"help", "update"}}, expect{errStr: "help called"}},
 
 		// success results.. don't use named parameters, so that changes to underlying struct
 		// will make this test fail to compile
-		{"global false", args{args: []string{"update"}},
-			expect{cmdline: CommandLine{"defaultConfig", Update, "", "",
+		{"global false", args{args: []string{"update", "--config", "barfoo.toml"}},
+			expect{cmdline: CommandLine{barFooConfig, Update, "", "",
 				CommandLineOptions{false, UpdateOpt{false, false, false}, CheckDownloadOpt{false, false, false, false}}}},
 		},
-		{"global true", args{args: []string{"update", "--feed=foo", "--debug", "--proxy=barfoo"}},
-			expect{cmdline: CommandLine{"defaultConfig", Update, "foo", "barfoo",
+		{"global true", args{args: []string{"update", "--config", "barfoo.toml", "--feed=foo", "--debug", "--proxy=barfoo"}},
+			expect{cmdline: CommandLine{barFooConfig, Update, "foo", "barfoo",
 				CommandLineOptions{true, UpdateOpt{false, false, false}, CheckDownloadOpt{false, false, false, false}}}},
 		},
 
 		// flags dependent on command, regardless on whether they're on the commandline or not
 		{"update dependant", args{args: CopyAndAppend([]string{"update"}, allFlags...)},
-			expect{cmdline: CommandLine{"barfoo.toml", Update, "foo", "barfoo",
+			expect{cmdline: CommandLine{barFooConfig, Update, "foo", "barfoo",
 				CommandLineOptions{true, UpdateOpt{true, true, true}, CheckDownloadOpt{false, false, false, false}}}},
 		},
 		{"check downloads dependant", args{args: CopyAndAppend([]string{"checkdownloads"}, allFlags...)},
-			expect{cmdline: CommandLine{"barfoo.toml", CheckDownloaded, "foo", "barfoo",
+			expect{cmdline: CommandLine{barFooConfig, CheckDownloaded, "foo", "barfoo",
 				CommandLineOptions{true, UpdateOpt{false, false, false}, CheckDownloadOpt{true, true, true, true}}}},
 		},
 	}
@@ -73,11 +79,11 @@ func TestInitCommandLine(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var oldFE = fileExists
 			fileExists = func(string) (bool, error) {
-				return tt.args.cfgDNE == false, Tern(tt.args.cfgDNE, errors.New("foobar"), nil)
+				return tt.args.cfgDNE == false, nil
 			}
 			defer func() { fileExists = oldFE }()
 
-			retCmdLine, err := InitCommandLine(Tern(tt.args.blankCfg, "", "defaultConfig"), tt.args.args)
+			retCmdLine, err := InitCommandLine( /*Tern(tt.args.blankCfg, "", "defaultConfig"), */ tt.args.args)
 
 			testutils.AssertErrContains(t, tt.expect.errStr, err)
 			testutils.Assert(t, (retCmdLine == nil) == (err != nil),

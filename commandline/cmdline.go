@@ -66,11 +66,11 @@ type CheckDownloadOpt struct {
 }
 
 // --------------------------------------------------------------------------
-func InitCommandLine(defaultConfig string, args []string) (*CommandLine, error) {
+func InitCommandLine(args []string) (*CommandLine, error) {
 
 	var c CommandLine
 
-	opt := c.buildOptions(defaultConfig)
+	opt := c.buildOptions()
 
 	//fmt.Printf("%+v\n", os.Args[1:])
 	remaining, err := opt.Parse(args)
@@ -92,28 +92,43 @@ func InitCommandLine(defaultConfig string, args []string) (*CommandLine, error) 
 		return nil, errors.New("command not recognized")
 	}
 
-	if c.ConfigFile != "" {
-		if exists, err := fileExists(c.ConfigFile); (err != nil) || (exists == false) {
-			// check relative to default
-			workFile := filepath.Join(filepath.Dir(defaultConfig), c.ConfigFile)
-			if exists, err := fileExists(workFile); (err != nil) || (exists == false) {
-				return nil, fmt.Errorf("cannot find config file: %v", c.ConfigFile)
+	if c.ConfigFile == "" {
+		return nil, errors.New("config cannot be blank")
+	} else {
+		// check for config file
+		var workfile = c.ConfigFile
+		if exists, err := podutils.FileExists(workfile); err != nil {
+			return nil, fmt.Errorf("error checking config file exists: %w", err)
+
+		} else if exists == false {
+			// check relative to currently running executable
+			if ex, err := os.Executable(); err != nil {
+				return nil, fmt.Errorf("error checking config file exists: %w", err)
+
+			} else {
+				workfile = filepath.Join(filepath.Dir(ex), c.ConfigFile)
+				if exists, err := fileExists(workfile); err != nil {
+					return nil, fmt.Errorf("error checking config file exists: %w", err)
+				} else if exists == false {
+					return nil, fmt.Errorf("cannot find config file '%v'; file does not exist", c.ConfigFile)
+				}
 			}
 		}
-	} else {
-		return nil, errors.New("config cannot be blank")
+		// we should have a valid config here..
+		c.ConfigFile = workfile
 	}
 
 	return &c, nil
 }
 
 // --------------------------------------------------------------------------
-func (c *CommandLine) buildOptions(defaultConfig string) *getoptions.GetOpt {
+func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 	opt := getoptions.New()
 	opt.SetUnknownMode(getoptions.Pass)
 
-	opt.StringVar(&c.ConfigFile, "config", defaultConfig,
-		opt.Description("TOML config to use; full path to file, or file in "+filepath.Dir(defaultConfig)),
+	opt.StringVar(&c.ConfigFile, "config", "",
+		opt.Required("config required"),
+		opt.Description("TOML config to use"),
 		opt.Alias("c"),
 		opt.ArgName("config.toml"))
 	opt.StringVar(&c.FeedShortname, "feed", "",
