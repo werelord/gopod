@@ -111,6 +111,15 @@ func Test_parseUrl(t *testing.T) {
 		{"url with non-existant parse",
 			args{encUrl: "http://track.me/foo/foo.bar.com/meh.mp3?foo=bar", urlparse: "meh.bar.com"},
 			exp{resUrl: "http://track.me/foo/foo.bar.com/meh.mp3"}},
+		{"comma delimited, first",
+			args{encUrl: "http://track.me/foo/foo.bar.com/meh.mp3?foo=bar", urlparse: "foo.bar.com,arm.leg.com"},
+			exp{resUrl: "http://foo.bar.com/meh.mp3"}},
+		{"comma delimited, second",
+			args{encUrl: "http://track.me/foo/arm.leg.com/meh.mp3?foo=bar", urlparse: "foo.bar.com,arm.leg.com"},
+			exp{resUrl: "http://arm.leg.com/meh.mp3"}},
+		{"comma delimited, miss",
+			args{encUrl: "http://track.me/foo/bar.foo.com/meh.mp3?foo=bar", urlparse: "foo.bar.com,arm.leg.com"},
+			exp{resUrl: "http://track.me/foo/bar.foo.com/meh.mp3"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -155,21 +164,16 @@ func Test_calcHash(t *testing.T) {
 	}
 }
 
-
-
 // mocking for os, net
 
 // type mockShit struct {
 // 	// todo: shit here
 // }
 
-
-
 // func setupPodUtilsMock() (mockShit, func(string, mockShit)) {
 // 	var ms = mockShit{}
 // 	var oldImpl = pnuImpl
 // 	pnuImpl = ms
-
 
 // }
 

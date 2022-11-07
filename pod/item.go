@@ -253,15 +253,24 @@ func parseUrl(urlstr, urlparse string) (string, error) {
 
 	// handle url parsing, if needed
 	if urlparse != "" {
-		// assuming host is direct domain..
-		trim := strings.SplitAfterN(u.Path, urlparse, 2)
-		if len(trim) == 2 {
-			u.Host = urlparse
-			u.Path = trim[1]
-		} else {
-			log.Warn("failed parsing url; split failed")
-			log.Warnf("url: '%v' UrlParse: '%v'", u.String(), urlparse)
+		// urlparse may be comma delimited
+		parseList := strings.Split(urlparse, ",")
+
+		var found = false
+		for _, parse := range parseList {
+			// assuming host is direct domain..
+			trim := strings.SplitAfterN(u.Path, parse, 2)
+			if len(trim) == 2 {
+				found = true
+				u.Host = parse
+				u.Path = trim[1]
+				break
+			}
 		}
+		if found == false {
+			log.WithFields(log.Fields{"url": u.String(),"UrlParse": urlparse}).Warn("failed parsing url; split failed")
+		}
+
 	}
 
 	return u.String(), nil

@@ -62,7 +62,7 @@ func main() {
 	log.Debugf("cmdline: %+v", cmdline)
 
 	if config, feedList, err = podconfig.LoadToml(cmdline.ConfigFile, runTimestamp); err != nil {
-		log.Error("failed to read toml file; exiting!")
+		log.Errorf("failed to read toml file: %v", err)
 		return
 	}
 
