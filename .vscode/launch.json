@@ -16,11 +16,11 @@
                 // global args
                 //"--help",
                 "--config", "e:\\gopod\\master.toml",
-                "--feed=mlife",
+                "--feed=pt",
                 //"--proxy", "http://localhost:8888",
 
                 // update commands
-                "update",
+                //"update",
                 //"--force",
                 //"--use-recent",
                 //"--simulate",
@@ -31,6 +31,9 @@
                 //"--rename",
                 //"--coll",
                 //"--savecoll",
+
+                // delete command
+                "deletefeed",
 
                 "--debug=true"
             ]

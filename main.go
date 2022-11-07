@@ -176,6 +176,8 @@ func parseCommand(cmd commandline.CommandType) commandFunc {
 		return runUpdate
 	case commandline.CheckDownloaded:
 		return runCheckDownloads
+	case commandline.Delete:
+		return runDelete
 	default:
 		return nil
 	}
@@ -194,9 +196,19 @@ func runUpdate(f *pod.Feed) {
 
 // --------------------------------------------------------------------------
 func runCheckDownloads(f *pod.Feed) {
-	// todo: this
 	log.Infof("running check downloads on '%v'", f.Shortname)
 	if err := f.CheckDownloads(); err != nil {
 		log.Errorf("Error in checking downloads for feed '%v': %v", f.Shortname, err)
+	}
+}
+
+// --------------------------------------------------------------------------
+func runDelete(f *pod.Feed) {
+	log.WithField("feed", f.Shortname).Infof("running delete")
+	if err := f.RunDelete(); err != nil {
+		log.WithFields(log.Fields{
+			"feed":  f.Shortname,
+			"error": err,
+		}).Error("failed running delete")
 	}
 }

@@ -17,6 +17,7 @@ const ( // commands
 	Unknown CommandType = iota
 	Update
 	CheckDownloaded
+	Delete
 )
 
 // for testing purposes
@@ -26,6 +27,7 @@ var cmdMap = map[CommandType]string{
 	Unknown:         "unknown command",
 	Update:          "update",
 	CheckDownloaded: "checkDownloaded",
+	Delete:          "delete",
 }
 
 func (cmd CommandType) Format(fs fmt.State, c rune) {
@@ -90,6 +92,8 @@ func InitCommandLine(args []string) (*CommandLine, error) {
 	} else if c.Command == Unknown {
 		// getopts should already have outputted the help text
 		return nil, errors.New("command not recognized")
+	} else if c.Command == Delete && c.FeedShortname == "" {
+		return nil, errors.New("delete command requires feed specified (use --feed=<shortname>)")
 	}
 
 	if c.ConfigFile == "" {
@@ -126,13 +130,14 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 	opt := getoptions.New()
 	opt.SetUnknownMode(getoptions.Pass)
 
+	// global options
 	opt.StringVar(&c.ConfigFile, "config", "",
 		opt.Required("config required"),
 		opt.Description("TOML config to use"),
 		opt.Alias("c"),
 		opt.ArgName("config.toml"))
 	opt.StringVar(&c.FeedShortname, "feed", "",
-		opt.Description("feed shortname to compile on"),
+		opt.Description("feed to compile on (use shortname)"),
 		opt.Alias("f"), opt.ArgName("shortname"))
 	opt.StringVar(&c.Proxy, "proxy", "",
 		opt.Description("use proxy url"),
@@ -150,7 +155,7 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 		opt.Description("Use the most recent feed xml file fetched rather than checking for new; if recent doesn't exist, will still download.  Note: if there are no errors on previous run, will likely do nothing unless --force is specified"))
 	updateCommand.SetCommandFn(c.generateCmdFunc(Update))
 
-	checkcommand := opt.NewCommand("checkdownloads", "check downloads of files")
+	checkcommand := opt.NewCommand("checkdownloads", "check integrity of database and files")
 	checkcommand.BoolVar(&c.DoArchive, "archive", false, opt.Alias("arc"),
 		opt.Description("set missing downloads to archived"))
 	checkcommand.BoolVar(&c.DoRename, "rename", false,
@@ -160,6 +165,9 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 	checkcommand.BoolVar(&c.SaveCollision, "savecollision", false, opt.Alias("savecoll"),
 		opt.Description("Save collision differences to <workingdir>\\.collisions\\"))
 	checkcommand.SetCommandFn(c.generateCmdFunc(CheckDownloaded))
+
+	deletecommand := opt.NewCommand("deletefeed", "delete feed and all items from database (performs a soft delete)")
+	deletecommand.SetCommandFn(c.generateCmdFunc(Delete))
 
 	opt.HelpCommand("help", opt.Alias("h", "?"))
 	return opt
