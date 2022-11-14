@@ -29,12 +29,6 @@ type feedInternal struct {
 	xmlfile string
 	mp3Path string
 
-	numDups uint // number of dupiclates counted before skipping remaining items in xmlparse
-
-	// itemMap is not explicitly exported, but converted to array to be exported
-	// used mostly for checking update, as to when to quit
-	itemMap map[string]*Item
-
 	log *log.Entry
 }
 
@@ -109,8 +103,6 @@ func (f *Feed) initFeed() error {
 		f.log.Error("error making mp3 directory: ", err)
 		return err
 	}
-
-	f.itemMap = make(map[string]*Item)
 
 	return nil
 }
