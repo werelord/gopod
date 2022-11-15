@@ -14,6 +14,7 @@ import (
 
 // --------------------------------------------------------------------------
 type Config struct {
+	LogFilesRetained int `toml:"logfilesretained"`
 	MaxDupChecks     int `toml:"dupcheckmax"`
 	XmlFilesRetained int `toml:"xmlfilesretained"`
 	WorkspaceDir     string

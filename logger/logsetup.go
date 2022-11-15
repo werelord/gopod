@@ -143,12 +143,19 @@ func addFileHook(filename string, levels []log.Level) error {
 	}
 }
 
-func RotateLogFiles() error {
+func RotateLogFiles(numKeep int) error {
+
+	if numKeep < 0 {
+		log.WithField("numkeep", numKeep).Debug("number of logs to keep is negative, not rotating")
+	} else if numKeep == 0 {
+		// undefined or set to 0
+		numKeep = numLogsToKeep
+	}
 	// rotate logfiles
-	if err := podutils.RotateFiles(logdir, "gopod.all.*.log", numLogsToKeep); err != nil {
+	if err := podutils.RotateFiles(logdir, "gopod.all.*.log", uint(numKeep)); err != nil {
 		log.Warn("failed to rotate logs: ", err)
 	}
-	if err := podutils.RotateFiles(logdir, "gopod.error.*.log", numLogsToKeep); err != nil {
+	if err := podutils.RotateFiles(logdir, "gopod.error.*.log", uint(numKeep)); err != nil {
 		log.Warn("failed to rotate logs: ", err)
 	}
 

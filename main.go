@@ -132,7 +132,9 @@ func main() {
 	// todo: db export to json
 
 	// rotate the log files
-	logger.RotateLogFiles()
+	if config.LogFilesRetained > 0 {
+		logger.RotateLogFiles(config.LogFilesRetained)
+	}
 }
 
 // --------------------------------------------------------------------------
