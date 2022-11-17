@@ -80,7 +80,7 @@ func (pdb PodDB) isFeedDeleted(hash string) (bool, error) {
 	}
 
 	var count int64
-	var res = db.Debug().Unscoped().Model(&FeedDBEntry{}).Where("Hash = ? AND DeletedAt not NULL", hash).Count(&count)
+	var res = db./*Debug().*/Unscoped().Model(&FeedDBEntry{}).Where("Hash = ? AND DeletedAt not NULL", hash).Count(&count)
 	if res.Error != nil {
 		return false, res.Error
 	}
@@ -296,7 +296,7 @@ func (pdb PodDB) deleteItems(list []*ItemDBEntry) error {
 
 	// attempt with primary key
 	for _, item := range list {
-		var res = db.Debug().Delete(item)
+		var res = db./*Debug().*/Delete(item)
 		if res.Error != nil {
 			return res.Error
 		} else if res.RowsAffected == 0 {
@@ -306,7 +306,7 @@ func (pdb PodDB) deleteItems(list []*ItemDBEntry) error {
 		} else {
 			// log.Tracef("deleted record; row affedcted: %v", res.RowsAffected)
 			// delete all associated xml data, whether its loaded or not
-			res = db.Debug().Where(&ItemXmlDBEntry{ItemId: item.ID}).Delete(&ItemXmlDBEntry{})
+			res = db./*Debug().*/Where(&ItemXmlDBEntry{ItemId: item.ID}).Delete(&ItemXmlDBEntry{})
 			if res.Error != nil {
 				return res.Error
 			} else if res.RowsAffected == 0 {

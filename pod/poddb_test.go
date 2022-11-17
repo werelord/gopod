@@ -661,7 +661,7 @@ func TestPodDB_saveFeed(t *testing.T) {
 
 				// check dbItems
 				var dbItems = make([]*ItemDBEntry, 0, len(tt.e.expItemList))
-				res = gmock.mockdb.DB.Debug().Preload("XmlData").Where(&ItemDBEntry{FeedId: tt.p.modFeed.ID}).Find(&dbItems)
+				res = gmock.mockdb.DB.Preload("XmlData").Where(&ItemDBEntry{FeedId: tt.p.modFeed.ID}).Find(&dbItems)
 				testutils.AssertErr(t, false, res.Error)
 				// direct comparision will fail; supply custom compare and use that
 				testutils.AssertDiffFunc(t, tt.e.expItemList, dbItems, itemCompare)
@@ -816,6 +816,7 @@ func TestPodDB_deleteItems(t *testing.T) {
 			exp{errStr: "might not exist", callStack: []stackType{open, delete}}},
 
 		// success tests
+		{"delete empty list", args{delIndex: []int{}}, exp{expDelIndex: []int{}}},
 		{"delete one", args{delIndex: []int{2}},
 			exp{expDelIndex: []int{2}, callStack: defCallStack}},
 		{"delete two", args{delIndex: []int{1, 3}},
