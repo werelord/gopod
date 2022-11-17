@@ -67,23 +67,25 @@ func NewDB(path string) (*PodDB, error) {
 }
 
 // --------------------------------------------------------------------------
-func (pdb PodDB) isFeedDeleted(feedEntry *FeedDBEntry) error {
+func (pdb PodDB) isFeedDeleted(hash string) (bool, error) {
 	if pdb.path == "" {
-		return errors.New("poddb is not initialized; call NewDB() first")
-	} else if feedEntry == nil {
-		return errors.New("feed cannot be nil")
-	} else if feedEntry.ID == 0 && feedEntry.Hash == "" {
-		return errors.New("hash or ID has not been set")
+		return false, errors.New("poddb is not initialized; call NewDB() first")
+	} else if hash == "" {
+		return false, errors.New("hash cannot be empty")
 	}
 
-	//db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
-	// if err != nil {
-	// 	return fmt.Errorf("error opening db: %w", err)
-	// }
+	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
+	if err != nil {
+		return false, fmt.Errorf("error opening db: %w", err)
+	}
 
-	//	var tx = db.Unscoped().Where()
+	var count int64
+	var res = db.Debug().Unscoped().Model(&FeedDBEntry{}).Where("Hash = ? AND DeletedAt not NULL", hash).Count(&count)
+	if res.Error != nil {
+		return false, res.Error
+	}
 
-	return nil
+	return count > 0, nil
 
 }
 
@@ -102,6 +104,8 @@ func (pdb PodDB) loadDBFeed(feedEntry *FeedDBEntry, loadXml bool) error {
 	if err != nil {
 		return fmt.Errorf("error opening db: %w", err)
 	}
+
+	// check for feed deleted
 
 	// right now, only hash or ID
 	var tx = db.Where(&FeedDBEntry{PodDBModel: PodDBModel{ID: feedEntry.ID}, Hash: feedEntry.Hash})
@@ -307,7 +311,7 @@ func (pdb PodDB) deleteItems(list []*ItemDBEntry) error {
 				return res.Error
 			} else if res.RowsAffected == 0 {
 				log.Warnf("delete xml returned 0 rows affected; xml for item id '%v' might not exist", item.ID)
-			} else {
+				// } else {
 				// log.Tracef("deleted record; row affedcted: %v", res.RowsAffected)
 			}
 

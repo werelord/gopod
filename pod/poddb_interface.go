@@ -31,6 +31,7 @@ type gormDBInterface interface {
 	Session(config *gorm.Session) gormDBInterface
 	Debug() gormDBInterface
 	Unscoped() gormDBInterface
+	Model(value any) gormDBInterface
 
 	// finisher methods, return gorm.DB directly (no more chaining)
 	AutoMigrate(dst ...any) error
@@ -39,6 +40,7 @@ type gormDBInterface interface {
 	Find(dest any, conds ...any) *gorm.DB
 	Save(value any) *gorm.DB
 	Delete(value any, conds ...any) *gorm.DB
+	Count(*int64) *gorm.DB
 }
 type gormDBImpl struct {
 	*gorm.DB
@@ -68,6 +70,9 @@ func (gdbi *gormDBImpl) Debug() gormDBInterface {
 func (gdbi *gormDBImpl) Unscoped() gormDBInterface {
 	return &gormDBImpl{gdbi.DB.Unscoped()}
 }
+func (gdbi *gormDBImpl) Model(value any) gormDBInterface {
+	return &gormDBImpl{gdbi.DB.Model(value)}
+}
 
 func (gdbi *gormDBImpl) FirstOrCreate(dest any, conds ...any) *gorm.DB {
 	return gdbi.DB.FirstOrCreate(dest, conds...)
@@ -83,4 +88,7 @@ func (gdbi *gormDBImpl) Save(value any) *gorm.DB {
 }
 func (gdbi *gormDBImpl) Delete(value any, conds ...any) *gorm.DB {
 	return gdbi.DB.Delete(value, conds...)
+}
+func (gdbi *gormDBImpl) Count(count *int64) *gorm.DB {
+	return gdbi.DB.Count(count)
 }

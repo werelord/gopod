@@ -1,7 +1,6 @@
 package pod
 
 import (
-	"errors"
 	"fmt"
 	"gopod/podutils"
 	"gopod/testutils"
@@ -12,234 +11,11 @@ import (
 	"github.com/go-test/deep"
 	"golang.org/x/exp/slices"
 
-	"github.com/glebarez/sqlite"
 	//"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
-// mostly integration tests
-
-// path changed using pure go sqlite driver
-// const inMemoryPath = "file::memory:?cache=shared"
-const inMemoryPath = ":memory:"
-
-type mockGorm struct {
-	// todo: what do we need
-	mockdb  *mockGormDB
-	openErr bool
-}
-
-type mockGormDB struct {
-	*gorm.DB
-
-	autoMigrateErr   bool
-	autoMigrateTypes []string
-
-	termErr bool
-}
-
-func (mg *mockGorm) Open(d gorm.Dialector, opts ...gorm.Option) (gormDBInterface, error) {
-	fmt.Print("MockGorm.Open()")
-	defer func() { fmt.Print("\n") }()
-	appendCallstack(open)
-
-	if mg.openErr {
-		fmt.Print(", returning error")
-		return nil, errors.New("foobar")
-	}
-	// make sure call list is reset
-
-	var (
-		err error
-		db  *gorm.DB
-	)
-	if mg.mockdb.DB == nil {
-		fmt.Print(", opening new instance")
-		db, err = gorm.Open(d, opts...)
-		mg.mockdb.DB = db
-	} else {
-		fmt.Print(", returning already opened")
-	}
-
-	return mg.mockdb, err
-}
-
-func (mgdb *mockGormDB) AutoMigrate(dst ...any) error {
-	fmt.Print("MockGormDB.AutoMigrate()\n")
-	appendCallstack(automigrate)
-
-	mgdb.autoMigrateTypes = testutils.ListTypes(dst...)
-
-	if mgdb.autoMigrateErr {
-		return errors.New("automigrate:foobar")
-	} else {
-		return nil
-	}
-}
-
-// terminal method calls
-func (mgdb *mockGormDB) FirstOrCreate(dest any, conds ...any) *gorm.DB {
-	appendCallstack(firstorcreate)
-	if mgdb.termErr {
-		return &gorm.DB{Error: errors.New("firstorcreate:foobar")}
-	} else {
-		return mgdb.DB.FirstOrCreate(dest, conds...)
-	}
-}
-func (mgdb *mockGormDB) First(dest any, conds ...any) *gorm.DB {
-	appendCallstack(first)
-	if mgdb.termErr {
-		return &gorm.DB{Error: errors.New("first:foobar")}
-	} else {
-		return mgdb.DB.First(dest, conds...)
-	}
-}
-func (mgdb *mockGormDB) Find(dest any, conds ...any) *gorm.DB {
-	appendCallstack(find)
-	if mgdb.termErr {
-		return &gorm.DB{Error: errors.New("find:foobar")}
-	} else {
-		return mgdb.DB.Find(dest, conds...)
-	}
-}
-func (mgdb *mockGormDB) Save(value any) *gorm.DB {
-	appendCallstack(save)
-	if mgdb.termErr {
-		return &gorm.DB{Error: errors.New("save:foobar")}
-	} else {
-		return mgdb.DB.Save(value)
-	}
-}
-func (mgdb *mockGormDB) Delete(value any, conds ...any) *gorm.DB {
-	appendCallstack(delete)
-	if mgdb.termErr {
-		return &gorm.DB{Error: errors.New("delete:foobar")}
-	} else {
-		return mgdb.DB.Delete(value, conds...)
-	}
-}
-
-// continuaetion method calls
-func (mgdb *mockGormDB) Where(query any, args ...any) gormDBInterface {
-	appendCallstack(where)
-	var newdb = mockGormDB{
-		termErr: mgdb.termErr,
-		DB:      mgdb.DB.Where(query, args...),
-	}
-	return &newdb
-}
-func (mgdb *mockGormDB) Preload(query string, args ...any) gormDBInterface {
-	appendCallstack(preload)
-	var newdb = mockGormDB{
-		termErr: mgdb.termErr,
-		DB:      mgdb.DB.Preload(query, args...),
-	}
-	return &newdb
-}
-func (mgdb *mockGormDB) Order(value any) gormDBInterface {
-	appendCallstack(order)
-	var newdb = mockGormDB{
-		termErr: mgdb.termErr,
-		DB:      mgdb.DB.Order(value),
-	}
-	return &newdb
-}
-func (mgdb *mockGormDB) Limit(lim int) gormDBInterface {
-	appendCallstack(limit)
-	var newdb = mockGormDB{
-		termErr: mgdb.termErr,
-		DB:      mgdb.DB.Limit(lim),
-	}
-	return &newdb
-}
-func (mgdb *mockGormDB) Session(config *gorm.Session) gormDBInterface {
-	appendCallstack(session)
-	var newdb = mockGormDB{
-		termErr: mgdb.termErr,
-		DB:      mgdb.DB.Session(config),
-	}
-	return &newdb
-}
-func (mgdb *mockGormDB) Debug() gormDBInterface {
-	// not logging this in callstack.. fuck that
-	var newdb = mockGormDB{
-		termErr: mgdb.termErr,
-		DB:      mgdb.DB.Debug(),
-	}
-	return &newdb
-}
-func (mgdb *mockGormDB) Unscoped() gormDBInterface {
-	appendCallstack(unscoped)
-	var newdb = mockGormDB{
-		DB: mgdb.DB.Unscoped(),
-	}
-	return &newdb
-}
-
-type stackType string
-
-const (
-	open          stackType = "g.open"
-	automigrate   stackType = "db.automigrate"
-	where         stackType = "db.where"
-	preload       stackType = "db.preload"
-	order         stackType = "db.order"
-	limit         stackType = "db.limit"
-	session       stackType = "db.session"
-	unscoped      stackType = "db.unscoped"
-	firstorcreate stackType = "db.firstorcreate"
-	first         stackType = "db.first"
-	find          stackType = "db.find"
-	save          stackType = "db.save"
-	delete        stackType = "db.delete"
-)
-
-var callStack []stackType
-
-func resetCallStack()             { callStack = make([]stackType, 0) }
-func appendCallstack(s stackType) { callStack = append(callStack, s) }
-func compareCallstack(tb testing.TB, exp []stackType) {
-	tb.Helper()
-
-	// make sure we're not comparing possible empty slice to nil slice
-	if exp == nil {
-		exp = make([]stackType, 0)
-	}
-
-	if diffs := deep.Equal(exp, callStack); diffs != nil {
-		str := "\033[31m\nObjects not equal:\033[39m\n"
-		for _, d := range diffs {
-			str += fmt.Sprintf("\033[31m\t%v\033[39m\n", d)
-		}
-		tb.Error(str)
-	}
-}
-
-func setupGormMock(t *testing.T, mock *mockGorm, openDB bool) (*mockGorm, func(*testing.T, *mockGorm)) {
-	if mock == nil {
-		mock = &mockGorm{}
-	}
-
-	var oldGorm = gImpl
-	gImpl = mock
-	fmt.Printf("setupTest(%v)", t.Name())
-
-	if openDB {
-		db, err := gorm.Open(sqlite.Open(inMemoryPath), &defaultConfig)
-		if err != nil {
-			t.Fatalf("open db failed: %v", err)
-		}
-		mock.mockdb = &mockGormDB{DB: db}
-	}
-	fmt.Print("\n")
-
-	return mock, func(t *testing.T, mg *mockGorm) {
-		fmt.Printf("\nTeardown(%v)\n", t.Name())
-		// don't need to call close here...
-		// todo: anything else here??
-		gImpl = oldGorm
-	}
-}
+// mostly integration tests.. mocks in poddb_testmock.go
 
 func TestNewDB(t *testing.T) {
 
@@ -293,6 +69,87 @@ func TestNewDB(t *testing.T) {
 				// check types on automigrate
 				testutils.AssertDiff(t, autoMigrageTypes, gmock.mockdb.autoMigrateTypes)
 			}
+		})
+	}
+}
+
+func TestPodDB_IsFeedDeleted(t *testing.T) {
+
+	var gmock, teardown = setupGormMock(t, nil, true)
+	defer teardown(t, gmock)
+
+	// todo: insert feeds, delete feeds..
+
+	var (
+		feed1, feed2 = generateFeed(false), generateFeed(false)
+
+		defCallStack = []stackType{open, unscoped, model, where, count}
+	)
+
+	// insert original
+	if err := gmock.mockdb.DB.AutoMigrate(&FeedDBEntry{}); err != nil {
+		t.Fatalf("error in automigrate: %v", err)
+	} else if res := gmock.mockdb.DB.Create([]*FeedDBEntry{&feed1, &feed2}); res.Error != nil {
+		t.Fatalf("error in insert: %v", res.Error)
+	} else {
+		fmt.Printf("inserted %v rows\n", res.RowsAffected)
+	}
+
+	// delete feed 2
+	if res := gmock.mockdb.DB.Delete(&feed2); res.Error != nil {
+		t.Fatalf("error in delete: %v", res.Error)
+	} else {
+		fmt.Printf("deleted %v rows\n", res.RowsAffected)
+	}
+
+	type args struct {
+		emptyPath bool
+		openErr   bool
+		termErr   bool
+		hash      string
+	}
+	type exp struct {
+		deleted   bool
+		errStr    string
+		callStack []stackType
+	}
+
+	tests := []struct {
+		name string
+		p    args
+		e    exp
+	}{
+		// error tests, no db changes
+		{"empty path", args{emptyPath: true},
+			exp{errStr: "poddb is not initialized"}},
+		{"empty hash", args{},
+			exp{errStr: "hash cannot be empty"}},
+		{"open error", args{openErr: true, hash: "foobar"},
+			exp{errStr: "error opening db", callStack: []stackType{open}}},
+		{"count error", args{termErr: true, hash: "foobar"},
+			exp{errStr: "count:foobar", callStack: defCallStack}},
+
+		// success tests
+		{"not deleted", args{hash: feed1.Hash}, exp{deleted: false, callStack: defCallStack}},
+		{"deleted", args{hash: feed2.Hash}, exp{deleted: true, callStack: defCallStack}},
+		{"feed does not exist", args{hash: "foobar"}, exp{deleted: false, callStack: defCallStack}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			resetCallStack()
+
+			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
+			gmock.openErr = tt.p.openErr
+			gmock.mockdb.termErr = tt.p.termErr
+
+			isDel, err := poddb.isFeedDeleted(tt.p.hash)
+
+			testutils.AssertErrContains(t, tt.e.errStr, err)
+			testutils.Assert(t, tt.e.deleted == isDel,
+				fmt.Sprintf("expecting deleted == %v, got %v", tt.e.deleted, isDel))
+			compareCallstack(t, tt.e.callStack)
+
 		})
 	}
 }
