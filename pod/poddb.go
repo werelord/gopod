@@ -15,12 +15,22 @@ import (
 
 type PodDBModel gorm.Model
 
+type RecordDeletedError struct {
+	Msg string
+}
+
+func (rde *RecordDeletedError) Error() string {
+	return rde.Msg
+}
+
 type direction bool
 
 const ( // because constants should be capitalized, but I don't want to export these..
 	cASC  direction = false
 	cDESC direction = true
 )
+
+const allItems = -1
 
 type PodDB struct {
 	path   string
@@ -54,6 +64,27 @@ func NewDB(path string) (*PodDB, error) {
 	}
 
 	return &poddb, nil
+}
+
+// --------------------------------------------------------------------------
+func (pdb PodDB) isFeedDeleted(feedEntry *FeedDBEntry) error {
+	if pdb.path == "" {
+		return errors.New("poddb is not initialized; call NewDB() first")
+	} else if feedEntry == nil {
+		return errors.New("feed cannot be nil")
+	} else if feedEntry.ID == 0 && feedEntry.Hash == "" {
+		return errors.New("hash or ID has not been set")
+	}
+
+	//db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
+	// if err != nil {
+	// 	return fmt.Errorf("error opening db: %w", err)
+	// }
+
+	//	var tx = db.Unscoped().Where()
+
+	return nil
+
 }
 
 // --------------------------------------------------------------------------
@@ -153,7 +184,7 @@ func (pdb PodDB) loadFeedItems(feedId uint, numItems int, includeXml bool, dtn d
 	return itemList, nil
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (pdb PodDB) loadItemXml(itemId uint) (*ItemXmlDBEntry, error) {
 	if pdb.path == "" {
 		return nil, errors.New("poddb is not initialized; call NewDB() first")
@@ -206,7 +237,7 @@ func (pdb PodDB) saveFeed(feed *FeedDBEntry) error {
 	return res.Error
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (pdb PodDB) saveItems(itemlist []*ItemDBEntry) error {
 	if pdb.path == "" {
 		return errors.New("poddb is not initialized; call NewDB() first")
@@ -236,8 +267,8 @@ func (pdb PodDB) saveItems(itemlist []*ItemDBEntry) error {
 
 }
 
-//--------------------------------------------------------------------------
-func (pdb PodDB) deleteFeedItems(list []*ItemDBEntry) error {
+// --------------------------------------------------------------------------
+func (pdb PodDB) deleteItems(list []*ItemDBEntry) error {
 	if pdb.path == "" {
 		return errors.New("poddb is not initialized; call NewDB() first")
 	} else if len(list) == 0 {
@@ -247,8 +278,9 @@ func (pdb PodDB) deleteFeedItems(list []*ItemDBEntry) error {
 		for _, item := range list {
 			if item.ID == 0 {
 				return fmt.Errorf("item missing ID; unable to delete: %v", item)
-			} else if item.XmlData.ID == 0 {
-				log.Warnf("attempting to delete item id '%v', but xml ID is 0; will leave orphaned data", item.ID)
+				// } else if item.XmlData.ID == 0 {
+				// 	log.Warnf("attempting to delete item id '%v', but xml ID is 0; will leave orphaned data", item.ID)
+				// rather than orphaning xmldata, will do a delete where all match item id
 			}
 		}
 	}
@@ -260,81 +292,27 @@ func (pdb PodDB) deleteFeedItems(list []*ItemDBEntry) error {
 
 	// attempt with primary key
 	for _, item := range list {
-		var res = db. /*.Debug()*/ Delete(item)
+		var res = db.Debug().Delete(item)
 		if res.Error != nil {
 			return res.Error
-		}
-		//log.Tracef("deleted record; row affedcted: %v", res.RowsAffected)
-		res = db. /*.Debug()*/ Delete(&item.XmlData)
-		if res.Error != nil {
-			return res.Error
-		}
-		//log.Tracef("deleted record; row affedcted: %v", res.RowsAffected)
+		} else if res.RowsAffected == 0 {
+			// deleting non-existing item will have 0 rows affected, which could indicate an item that doesn't exist..
+			return fmt.Errorf("delete returned 0 rows affected; item id '%v' might not exist", item.ID)
+			// log.Warn("delete returned 0 rows affected; does item exist?")
+		} else {
+			// log.Tracef("deleted record; row affedcted: %v", res.RowsAffected)
+			// delete all associated xml data, whether its loaded or not
+			res = db.Debug().Where(&ItemXmlDBEntry{ItemId: item.ID}).Delete(&ItemXmlDBEntry{})
+			if res.Error != nil {
+				return res.Error
+			} else if res.RowsAffected == 0 {
+				log.Warnf("delete xml returned 0 rows affected; xml for item id '%v' might not exist", item.ID)
+			} else {
+				// log.Tracef("deleted record; row affedcted: %v", res.RowsAffected)
+			}
 
+		}
 	}
 
 	return nil
 }
-
-// --------------------------------------------------------------------------
-// func (pdb PodDB) saveItemEntries(entrylist []*ItemDBEntry) error {
-// 	// should save item xml, if set
-
-// 	if len(entrylist) == 0 {
-// 		log.Warn("save item entries called with empty list; nothing to do")
-// 		return nil
-// 	}
-
-// 	db, err := gimpl.Open(pdb.path, &pdb.config)
-// 	if err != nil {
-// 		return fmt.Errorf("error opening db: %w", err)
-// 	}
-// 	var (
-// 		resUpdate, resCreate *gorm.DB
-// 		createlist           = make([]*ItemDBEntry, 0, len(entrylist))
-// 		updatelist           = make([]*ItemDBEntry, 0, len(entrylist))
-// 	)
-
-// 	// looping thru, separating update from create
-
-// 	for _, entry := range entrylist {
-// 		// make sure feed id is set
-// 		if entry.FeedId == 0 {
-// 			return fmt.Errorf("feed id not set in entry: %v", entry)
-// 		}
-
-// 		if entry.ID > 0 {
-// 			updatelist = append(updatelist, entry)
-// 		} else {
-// 			// see if it exists, via hash
-// 			var count int64
-// 			db.Model(&ItemDBEntry{}).Where(&ItemDBEntry{Hash: entry.Hash}).Count(&count)
-// 			if count > 0 {
-// 				updatelist = append(updatelist, entry)
-// 			} else {
-// 				createlist = append(createlist, entry)
-// 			}
-// 		}
-// 	}
-
-// 	if len(updatelist) > 0 {
-// 		resUpdate = db.Save(updatelist)
-// 		if resUpdate.Error != nil {
-// 			log.Error("itemlist save error: ", resUpdate.Error)
-// 		}
-// 	}
-// 	if len(createlist) > 0 {
-// 		resCreate = db.Create(createlist)
-// 		if resCreate.Error != nil {
-// 			log.Error("itemlist create error: ", resCreate.Error)
-// 		}
-// 	}
-
-// 	if resUpdate != nil && resUpdate.Error != nil {
-// 		return resUpdate.Error
-// 	} else if resCreate != nil && resCreate.Error != nil {
-// 		return resCreate.Error
-// 	}
-
-// 	return nil
-// }

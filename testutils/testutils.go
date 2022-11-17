@@ -20,6 +20,7 @@ func init() {
 
 // assert fails the test if the condition is false.
 func Assert(tb testing.TB, condition bool, msg string) {
+	tb.Helper()
 	if condition == false {
 		tb.Errorf("\033[31m %s \033[39m\n\n", msg)
 	}
@@ -132,11 +133,12 @@ func RandStringBytes(n int) string {
 }
 
 func AssertDiffFunc[T comparable](tb testing.TB, wantList, gotList []T, comp func(T, T) bool) {
+	 tb.Helper()
 
 	var (
 		missing = make([]T, 0)
 		extra   = make([]T, 0)
-	)
+	)	
 
 	var indexOf = func(s []T, v T) int {
 		for i, e := range s {

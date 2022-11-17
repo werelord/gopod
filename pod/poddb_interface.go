@@ -30,6 +30,7 @@ type gormDBInterface interface {
 	Limit(limit int) gormDBInterface
 	Session(config *gorm.Session) gormDBInterface
 	Debug() gormDBInterface
+	Unscoped() gormDBInterface
 
 	// finisher methods, return gorm.DB directly (no more chaining)
 	AutoMigrate(dst ...any) error
@@ -63,6 +64,9 @@ func (gdbi *gormDBImpl) Session(config *gorm.Session) gormDBInterface {
 }
 func (gdbi *gormDBImpl) Debug() gormDBInterface {
 	return &gormDBImpl{gdbi.DB.Debug()}
+}
+func (gdbi *gormDBImpl) Unscoped() gormDBInterface {
+	return &gormDBImpl{gdbi.DB.Unscoped()}
 }
 
 func (gdbi *gormDBImpl) FirstOrCreate(dest any, conds ...any) *gorm.DB {

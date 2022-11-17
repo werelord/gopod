@@ -304,5 +304,5 @@ func (f Feed) deleteFeedItems(list []*Item) error {
 		dbEntryList = append(dbEntryList, &item.ItemDBEntry)
 	}
 
-	return db.deleteFeedItems(dbEntryList)
+	return db.deleteItems(dbEntryList)
 }
