@@ -123,6 +123,17 @@ func (f *Feed) LoadDBFeed(includeXml bool) error {
 	}
 	// make sure hash is prepopulated
 	f.Hash = f.generateHash()
+
+	// check for feed deleted before loading
+	if deleted, err := db.isFeedDeleted(f.Hash); err != nil {
+		f.log.Error("error in checking deleted: ", err)
+		return err
+	} else if deleted {
+		err := fmt.Errorf("feed is deleted, cannot load feed")
+		f.log.Error(err)
+		return err
+	}
+
 	if err := db.loadDBFeed(&f.FeedDBEntry, includeXml); err != nil {
 		f.log.Error("failed loading feed: ", err)
 		return err

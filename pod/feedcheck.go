@@ -29,15 +29,14 @@ type fileCheckStatus struct {
 // --------------------------------------------------------------------------
 func (f *Feed) CheckDownloads() error {
 
-	var fcs = fileCheckStatus{
-		fileExistsMap: make(map[string]bool),
-	}
-
-	// make sure db is loaded; don't need xml for this
 	var (
+		fcs = fileCheckStatus{
+			fileExistsMap: make(map[string]bool),
+		}
 		err error
 	)
 
+	// make sure db is loaded; don't need xml for this
 	if err = f.LoadDBFeed(false); err != nil {
 		f.log.Error("failed to load feed data from db: ", err)
 		return err

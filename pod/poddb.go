@@ -15,14 +15,6 @@ import (
 
 type PodDBModel gorm.Model
 
-type RecordDeletedError struct {
-	Msg string
-}
-
-func (rde *RecordDeletedError) Error() string {
-	return rde.Msg
-}
-
 type direction bool
 
 const ( // because constants should be capitalized, but I don't want to export these..
@@ -80,7 +72,7 @@ func (pdb PodDB) isFeedDeleted(hash string) (bool, error) {
 	}
 
 	var count int64
-	var res = db./*Debug().*/Unscoped().Model(&FeedDBEntry{}).Where("Hash = ? AND DeletedAt not NULL", hash).Count(&count)
+	var res = db. /*Debug().*/ Unscoped().Model(&FeedDBEntry{}).Where("Hash = ? AND DeletedAt not NULL", hash).Count(&count)
 	if res.Error != nil {
 		return false, res.Error
 	}
@@ -268,6 +260,65 @@ func (pdb PodDB) saveItems(itemlist []*ItemDBEntry) error {
 	var res = db.Session(&gorm.Session{FullSaveAssociations: true}).Save(itemlist)
 	log.Debugf("rows affected: %v", res.RowsAffected)
 	return res.Error
+}
+
+//--------------------------------------------------------------------------
+func (pdb PodDB) deleteFeed(feed *FeedDBEntry) error {
+	if pdb.path == "" {
+		return errors.New("poddb is not initialized; call NewDB() first")
+	} else if feed == nil {
+		return errors.New("feed cannot be nil")
+	} else if feed.ID == 0 && feed.Hash == "" {
+		// this hopefully will never happen; fail if it does
+		return errors.New("hash or ID has not been set")
+	}
+
+	// db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
+	// if err != nil {
+	// 	return fmt.Errorf("error opening db: %w", err)
+	// }
+
+
+	// // delete feed & xml 
+	// // get all items, delete item & xml
+	
+	// // just get the id and various timestamps for these items; don't need everything from the item/xml
+	// type DelType struct {
+	// 	PodDBModel
+	// }
+
+	// var (
+	// 	//feedXml DelType
+	// 	itemList = make([]DelType, 0)
+	// 	//itemIdChunk
+	// )
+	
+	// // get all the items, for deleting xml
+	// if res := db.Debug().Where(&ItemDBEntry{FeedId: feed.ID}).Find(&itemList); res != nil {
+	// 	return fmt.Errorf("error finding items: %w", res.Error)
+	// } else {
+	// 	log.Debugf("finding items, rows returned: %v", res.RowsAffected)
+	// }
+	
+	// // todo: do we need to chunk here?? 
+	// var itemIdList = make([]uint, 0, len(itemList))
+	// for _, item := range itemList {
+	// 	itemIdList = append(itemIdList, item.ID)
+	// }
+
+	// // do a delete on item xml
+	// if res := db.Debug().Delete(&ItemXmlDBEntry{}, itemIdList); res.Error != nil {
+	// 	return fmt.Errorf("error deleting item xml: %w", res.Error)
+	// } else {
+	// 	log.Debugf()
+	// }
+
+	
+
+	
+
+
+	return nil
 
 }
 
@@ -296,7 +347,7 @@ func (pdb PodDB) deleteItems(list []*ItemDBEntry) error {
 
 	// attempt with primary key
 	for _, item := range list {
-		var res = db./*Debug().*/Delete(item)
+		var res = db. /*Debug().*/ Delete(item)
 		if res.Error != nil {
 			return res.Error
 		} else if res.RowsAffected == 0 {
@@ -306,7 +357,7 @@ func (pdb PodDB) deleteItems(list []*ItemDBEntry) error {
 		} else {
 			// log.Tracef("deleted record; row affedcted: %v", res.RowsAffected)
 			// delete all associated xml data, whether its loaded or not
-			res = db./*Debug().*/Where(&ItemXmlDBEntry{ItemId: item.ID}).Delete(&ItemXmlDBEntry{})
+			res = db. /*Debug().*/ Where(&ItemXmlDBEntry{ItemId: item.ID}).Delete(&ItemXmlDBEntry{})
 			if res.Error != nil {
 				return res.Error
 			} else if res.RowsAffected == 0 {
