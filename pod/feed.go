@@ -38,13 +38,13 @@ type FeedDBEntry struct {
 	Hash         string `gorm:"uniqueIndex"`
 	DBShortname  string // just for db browsing
 	EpisodeCount int
-	XmlFeedData  FeedXmlDBEntry `gorm:"foreignKey:FeedId"`
-	ItemList     []*ItemDBEntry `gorm:"foreignKey:FeedId"`
+	XmlId        uint
+	XmlFeedData  *FeedXmlDBEntry `gorm:"foreignKey:XmlId"`
+	ItemList     []*ItemDBEntry  `gorm:"foreignKey:FeedId"`
 }
 
 type FeedXmlDBEntry struct {
 	PodDBModel
-	FeedId                uint
 	podutils.XChannelData `gorm:"embedded"`
 }
 
@@ -151,15 +151,18 @@ func (f *Feed) loadDBFeedXml() error {
 		return errors.New("db is nil")
 	} else if f.ID == 0 {
 		return fmt.Errorf("cannot load xml; feed '%v' itself not loaded", f.Shortname)
-	} else if f.XmlFeedData.ID > 0 {
+	} else if f.XmlId == 0 {
+		return fmt.Errorf("cannot load xml; xml id in '%v' is zero", f.Shortname)
+	} else if f.XmlFeedData != nil && f.XmlFeedData.ID > 0 {
 		// already loaded
 		return nil
 	}
 
-	f.XmlFeedData.FeedId = f.ID
-	if err := db.loadDBFeedXml(&f.XmlFeedData); err != nil {
+	if xml, err := db.loadDBFeedXml(f.XmlId); err != nil {
 		f.log.Error("failed loading feed xml: ", err)
 		return err
+	} else {
+		f.XmlFeedData = xml
 	}
 
 	f.log.Infof("{%v} feed xml loaded, id: %v, xml id: %v", f.Shortname, f.ID, f.XmlFeedData.ID)
@@ -215,7 +218,7 @@ func (f *Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error
 
 	// make sure we have an ID.. in loading, if this is a new feed, we're creating via FirstOrCreate
 	if f.ID == 0 {
-		return errors.New("unalbe to save to db; id is zero")
+		return errors.New("unable to save to db; id is zero")
 	}
 	f.log.Infof("Saving db, xml:%v, itemCount:%v", newxml, len(newitems))
 
@@ -229,7 +232,9 @@ func (f *Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error
 	f.Hash = f.generateHash()
 	f.DBShortname = f.Shortname
 	if newxml != nil {
-		f.XmlFeedData.FeedId = f.ID
+		if f.XmlFeedData == nil {
+			return errors.New("feed xml is not loaded; make sure it is loaded before saving new xml")
+		}
 		f.XmlFeedData.XChannelData = *newxml
 	}
 

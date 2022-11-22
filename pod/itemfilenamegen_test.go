@@ -105,6 +105,7 @@ func TestItem_generateFilename(t *testing.T) {
 			var item = Item{}
 			item.Url = tt.i.url
 			item.EpNum = tt.i.itemcount
+			item.XmlData = &ItemXmlDBEntry{}
 			item.XmlData.Title = tt.i.title
 			item.XmlData.Link = tt.i.xLink
 			item.XmlData.EpisodeStr = tt.i.epStr
@@ -169,6 +170,7 @@ func TestItem_replaceLinkFinalPath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			var item = Item{}
+			item.XmlData = &ItemXmlDBEntry{}
 			item.XmlData.Link = tt.p.xLink
 
 			got := item.replaceLinkFinalPath(tt.p.repstr, tt.p.defstring)
@@ -199,6 +201,7 @@ func TestItem_replaceEpisode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			var item = Item{}
+			item.XmlData = &ItemXmlDBEntry{}
 			item.XmlData.EpisodeStr = tt.p.epstr
 
 			var cfg = podconfig.FeedToml{EpisodePad: tt.p.padlen}
@@ -300,6 +303,7 @@ func TestItem_replaceTitleRegex(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var item = Item{}
+			item.XmlData = &ItemXmlDBEntry{}
 			item.XmlData.Title = tt.p.title
 
 			got, err := item.replaceTitleRegex(tt.p.str, tt.p.regex)

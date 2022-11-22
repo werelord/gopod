@@ -18,57 +18,76 @@ import (
 // mostly integration tests.. mocks in poddb_testmock.go
 
 func TestNewDB(t *testing.T) {
-
-	var autoMigrageTypes = testutils.ListTypes(&FeedDBEntry{}, &FeedXmlDBEntry{}, &ItemDBEntry{}, &ItemXmlDBEntry{})
-
 	type arg struct {
-		path string
-		mock mockGorm
+		pathEmpty bool
+		createVer int
+		mock      mockGorm
+		termErr   []stackType
 	}
 	type exp struct {
-		autoMigrateCalled bool
-		dbNil             bool
-		errStr            string
+		createVerCalled bool
+		dbNil           bool
+		errStr          string
+		callStack       []stackType
 	}
 	tests := []struct {
 		name string
 		p    arg
 		e    exp
 	}{
-		{"empty path", arg{path: "", mock: mockGorm{mockdb: &mockGormDB{}}},
-			exp{autoMigrateCalled: false, dbNil: true, errStr: "db path cannot be empty"}},
-		{"open error", arg{path: inMemoryPath, mock: mockGorm{openErr: true, mockdb: &mockGormDB{}}},
-			exp{autoMigrateCalled: false, dbNil: true, errStr: "error opening db: foobar"}},
-		{"automigrate error", arg{path: inMemoryPath, mock: mockGorm{mockdb: &mockGormDB{autoMigrateErr: true}}},
-			exp{autoMigrateCalled: true, dbNil: true, errStr: "automigrate:foobar"}},
-		{"success", arg{path: inMemoryPath, mock: mockGorm{mockdb: &mockGormDB{}}},
-			exp{autoMigrateCalled: true, dbNil: false}},
+
+		{"empty path", arg{pathEmpty: true, mock: mockGorm{mockdb: &mockGormDB{}}},
+			exp{dbNil: true, errStr: "db path cannot be empty"}},
+		{"open error", arg{mock: mockGorm{openErr: true, mockdb: &mockGormDB{}}},
+			exp{dbNil: true, errStr: "error opening db: foobar", callStack: []stackType{open}}},
+		{"create ver fail",
+			arg{mock: mockGorm{mockdb: &mockGormDB{}}, termErr: []stackType{exec, scan}, createVer: -1},
+			exp{dbNil: true, createVerCalled: true, errStr: "error finding db version",
+				callStack: []stackType{open, raw, scan, exec}}},
+		{"model version mismatch", arg{mock: mockGorm{mockdb: &mockGormDB{}}, createVer: 42},
+			exp{dbNil: true, errStr: "model doesn't match current", callStack: []stackType{open, raw, scan}}},
+
+		{"success, create version table", arg{mock: mockGorm{mockdb: &mockGormDB{}}, createVer: -1},
+			exp{createVerCalled: true, callStack: []stackType{open, raw, scan, exec}}},
+
+		{"success, matching model versions", arg{mock: mockGorm{mockdb: &mockGormDB{}}},
+			exp{callStack: []stackType{open, raw, scan}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			var gmock, teardown = setupGormMock(t, &tt.p.mock, false)
+			var gmock, teardown = setupGormMock(t, &tt.p.mock, true)
 			defer teardown(t, gmock)
 
 			resetCallStack()
 
-			got, err := NewDB(tt.p.path)
+			// if negative, no create ver called
+			// if zero, use default
+			// greater than zero, likely used for mismatch
+			if tt.p.createVer >= 0 {
+				var createVer = tt.p.createVer
+				if createVer == 0 {
+					createVer = currentModel
+				}
+				// hack create version
+				if res := gmock.mockdb.DB.
+					Exec("CREATE TABLE poddb_model (ID integer); INSERT INTO poddb_model (ID) VALUES (?)",
+						createVer); res.Error != nil {
+					t.Fatalf("setup version failed: %v", res.Error)
+				}
+			}
+			gmock.mockdb.termErr = tt.p.termErr
+
+			got, err := NewDB(podutils.Tern(tt.p.pathEmpty, "", inMemoryPath))
 
 			testutils.AssertErrContains(t, tt.e.errStr, err)
 			testutils.Assert(t, (got == nil) == tt.e.dbNil, fmt.Sprintf("expected db nil, got %v", got))
 
-			var amCalled = slices.Contains(callStack, automigrate)
-			testutils.Assert(t, tt.e.autoMigrateCalled == amCalled,
-				fmt.Sprintf("automigrate called expect: %v, got %v", tt.e.autoMigrateCalled, amCalled))
+			var createVerCalled = slices.Contains(callStack, exec)
+			testutils.Assert(t, tt.e.createVerCalled == createVerCalled,
+				fmt.Sprintf("create version table called expect: %v, got %v", tt.e.createVerCalled, createVerCalled))
 
-			if tt.e.autoMigrateCalled {
-				testutils.Assert(t, len(autoMigrageTypes) == len(gmock.mockdb.autoMigrateTypes),
-					fmt.Sprintf("automigrate types len() exp %v, got %v",
-						len(autoMigrageTypes), len(gmock.mockdb.autoMigrateTypes)))
-
-				// check types on automigrate
-				testutils.AssertDiff(t, autoMigrageTypes, gmock.mockdb.autoMigrateTypes)
-			}
+			compareCallstack(t, tt.e.callStack)
 		})
 	}
 }
@@ -105,7 +124,7 @@ func TestPodDB_IsFeedDeleted(t *testing.T) {
 	type args struct {
 		emptyPath bool
 		openErr   bool
-		termErr   bool
+		termErr   stackType
 		hash      string
 	}
 	type exp struct {
@@ -126,7 +145,7 @@ func TestPodDB_IsFeedDeleted(t *testing.T) {
 			exp{errStr: "hash cannot be empty"}},
 		{"open error", args{openErr: true, hash: "foobar"},
 			exp{errStr: "error opening db", callStack: []stackType{open}}},
-		{"count error", args{termErr: true, hash: "foobar"},
+		{"count error", args{termErr: count, hash: "foobar"},
 			exp{errStr: "count:foobar", callStack: defCallStack}},
 
 		// success tests
@@ -141,7 +160,7 @@ func TestPodDB_IsFeedDeleted(t *testing.T) {
 
 			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
 			gmock.openErr = tt.p.openErr
-			gmock.mockdb.termErr = tt.p.termErr
+			gmock.mockdb.termErr = []stackType{tt.p.termErr}
 
 			isDel, err := poddb.isFeedDeleted(tt.p.hash)
 
@@ -161,18 +180,11 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 
 	// insert shit here, for retrieval
 	var (
-		entryOne, entryTwo, newEntry FeedDBEntry
+		entryOne, entryTwo, newEntry = generateFeed(true), generateFeed(true), generateFeed(true)
 		entryOneNoXml, entryTwoNoXml FeedDBEntry
 
 		hashQuery, idQuery FeedDBEntry
 	)
-
-	entryOne.Hash = "foobar"
-	entryOne.XmlFeedData.Title = "barFoo"
-	entryTwo.Hash = "armleg"
-	entryTwo.XmlFeedData.Title = "armleg"
-	newEntry.Hash = "bahmeh"
-	newEntry.XmlFeedData.Link = "https://foo.bar/example"
 
 	if err := gmock.mockdb.DB.AutoMigrate(&FeedDBEntry{}, &FeedXmlDBEntry{}); err != nil {
 		t.Fatalf("error in automigrate: %v", err)
@@ -183,11 +195,11 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 	}
 	hashQuery.Hash = entryOne.Hash
 	entryOneNoXml = entryOne
-	entryOneNoXml.XmlFeedData = FeedXmlDBEntry{}
+	entryOneNoXml.XmlFeedData = nil
 
 	idQuery.ID = entryTwo.ID
 	entryTwoNoXml = entryTwo
-	entryTwoNoXml.XmlFeedData = FeedXmlDBEntry{}
+	entryTwoNoXml.XmlFeedData = nil
 
 	var (
 		defCS        = []stackType{open, where, firstorcreate}
@@ -198,7 +210,7 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 		emptyPath bool
 		openErr   bool
 		entryNil  bool
-		termErr   bool
+		termErr   stackType
 		fq        FeedDBEntry
 		loadXml   bool
 	}
@@ -219,7 +231,7 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 		{"missing id+hash", args{}, exp{errStr: "hash or ID has not been set"}},
 		{"open error", args{openErr: true, fq: hashQuery},
 			exp{errStr: "error opening db", callStack: []stackType{open}}},
-		{"firstOrCreate error", args{termErr: true, fq: hashQuery},
+		{"firstOrCreate error", args{termErr: firstorcreate, fq: hashQuery},
 			exp{errStr: "firstorcreate:foobar", callStack: defCS}},
 		// success results
 		{"success with hash", args{fq: hashQuery},
@@ -237,7 +249,7 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
 			gmock.openErr = tt.p.openErr
-			gmock.mockdb.termErr = tt.p.termErr
+			gmock.mockdb.termErr = []stackType{tt.p.termErr}
 
 			resetCallStack()
 			var fq = tt.p.fq
@@ -246,15 +258,12 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 			if testutils.AssertErrContains(t, tt.e.errStr, err) {
 				// general expected structure
 				testutils.Assert(t, fq.ID > 0, fmt.Sprintf("Id > 0, got %v", fq.ID))
-				if tt.p.loadXml {
-					testutils.Assert(t, fq.XmlFeedData.ID > 0,
-						fmt.Sprintf("Xml ID > 0, got %v", fq.XmlFeedData.ID))
-					testutils.Assert(t, fq.XmlFeedData.FeedId == fq.ID,
-						fmt.Sprintf("Xml Feed Id should be %v, got %v", fq.ID, fq.XmlFeedData.ID))
-				} else {
-					testutils.Assert(t, fq.XmlFeedData.ID == 0,
-						fmt.Sprintf("Xml ID == 0, got %v", fq.XmlFeedData.ID))
-				}
+				testutils.Assert(t, fq.XmlId > 0, fmt.Sprintf("xmlId > 0, got %v", fq.ID))
+
+				// see if xml is loaded
+
+				testutils.Assert(t, (fq.XmlFeedData != nil) == (tt.p.loadXml),
+					fmt.Sprintf("expected XmlFeedData(nil) == %v, got %v", !tt.p.loadXml, fq.XmlFeedData))
 
 				var exp = tt.e.fe
 				if tt.e.useDB {
@@ -282,16 +291,13 @@ func TestPodDB_loadDBFeedXml(t *testing.T) {
 
 	// insert stuff for retrieval
 	var (
-		entryOne, entryTwo         FeedXmlDBEntry
-		qWithId, qWithFeedId       FeedXmlDBEntry
-		notFoundId, notfoundFeedId FeedXmlDBEntry
+		entryOne, entryTwo FeedXmlDBEntry
 	)
 
 	entryOne.Title = "foobar"
 	entryOne.Author = "meh"
 
 	entryTwo.Title = "barfoo"
-	entryTwo.FeedId = 42
 	entryTwo.PubDate = time.Now()
 
 	if err := gmock.mockdb.DB.AutoMigrate(&FeedDBEntry{}, &FeedXmlDBEntry{}); err != nil {
@@ -302,19 +308,13 @@ func TestPodDB_loadDBFeedXml(t *testing.T) {
 		fmt.Printf("inserted %v rows, ids: %v %v\n", res.RowsAffected, entryOne.ID, entryTwo.ID)
 	}
 
-	qWithId.ID = entryOne.ID
-	qWithFeedId.FeedId = entryTwo.FeedId
-	notFoundId.ID = 99
-	notfoundFeedId.FeedId = 13
-
 	var expCS = []stackType{open, where, first}
 
 	type args struct {
 		emptyPath bool
 		openErr   bool
-		entryNil  bool
-		termErr   bool
-		fxq       FeedXmlDBEntry
+		termErr   stackType
+		xmlId     uint
 	}
 	type exp struct {
 		fxe       FeedXmlDBEntry
@@ -327,23 +327,20 @@ func TestPodDB_loadDBFeedXml(t *testing.T) {
 		e    exp
 	}{
 		// error tests
-		{"empty path", args{emptyPath: true, fxq: qWithId}, exp{errStr: "poddb is not initialized"}},
-		{"entry nil", args{entryNil: true}, exp{errStr: "feedxml cannot be nil"}},
-		{"missing id+hash", args{}, exp{errStr: "xmlID or feedID cannot be zero"}},
-		{"open error", args{openErr: true, fxq: qWithId},
+		{"empty path", args{emptyPath: true, xmlId: entryOne.ID}, exp{errStr: "poddb is not initialized"}},
+		{"id zero", args{}, exp{errStr: "xml ID cannot be zero"}},
+		{"open error", args{openErr: true, xmlId: entryOne.ID},
 			exp{errStr: "error opening db", callStack: []stackType{open}}},
-		{"generic find error", args{termErr: true, fxq: qWithId},
+		{"generic find error", args{termErr: first, xmlId: entryOne.ID},
 			exp{errStr: "first:foobar", callStack: expCS}},
 
 		// not existing tests
-		{"id doesn't exist", args{fxq: notFoundId},
-			exp{errStr: "record not found", callStack: expCS}},
-		{"feedid doesn't exist", args{fxq: notfoundFeedId},
+		{"id doesn't exist", args{xmlId: 99},
 			exp{errStr: "record not found", callStack: expCS}},
 
 		// success
-		{"success by id", args{fxq: qWithId}, exp{fxe: entryOne, callStack: expCS}},
-		{"success by feedid", args{fxq: qWithFeedId}, exp{fxe: entryTwo, callStack: expCS}},
+		{"success one", args{xmlId: entryOne.ID}, exp{fxe: entryOne, callStack: expCS}},
+		{"success two", args{xmlId: entryTwo.ID}, exp{fxe: entryTwo, callStack: expCS}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -351,16 +348,17 @@ func TestPodDB_loadDBFeedXml(t *testing.T) {
 			resetCallStack()
 			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
 			gmock.openErr = tt.p.openErr
-			gmock.mockdb.termErr = tt.p.termErr
+			gmock.mockdb.termErr = []stackType{tt.p.termErr}
 
-			var fxq = tt.p.fxq
-
-			var err = poddb.loadDBFeedXml(podutils.Tern(tt.p.entryNil, nil, &fxq))
-			if testutils.AssertErrContains(t, tt.e.errStr, err) {
-				testutils.Assert(t, fxq.ID > 0, fmt.Sprintf("Id > 0, got %v", fxq.ID))
+			var xmlEntry, err = poddb.loadDBFeedXml(tt.p.xmlId)
+			testutils.AssertErrContains(t, tt.e.errStr, err)
+			if err != nil {
+				testutils.Assert(t, xmlEntry == nil, fmt.Sprintf("expected xmlEntry == nil, got %v", xmlEntry))
+			} else {
+				testutils.Assert(t, xmlEntry.ID > 0, fmt.Sprintf("Id > 0, got %v", xmlEntry.ID))
 
 				// compare objects
-				testutils.AssertEquals(t, tt.e.fxe, fxq)
+				testutils.AssertEquals(t, tt.e.fxe, *xmlEntry)
 			}
 
 			compareCallstack(t, tt.e.callStack)
@@ -399,13 +397,13 @@ func TestPodDB_loadFeedItems(t *testing.T) {
 	}
 
 	var rmXml = func(e ItemDBEntry) *ItemDBEntry {
-		return &ItemDBEntry{e.PodDBModel, e.Hash, e.FeedId, e.ItemData, ItemXmlDBEntry{}}
+		return &ItemDBEntry{e.PodDBModel, e.Hash, e.FeedId, e.ItemData, e.XmlId, nil}
 	}
 
 	type args struct {
 		emptyPath  bool
 		openErr    bool
-		termErr    bool
+		termErr    stackType
 		feedId     uint
 		numItems   int
 		includeXml bool
@@ -428,7 +426,7 @@ func TestPodDB_loadFeedItems(t *testing.T) {
 		{"feed id zero", args{}, exp{errStr: "feed id cannot be zero"}},
 		{"open error", args{openErr: true, feedId: 2},
 			exp{errStr: "error opening db", callStack: []stackType{open}}},
-		{"find error", args{termErr: true, feedId: 2},
+		{"find error", args{termErr: find, feedId: 2},
 			exp{errStr: "find:foobar", resultList: []*ItemDBEntry{}, callStack: []stackType{open, where, order, find}}},
 
 		// success results
@@ -465,7 +463,7 @@ func TestPodDB_loadFeedItems(t *testing.T) {
 			resetCallStack()
 			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
 			gmock.openErr = tt.p.openErr
-			gmock.mockdb.termErr = tt.p.termErr
+			gmock.mockdb.termErr = []stackType{tt.p.termErr}
 
 			var direction = podutils.Tern(tt.p.asc == true, cASC, cDESC)
 
@@ -510,8 +508,7 @@ func TestPodDB_loadItemXml(t *testing.T) {
 
 	if err := gmock.mockdb.DB.AutoMigrate(&ItemDBEntry{}, &ItemXmlDBEntry{}); err != nil {
 		t.Fatalf("error in automigrate: %v", err)
-	} else if res := gmock.mockdb.DB.Create(
-		[]*ItemDBEntry{&item1, &item2}); res.Error != nil {
+	} else if res := gmock.mockdb.DB.Create([]*ItemDBEntry{&item1, &item2}); res.Error != nil {
 		t.Fatalf("error in insert: %v", res.Error)
 	} else {
 		fmt.Printf("inserted %v rows\n", res.RowsAffected)
@@ -520,8 +517,8 @@ func TestPodDB_loadItemXml(t *testing.T) {
 	type args struct {
 		emptyPath bool
 		openErr   bool
-		termErr   bool
-		itemId    uint
+		termErr   stackType
+		xmlId     uint
 	}
 	type exp struct {
 		xmlEntry  *ItemXmlDBEntry
@@ -535,16 +532,16 @@ func TestPodDB_loadItemXml(t *testing.T) {
 	}{
 		// error results
 		{"empty path", args{emptyPath: true}, exp{errStr: "poddb is not initialized"}},
-		{"feed id zero", args{}, exp{errStr: "feed id cannot be zero"}},
-		{"open error", args{openErr: true, itemId: item1.ID},
+		{"feed id zero", args{}, exp{errStr: "xml id cannot be zero"}},
+		{"open error", args{openErr: true, xmlId: item1.XmlId},
 			exp{errStr: "error opening db", callStack: []stackType{open}}},
-		{"first error", args{termErr: true, itemId: item1.ID},
+		{"first error", args{termErr: first, xmlId: item1.XmlId},
 			exp{errStr: "first:foobar", callStack: stdCallStack}},
-		{"not found", args{itemId: 42}, exp{errStr: "record not found", callStack: stdCallStack}},
+		{"not found", args{xmlId: 42}, exp{errStr: "record not found", callStack: stdCallStack}},
 
 		// success
-		{"item1", args{itemId: item1.ID}, exp{xmlEntry: &item1.XmlData, callStack: stdCallStack}},
-		{"item2", args{itemId: item2.ID}, exp{xmlEntry: &item2.XmlData, callStack: stdCallStack}},
+		{"item1", args{xmlId: item1.XmlId}, exp{xmlEntry: item1.XmlData, callStack: stdCallStack}},
+		{"item2", args{xmlId: item2.XmlId}, exp{xmlEntry: item2.XmlData, callStack: stdCallStack}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -552,9 +549,9 @@ func TestPodDB_loadItemXml(t *testing.T) {
 			resetCallStack()
 			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
 			gmock.openErr = tt.p.openErr
-			gmock.mockdb.termErr = tt.p.termErr
+			gmock.mockdb.termErr = []stackType{tt.p.termErr}
 
-			res, err := poddb.loadItemXml(tt.p.itemId)
+			res, err := poddb.loadItemXml(tt.p.xmlId)
 
 			testutils.AssertErrContains(t, tt.e.errStr, err)
 			testutils.AssertEquals(t, tt.e.xmlEntry, res)
@@ -588,11 +585,19 @@ func TestPodDB_saveFeed(t *testing.T) {
 		fmt.Printf("inserted %v rows\n", res.RowsAffected)
 	}
 
-	// make modifications
+	var cloneXml = func(xml *FeedXmlDBEntry) *FeedXmlDBEntry {
+		var FeedXmlDBEntry = *xml
+		return &FeedXmlDBEntry
+	}
+
+	// make modifications.. make sure xml data has new references
 	mf1 = of1
+	mf1.XmlFeedData = cloneXml(of1.XmlFeedData)
 	mf1.XmlFeedData.Description = testutils.RandStringBytes(8)
 	mf1ItemList = []*ItemDBEntry{&ni3}
+
 	mf2 = of2
+	mf2.XmlFeedData = cloneXml(of2.XmlFeedData)
 	mf2.XmlFeedData.Link = testutils.RandStringBytes(8)
 	mf2ItemList = []*ItemDBEntry{&ni4}
 
@@ -602,7 +607,7 @@ func TestPodDB_saveFeed(t *testing.T) {
 		modFeed     FeedDBEntry
 		modItemList []*ItemDBEntry
 		openErr     bool
-		termErr     bool
+		termErr     stackType
 	}
 	type exp struct {
 		expFeed     FeedDBEntry
@@ -625,7 +630,7 @@ func TestPodDB_saveFeed(t *testing.T) {
 			exp{errStr: "hash cannot be empty"}},
 		{"open error", args{openErr: true, modFeed: mf1},
 			exp{errStr: "error opening db", callStack: []stackType{open}}},
-		{"save error", args{termErr: true, modFeed: mf1},
+		{"save error", args{termErr: save, modFeed: mf1},
 			exp{errStr: "save:foobar", callStack: []stackType{open, session, save}}},
 
 		// success tests
@@ -639,7 +644,7 @@ func TestPodDB_saveFeed(t *testing.T) {
 			resetCallStack()
 			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
 			gmock.openErr = tt.p.openErr
-			gmock.mockdb.termErr = tt.p.termErr
+			gmock.mockdb.termErr = []stackType{tt.p.termErr}
 
 			tt.p.modFeed.ItemList = tt.p.modItemList
 
@@ -701,7 +706,7 @@ func TestPodDB_saveItems(t *testing.T) {
 	type args struct {
 		emptyPath  bool
 		openErr    bool
-		termErr    bool
+		termErr    stackType
 		insertList []*ItemDBEntry
 	}
 	type exp struct {
@@ -720,7 +725,7 @@ func TestPodDB_saveItems(t *testing.T) {
 			exp{errStr: "poddb is not initialized"}},
 		{"open error", args{openErr: true, insertList: defaultInsert},
 			exp{errStr: "error opening db", callStack: []stackType{open}}},
-		{"save error", args{termErr: true, insertList: defaultInsert},
+		{"save error", args{termErr: save, insertList: defaultInsert},
 			exp{errStr: "save:foobar", callStack: []stackType{open, session, save}}},
 
 		// list errors
@@ -742,7 +747,7 @@ func TestPodDB_saveItems(t *testing.T) {
 			resetCallStack()
 			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
 			gmock.openErr = tt.p.openErr
-			gmock.mockdb.termErr = tt.p.termErr
+			gmock.mockdb.termErr = []stackType{tt.p.termErr}
 
 			err := poddb.saveItems(tt.p.insertList)
 
@@ -787,7 +792,7 @@ func TestPodDB_deleteItems(t *testing.T) {
 	type args struct {
 		emptyPath   bool
 		openErr     bool
-		termErr     bool
+		termErr     stackType
 		missingId   bool
 		notInserted bool
 		delIndex    []int
@@ -807,7 +812,7 @@ func TestPodDB_deleteItems(t *testing.T) {
 			exp{errStr: "poddb is not initialized"}},
 		{"open error", args{openErr: true, delIndex: []int{1}},
 			exp{errStr: "error opening db", callStack: []stackType{open}}},
-		{"delete error", args{termErr: true, delIndex: []int{1}},
+		{"delete error", args{termErr: delete, delIndex: []int{1}},
 			exp{errStr: "delete:foobar", callStack: []stackType{open, delete}}},
 
 		// list errors
@@ -874,7 +879,7 @@ func TestPodDB_deleteItems(t *testing.T) {
 
 			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
 			gmock.openErr = tt.p.openErr
-			gmock.mockdb.termErr = tt.p.termErr
+			gmock.mockdb.termErr = []stackType{tt.p.termErr}
 
 			err := poddb.deleteItems(deletelist)
 
@@ -905,7 +910,7 @@ func TestPodDB_deleteItems(t *testing.T) {
 			testutils.AssertErr(t, false, res.Error)
 			// because fucking preload doesn't work with unscoped
 			for _, item := range dbDelItems {
-				gmock.mockdb.DB.Unscoped().Where("ItemId = ? AND DeletedAt not NULL", item.ID).First(&item.XmlData)
+				gmock.mockdb.DB.Unscoped().Where("ID = ? AND DeletedAt not NULL", item.XmlId).First(&item.XmlData)
 			}
 			testutils.AssertDiffFunc(t, resDelList, dbDelItems, itemCompare)
 
@@ -919,6 +924,7 @@ func generateFeed(withXml bool) FeedDBEntry {
 	var f FeedDBEntry
 	f.Hash = testutils.RandStringBytes(8)
 	if withXml {
+		f.XmlFeedData = &FeedXmlDBEntry{}
 		f.XmlFeedData.Title = testutils.RandStringBytes(8)
 	}
 	return f
@@ -937,6 +943,7 @@ func generateItem(feedId uint, withXml bool) ItemDBEntry {
 	i.Guid = testutils.RandStringBytes(8)
 	i.Downloaded = podutils.Tern(r.Intn(2) == 1, true, false)
 	if withXml {
+		i.XmlData = &ItemXmlDBEntry{}
 		i.XmlData.Title = testutils.RandStringBytes(8)
 		i.XmlData.Enclosure.Url = testutils.RandStringBytes(8)
 		i.XmlData.Guid = i.Guid
@@ -949,7 +956,8 @@ func feedCompare(tb testing.TB, one, two FeedDBEntry) {
 	tb.Helper()
 	var ret = make([]string, 0)
 	ret = append(ret, deep.Equal(one.Hash, two.Hash)...)
-	ret = append(ret, deep.Equal(one.XmlFeedData.FeedId, two.XmlFeedData.FeedId)...)
+	ret = append(ret, deep.Equal(one.XmlId, two.XmlId)...)
+	ret = append(ret, deep.Equal(one.XmlFeedData.ID, two.XmlFeedData.ID)...)
 	ret = append(ret, deep.Equal(one.XmlFeedData.XChannelData, two.XmlFeedData.XChannelData)...)
 
 	testutils.Assert(tb, len(ret) == 0, fmt.Sprintf("feed difference: %v", ret))
@@ -966,7 +974,7 @@ func itemCompare(l, r *ItemDBEntry) bool {
 		if len(diff) > 0 {
 			return false
 		}
-		diff = deep.Equal(l.XmlData.ItemId, r.XmlData.ItemId)
+		diff = deep.Equal(l.XmlId, r.XmlId)
 		if len(diff) > 0 {
 			return false
 		}

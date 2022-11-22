@@ -29,6 +29,8 @@ type PodDB struct {
 	config gorm.Config
 }
 
+const currentModel = 1
+
 var defaultConfig = gorm.Config{
 	NamingStrategy: schema.NamingStrategy{
 		NoLowerCase: true,
@@ -45,14 +47,20 @@ func NewDB(path string) (*PodDB, error) {
 	if db, err := gImpl.Open(sqlite.Open(poddb.path), &poddb.config); err != nil {
 		return nil, fmt.Errorf("error opening db: %w", err)
 
-		// todo: pull the db version from the db; if changes, do migration
-	} else if err = db.AutoMigrate(
-		&FeedDBEntry{},
-		&FeedXmlDBEntry{},
-		&ItemDBEntry{},
-		&ItemXmlDBEntry{},
-	); err != nil {
-		return nil, err
+	} else {
+		var result = struct{ ID int }{}
+
+		if res := db.Raw("SELECT ID from poddb_model").Scan(&result); res.Error != nil {
+			// handle new database file; this will happen on that error
+			log.Debug("finding model id failed; attempting to create new model")
+			var sqlStr = "CREATE TABLE poddb_model (ID integer); INSERT INTO poddb_model (ID) VALUES (?)"
+			if res := db.Exec(sqlStr, currentModel); res.Error != nil {
+				return nil, fmt.Errorf("error finding db version: %w", res.Error)
+			}
+		} else if result.ID != currentModel {
+			// future: custom error for calling migration methods
+			return nil, fmt.Errorf("model doesn't match current; migrate needs to happen")
+		}
 	}
 
 	return &poddb, nil
@@ -117,31 +125,26 @@ func (pdb PodDB) loadDBFeed(feedEntry *FeedDBEntry, loadXml bool) error {
 }
 
 // --------------------------------------------------------------------------
-func (pdb PodDB) loadDBFeedXml(feedXml *FeedXmlDBEntry) error {
+func (pdb PodDB) loadDBFeedXml(xmlId uint) (*FeedXmlDBEntry, error) {
 
 	if pdb.path == "" {
-		return errors.New("poddb is not initialized; call NewDB() first")
-	} else if feedXml == nil {
-		return errors.New("feedxml cannot be nil")
-	} else if feedXml.ID == 0 && feedXml.FeedId == 0 {
-		return errors.New("xmlID or feedID cannot be zero")
+		return nil, errors.New("poddb is not initialized; call NewDB() first")
+	} else if xmlId == 0 {
+		return nil, errors.New("xml ID cannot be zero")
 	}
 
 	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
 	if err != nil {
-		return fmt.Errorf("error opening db: %w", err)
+		return nil, fmt.Errorf("error opening db: %w", err)
 	}
-	// only feed id
-	var res = db.Where(&FeedXmlDBEntry{
-		PodDBModel: PodDBModel{ID: feedXml.ID},
-		FeedId:     feedXml.FeedId}).
-		First(feedXml)
-	if res.Error != nil {
-		return res.Error
+
+	var xmlEntry FeedXmlDBEntry
+	if res := db.Where(&FeedXmlDBEntry{PodDBModel: PodDBModel{ID: xmlId}}).First(&xmlEntry); res.Error != nil {
+		return nil, res.Error
 	}
 	// log.Debug("rows found: ", res.RowsAffected)
 
-	return nil
+	return &xmlEntry, nil
 }
 
 // --------------------------------------------------------------------------
@@ -181,23 +184,23 @@ func (pdb PodDB) loadFeedItems(feedId uint, numItems int, includeXml bool, dtn d
 }
 
 // --------------------------------------------------------------------------
-func (pdb PodDB) loadItemXml(itemId uint) (*ItemXmlDBEntry, error) {
+func (pdb PodDB) loadItemXml(xmlId uint) (*ItemXmlDBEntry, error) {
 	if pdb.path == "" {
 		return nil, errors.New("poddb is not initialized; call NewDB() first")
-	} else if itemId == 0 {
-		return nil, errors.New("feed id cannot be zero")
+	} else if xmlId == 0 {
+		return nil, errors.New("xml id cannot be zero")
 	}
+
 	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
 	if err != nil {
 		return nil, fmt.Errorf("error opening db: %w", err)
 	}
-	var xmlEntry ItemXmlDBEntry
 
-	var res = db.Where(&ItemXmlDBEntry{ItemId: itemId}).First(&xmlEntry)
-	if res.Error != nil {
+	var xmlEntry ItemXmlDBEntry
+	if res := db.Where(&ItemXmlDBEntry{PodDBModel: PodDBModel{ID: xmlId}}).First(&xmlEntry); res.Error != nil {
 		return nil, res.Error
 	}
-	log.Tracef("xml found, id: %v", xmlEntry.ID)
+	//log.Tracef("xml found, id: %v", xmlEntry.ID)
 	return &xmlEntry, nil
 }
 
@@ -262,7 +265,7 @@ func (pdb PodDB) saveItems(itemlist []*ItemDBEntry) error {
 	return res.Error
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (pdb PodDB) deleteFeed(feed *FeedDBEntry) error {
 	if pdb.path == "" {
 		return errors.New("poddb is not initialized; call NewDB() first")
@@ -278,10 +281,9 @@ func (pdb PodDB) deleteFeed(feed *FeedDBEntry) error {
 	// 	return fmt.Errorf("error opening db: %w", err)
 	// }
 
-
-	// // delete feed & xml 
+	// // delete feed & xml
 	// // get all items, delete item & xml
-	
+
 	// // just get the id and various timestamps for these items; don't need everything from the item/xml
 	// type DelType struct {
 	// 	PodDBModel
@@ -292,15 +294,15 @@ func (pdb PodDB) deleteFeed(feed *FeedDBEntry) error {
 	// 	itemList = make([]DelType, 0)
 	// 	//itemIdChunk
 	// )
-	
+
 	// // get all the items, for deleting xml
 	// if res := db.Debug().Where(&ItemDBEntry{FeedId: feed.ID}).Find(&itemList); res != nil {
 	// 	return fmt.Errorf("error finding items: %w", res.Error)
 	// } else {
 	// 	log.Debugf("finding items, rows returned: %v", res.RowsAffected)
 	// }
-	
-	// // todo: do we need to chunk here?? 
+
+	// // todo: do we need to chunk here??
 	// var itemIdList = make([]uint, 0, len(itemList))
 	// for _, item := range itemList {
 	// 	itemIdList = append(itemIdList, item.ID)
@@ -312,11 +314,6 @@ func (pdb PodDB) deleteFeed(feed *FeedDBEntry) error {
 	// } else {
 	// 	log.Debugf()
 	// }
-
-	
-
-	
-
 
 	return nil
 
@@ -357,7 +354,7 @@ func (pdb PodDB) deleteItems(list []*ItemDBEntry) error {
 		} else {
 			// log.Tracef("deleted record; row affedcted: %v", res.RowsAffected)
 			// delete all associated xml data, whether its loaded or not
-			res = db. /*Debug().*/ Where(&ItemXmlDBEntry{ItemId: item.ID}).Delete(&ItemXmlDBEntry{})
+			res = db. /*Debug().*/ Where(&ItemXmlDBEntry{PodDBModel: PodDBModel{ID: item.XmlId}}).Delete(&ItemXmlDBEntry{})
 			if res.Error != nil {
 				return res.Error
 			} else if res.RowsAffected == 0 {

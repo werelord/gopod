@@ -3,11 +3,11 @@ package pod
 import (
 	"errors"
 	"fmt"
-	"gopod/testutils"
 	"testing"
 
 	"github.com/glebarez/sqlite"
 	"github.com/go-test/deep"
+	"golang.org/x/exp/slices"
 	"gorm.io/gorm"
 )
 
@@ -24,10 +24,10 @@ type mockGorm struct {
 type mockGormDB struct {
 	*gorm.DB
 
-	autoMigrateErr   bool
-	autoMigrateTypes []string
+	// autoMigrateErr   bool
+	// autoMigrateTypes []string
 
-	termErr bool
+	termErr []stackType
 }
 
 func (mg *mockGorm) Open(d gorm.Dialector, opts ...gorm.Option) (gormDBInterface, error) {
@@ -57,22 +57,22 @@ func (mg *mockGorm) Open(d gorm.Dialector, opts ...gorm.Option) (gormDBInterface
 }
 
 func (mgdb *mockGormDB) AutoMigrate(dst ...any) error {
-	fmt.Print("MockGormDB.AutoMigrate()\n")
+	//fmt.Print("MockGormDB.AutoMigrate()\n")
 	appendCallstack(automigrate)
 
-	mgdb.autoMigrateTypes = testutils.ListTypes(dst...)
+	// mgdb.autoMigrateTypes = testutils.ListTypes(dst...)
 
-	if mgdb.autoMigrateErr {
-		return errors.New("automigrate:foobar")
-	} else {
-		return nil
-	}
+	// if mgdb.autoMigrateErr {
+	return errors.New("automigrate shouldn't be called")
+	// } else {
+	// return nil
+	// }
 }
 
 // terminal method calls
 func (mgdb *mockGormDB) FirstOrCreate(dest any, conds ...any) *gorm.DB {
 	appendCallstack(firstorcreate)
-	if mgdb.termErr {
+	if slices.Contains(mgdb.termErr, firstorcreate) {
 		return &gorm.DB{Error: errors.New("firstorcreate:foobar")}
 	} else {
 		return mgdb.DB.FirstOrCreate(dest, conds...)
@@ -80,7 +80,7 @@ func (mgdb *mockGormDB) FirstOrCreate(dest any, conds ...any) *gorm.DB {
 }
 func (mgdb *mockGormDB) First(dest any, conds ...any) *gorm.DB {
 	appendCallstack(first)
-	if mgdb.termErr {
+	if slices.Contains(mgdb.termErr, first) {
 		return &gorm.DB{Error: errors.New("first:foobar")}
 	} else {
 		return mgdb.DB.First(dest, conds...)
@@ -88,7 +88,7 @@ func (mgdb *mockGormDB) First(dest any, conds ...any) *gorm.DB {
 }
 func (mgdb *mockGormDB) Find(dest any, conds ...any) *gorm.DB {
 	appendCallstack(find)
-	if mgdb.termErr {
+	if slices.Contains(mgdb.termErr, find) {
 		return &gorm.DB{Error: errors.New("find:foobar")}
 	} else {
 		return mgdb.DB.Find(dest, conds...)
@@ -96,7 +96,7 @@ func (mgdb *mockGormDB) Find(dest any, conds ...any) *gorm.DB {
 }
 func (mgdb *mockGormDB) Save(value any) *gorm.DB {
 	appendCallstack(save)
-	if mgdb.termErr {
+	if slices.Contains(mgdb.termErr, save) {
 		return &gorm.DB{Error: errors.New("save:foobar")}
 	} else {
 		return mgdb.DB.Save(value)
@@ -104,7 +104,7 @@ func (mgdb *mockGormDB) Save(value any) *gorm.DB {
 }
 func (mgdb *mockGormDB) Delete(value any, conds ...any) *gorm.DB {
 	appendCallstack(delete)
-	if mgdb.termErr {
+	if slices.Contains(mgdb.termErr, delete) {
 		return &gorm.DB{Error: errors.New("delete:foobar")}
 	} else {
 		return mgdb.DB.Delete(value, conds...)
@@ -112,14 +112,30 @@ func (mgdb *mockGormDB) Delete(value any, conds ...any) *gorm.DB {
 }
 func (mgdb *mockGormDB) Count(c *int64) *gorm.DB {
 	appendCallstack(count)
-	if mgdb.termErr {
+	if slices.Contains(mgdb.termErr, count) {
 		return &gorm.DB{Error: errors.New("count:foobar")}
 	} else {
 		return mgdb.DB.Count(c)
 	}
 }
+func (mgdb *mockGormDB) Scan(dest any) *gorm.DB {
+	appendCallstack(scan)
+	if slices.Contains(mgdb.termErr, scan) {
+		return &gorm.DB{Error: errors.New("scan:foobar")}
+	} else {
+		return mgdb.DB.Scan(dest)
+	}
+}
+func (mgdb *mockGormDB) Exec(sql string, values ...any) *gorm.DB {
+	appendCallstack(exec)
+	if slices.Contains(mgdb.termErr, exec) {
+		return &gorm.DB{Error: errors.New("exec:foobar")}
+	} else {
+		return mgdb.DB.Exec(sql, values...)
+	}
+}
 
-// continuaetion method calls
+// continuation method calls
 func (mgdb *mockGormDB) Where(query any, args ...any) gormDBInterface {
 	appendCallstack(where)
 	var newdb = mockGormDB{
@@ -172,7 +188,7 @@ func (mgdb *mockGormDB) Unscoped() gormDBInterface {
 	appendCallstack(unscoped)
 	var newdb = mockGormDB{
 		termErr: mgdb.termErr,
-		DB: mgdb.DB.Unscoped(),
+		DB:      mgdb.DB.Unscoped(),
 	}
 	return &newdb
 }
@@ -180,7 +196,15 @@ func (mgdb *mockGormDB) Model(value any) gormDBInterface {
 	appendCallstack(model)
 	var newdb = mockGormDB{
 		termErr: mgdb.termErr,
-		DB: mgdb.DB.Model(value),
+		DB:      mgdb.DB.Model(value),
+	}
+	return &newdb
+}
+func (mgdb *mockGormDB) Raw(sql string, values ...any) gormDBInterface {
+	appendCallstack(raw)
+	var newdb = mockGormDB{
+		termErr: mgdb.termErr,
+		DB:      mgdb.DB.Raw(sql, values...),
 	}
 	return &newdb
 }
@@ -200,6 +224,7 @@ const (
 	unscoped    stackType = "db.unscoped"
 	count       stackType = "db.count"
 	model       stackType = "db.model"
+	raw         stackType = "db.raw"
 
 	// terminating calls
 	firstorcreate stackType = "db.firstorcreate"
@@ -207,6 +232,8 @@ const (
 	find          stackType = "db.find"
 	save          stackType = "db.save"
 	delete        stackType = "db.delete"
+	scan          stackType = "db.scan"
+	exec          stackType = "db.exec"
 )
 
 var callStack []stackType

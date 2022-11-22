@@ -32,6 +32,7 @@ type gormDBInterface interface {
 	Debug() gormDBInterface
 	Unscoped() gormDBInterface
 	Model(value any) gormDBInterface
+	Raw(sql string, values ...any) gormDBInterface
 
 	// finisher methods, return gorm.DB directly (no more chaining)
 	AutoMigrate(dst ...any) error
@@ -41,6 +42,8 @@ type gormDBInterface interface {
 	Save(value any) *gorm.DB
 	Delete(value any, conds ...any) *gorm.DB
 	Count(*int64) *gorm.DB
+	Scan(dest any) *gorm.DB
+	Exec(sql string, values ...any) *gorm.DB
 }
 type gormDBImpl struct {
 	*gorm.DB
@@ -73,6 +76,9 @@ func (gdbi *gormDBImpl) Unscoped() gormDBInterface {
 func (gdbi *gormDBImpl) Model(value any) gormDBInterface {
 	return &gormDBImpl{gdbi.DB.Model(value)}
 }
+func (gdbi *gormDBImpl) Raw(sql string, values ...any) gormDBInterface {
+	return &gormDBImpl{gdbi.DB.Raw(sql, values...)}
+}
 
 func (gdbi *gormDBImpl) FirstOrCreate(dest any, conds ...any) *gorm.DB {
 	return gdbi.DB.FirstOrCreate(dest, conds...)
@@ -91,4 +97,10 @@ func (gdbi *gormDBImpl) Delete(value any, conds ...any) *gorm.DB {
 }
 func (gdbi *gormDBImpl) Count(count *int64) *gorm.DB {
 	return gdbi.DB.Count(count)
+}
+func (gdbi *gormDBImpl) Scan(dest any) *gorm.DB {
+	return gdbi.DB.Scan(dest)
+}
+func (gdbi *gormDBImpl) Exec(sql string, values ...any) *gorm.DB {
+	return gdbi.DB.Exec(sql, values...)
 }

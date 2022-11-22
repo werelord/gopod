@@ -38,7 +38,8 @@ type ItemDBEntry struct {
 	FeedId uint
 
 	ItemData `gorm:"embedded"`
-	XmlData  ItemXmlDBEntry `gorm:"foreignKey:ItemId"`
+	XmlId    uint
+	XmlData  *ItemXmlDBEntry `gorm:"foreignKey:XmlId"`
 }
 
 type ItemData struct {
@@ -55,7 +56,6 @@ type ItemData struct {
 
 type ItemXmlDBEntry struct {
 	PodDBModel
-	ItemId             uint
 	podutils.XItemData `gorm:"embedded"`
 }
 
@@ -172,6 +172,8 @@ func (i *Item) updateFromEntry(
 		return errors.New("xml data cannot be nil")
 	} else if xml.Guid != i.Guid {
 		return errors.New("guid from xml doesn't match items; this should not happen")
+	} else if i.XmlData == nil {
+		return errors.New("xml is nil; make sure previous xml is loaded before updating")
 	} else if i.XmlData.ID == 0 {
 		return errors.New("xml ID is 0; make sure previous xml is loaded before updating")
 	} else if i.parentShortname != feedcfg.Shortname {
@@ -230,10 +232,10 @@ func (i *Item) loadItemXml(db *PodDB) error {
 		return errors.New("db is nil")
 	}
 
-	if xmlEntry, err := db.loadItemXml(i.ID); err != nil {
+	if xmlEntry, err := db.loadItemXml(i.XmlId); err != nil {
 		return err
 	} else {
-		i.XmlData = *xmlEntry
+		i.XmlData = xmlEntry
 	}
 
 	return nil
@@ -268,7 +270,7 @@ func parseUrl(urlstr, urlparse string) (string, error) {
 			}
 		}
 		if found == false {
-			log.WithFields(log.Fields{"url": u.String(),"UrlParse": urlparse}).Warn("failed parsing url; split failed")
+			log.WithFields(log.Fields{"url": u.String(), "UrlParse": urlparse}).Warn("failed parsing url; split failed")
 		}
 
 	}
