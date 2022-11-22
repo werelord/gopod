@@ -92,8 +92,7 @@ func main() {
 	}
 
 	//------------------------------------- DEBUG -------------------------------------
-	//	const RunTest = true
-	if config.Debug && RunTest(*config, feedMap) {
+	if config.Debug && RunTest(*config, feedMap, poddb) {
 		// runtest was run, exit
 		return
 	}
@@ -138,10 +137,10 @@ func main() {
 }
 
 // --------------------------------------------------------------------------
-func RunTest(config podconfig.Config, feedMap map[string]*pod.Feed) (exit bool) {
+func RunTest(config podconfig.Config, feedMap map[string]*pod.Feed, db *pod.PodDB) (exit bool) {
 	if config.Debug && false {
 
-		doMigrate(feedMap)
+		//doMigrate(feedMap, db)
 		return true
 	}
 	return false
