@@ -33,3 +33,23 @@ func Tern[T any](cond bool, t T, f T) T {
 		return f
 	}
 }
+
+// split slice into chunks of set size
+func Chunk[T any](slice []T, chunksize int) [][]T {
+	var chunks [][]T
+
+	for {
+		if len(slice) == 0 {
+			break
+		}
+
+		// check to make sure we don't split past current length
+		if len(slice) < chunksize {
+			chunksize = len(slice)
+		}
+		chunks = append(chunks, slice[0:chunksize])
+		slice = slice[chunksize:]
+	}
+
+	return chunks
+}
