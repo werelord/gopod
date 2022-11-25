@@ -3,6 +3,7 @@ package pod
 import (
 	"errors"
 	"fmt"
+	"gopod/podutils"
 
 	//"gorm.io/driver/sqlite"
 	"github.com/glebarez/sqlite"
@@ -104,8 +105,6 @@ func (pdb PodDB) loadDBFeed(feedEntry *FeedDBEntry, loadXml bool) error {
 	if err != nil {
 		return fmt.Errorf("error opening db: %w", err)
 	}
-
-	// check for feed deleted
 
 	// right now, only hash or ID
 	var tx = db.Where(&FeedDBEntry{PodDBModel: PodDBModel{ID: feedEntry.ID}, Hash: feedEntry.Hash})
@@ -271,52 +270,52 @@ func (pdb PodDB) deleteFeed(feed *FeedDBEntry) error {
 		return errors.New("poddb is not initialized; call NewDB() first")
 	} else if feed == nil {
 		return errors.New("feed cannot be nil")
-	} else if feed.ID == 0 && feed.Hash == "" {
+	} else if feed.ID == 0 {
 		// this hopefully will never happen; fail if it does
-		return errors.New("hash or ID has not been set")
+		return errors.New("feed id cannot be zero")
 	}
 
-	// db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
-	// if err != nil {
-	// 	return fmt.Errorf("error opening db: %w", err)
-	// }
+	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
+	if err != nil {
+		return fmt.Errorf("error opening db: %w", err)
+	}
 
-	// // delete feed & xml
-	// // get all items, delete item & xml
+	// get all the items, for deletion
+	var itemlist = make([]*ItemDBEntry, 0)
+	if res := db. /*Debug().*/ Where(&ItemDBEntry{FeedId: feed.ID}).Order("ID").Find(&itemlist); res.Error != nil {
+		return fmt.Errorf("error finding items: %w", res.Error)
+	} else if err := pdb.deleteItems(itemlist); err != nil {
+		return fmt.Errorf("error deleting items: %w", err)
+	}
 
-	// // just get the id and various timestamps for these items; don't need everything from the item/xml
-	// type DelType struct {
-	// 	PodDBModel
-	// }
+	// delete feed xml
+	if feed.XmlId == 0 {
+		log.Warnf("feed xml is zero; xml entry might not exist")
+	} else {
+		var xmlentry = podutils.Tern(feed.XmlFeedData == nil, &FeedXmlDBEntry{}, feed.XmlFeedData)
+		if res := db. /*Debug().*/ Delete(xmlentry, feed.XmlId); res.Error != nil {
+			err := fmt.Errorf("failed deleting feed xml: %w", res.Error)
+			log.Error(err)
+			return err
+		} else if res.RowsAffected != 1 {
+			log.Warnf("xml delete; expected 1 row, got %v", res.RowsAffected)
+		} else {
+			log.Debugf("feed xml delete, rows: %v", res.RowsAffected)
+		}
+	}
 
-	// var (
-	// 	//feedXml DelType
-	// 	itemList = make([]DelType, 0)
-	// 	//itemIdChunk
-	// )
-
-	// // get all the items, for deleting xml
-	// if res := db.Debug().Where(&ItemDBEntry{FeedId: feed.ID}).Find(&itemList); res != nil {
-	// 	return fmt.Errorf("error finding items: %w", res.Error)
-	// } else {
-	// 	log.Debugf("finding items, rows returned: %v", res.RowsAffected)
-	// }
-
-	// // todo: do we need to chunk here??
-	// var itemIdList = make([]uint, 0, len(itemList))
-	// for _, item := range itemList {
-	// 	itemIdList = append(itemIdList, item.ID)
-	// }
-
-	// // do a delete on item xml
-	// if res := db.Debug().Delete(&ItemXmlDBEntry{}, itemIdList); res.Error != nil {
-	// 	return fmt.Errorf("error deleting item xml: %w", res.Error)
-	// } else {
-	// 	log.Debugf()
-	// }
+	// delete feed
+	if res := db. /*Debug().*/ Delete(feed, feed.ID); res.Error != nil {
+		err := fmt.Errorf("failed deleting feed: %w", res.Error)
+		log.Error(err)
+		return err
+	} else if res.RowsAffected != 1 {
+		log.Warnf("feed delete; expected 1 row, got %v", res.RowsAffected)
+	} else {
+		log.Debugf("feed delete, rows: %v", res.RowsAffected)
+	}
 
 	return nil
-
 }
 
 // --------------------------------------------------------------------------
@@ -326,13 +325,23 @@ func (pdb PodDB) deleteItems(list []*ItemDBEntry) error {
 	} else if len(list) == 0 {
 		log.Warn("item list for deletion is empty; doing nothing")
 		return nil
-	} else {
-		for _, item := range list {
-			if item.ID == 0 {
-				return fmt.Errorf("item missing ID; unable to delete: %v", item)
-				// } else if item.XmlData.ID == 0 {
-				// 	log.Warnf("attempting to delete item id '%v', but xml ID is 0; will leave orphaned data", item.ID)
-				// rather than orphaning xmldata, will do a delete where all match item id
+	}
+
+	// collect item ids, xml ids
+	var (
+		itemIdList = make([]uint, 0, len(list))
+		xmlIdList  = make([]uint, 0, len(list))
+	)
+
+	for _, item := range list {
+		if item.ID == 0 {
+			return fmt.Errorf("item missing ID; unable to delete: %v", item)
+		} else {
+			itemIdList = append(itemIdList, item.ID)
+			if item.XmlId == 0 {
+				log.Warnf("xml id is missing; unable to delete: %v", item)
+			} else {
+				xmlIdList = append(xmlIdList, item.XmlId)
 			}
 		}
 	}
@@ -342,29 +351,35 @@ func (pdb PodDB) deleteItems(list []*ItemDBEntry) error {
 		return fmt.Errorf("error opening db: %w", err)
 	}
 
-	// attempt with primary key
-	for _, item := range list {
-		var res = db. /*Debug().*/ Delete(item)
-		if res.Error != nil {
-			return res.Error
-		} else if res.RowsAffected == 0 {
-			// deleting non-existing item will have 0 rows affected, which could indicate an item that doesn't exist..
-			return fmt.Errorf("delete returned 0 rows affected; item id '%v' might not exist", item.ID)
-			// log.Warn("delete returned 0 rows affected; does item exist?")
+	// running delete on chuncks
+	for _, xmlchunk := range podutils.Chunk(xmlIdList, 100) {
+		if res := db. /*Debug().*/ Delete(&ItemXmlDBEntry{}, xmlchunk); res.Error != nil {
+			err := fmt.Errorf("failed deleting item xml: %w", res.Error)
+			log.Error(err)
+			return err
+		} else if res.RowsAffected != int64(len(xmlchunk)) {
+			log.Warnf("xml delete; expected %v rows, got %v", len(xmlchunk), res.RowsAffected)
 		} else {
-			// log.Tracef("deleted record; row affedcted: %v", res.RowsAffected)
-			// delete all associated xml data, whether its loaded or not
-			res = db. /*Debug().*/ Where(&ItemXmlDBEntry{PodDBModel: PodDBModel{ID: item.XmlId}}).Delete(&ItemXmlDBEntry{})
-			if res.Error != nil {
-				return res.Error
-			} else if res.RowsAffected == 0 {
-				log.Warnf("delete xml returned 0 rows affected; xml for item id '%v' might not exist", item.ID)
-				// } else {
-				// log.Tracef("deleted record; row affedcted: %v", res.RowsAffected)
-			}
-
+			log.Debugf("xml delete, rows: %v (expect %v)", res.RowsAffected, len(xmlchunk))
 		}
 	}
+
+	for _, idchunk := range podutils.Chunk(itemIdList, 100) {
+		if res := db. /*Debug().*/ Delete(&ItemDBEntry{}, idchunk); res.Error != nil {
+			err := fmt.Errorf("failed deleting item: %w", res.Error)
+			log.Error(err)
+			return err
+		} else if res.RowsAffected != int64(len(idchunk)) {
+			log.Warnf("item delete; expected %v rows, got %v", len(idchunk), res.RowsAffected)
+		} else {
+			log.Debugf("item delete, rows: %v (expect %v)", res.RowsAffected, len(idchunk))
+		}
+	}
+
+	// future: deleting off list of ids as done above does not modify passed in list's DeletedAt field
+	// for now, we're not going to use that outside of this function (tests will reflect that)
+	// but if that changes, will need to grab the DeletedAt value from the value passed in to Delete
+	// and propegate that to all items listed above
 
 	return nil
 }

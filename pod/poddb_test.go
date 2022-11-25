@@ -764,6 +764,187 @@ func TestPodDB_saveItems(t *testing.T) {
 	}
 }
 
+func TestPodDB_deleteFeed(t *testing.T) {
+
+	var defCallStack, noItemCallStack = []stackType{}, []stackType{}
+	// item finding
+	defCallStack = append(defCallStack, open, where, order, find)
+	noItemCallStack = append(noItemCallStack, open, where, order, find)
+
+	// item deletion (xml & item) (chunks will be 1)
+	defCallStack = append(defCallStack, open, delete, delete)
+
+	// feed xml & feed
+	defCallStack = append(defCallStack, delete, delete)
+	noItemCallStack = append(noItemCallStack, delete, delete)
+
+	rand.Seed(time.Now().UnixNano())
+
+	type args struct {
+		emptyPath bool
+		openErr   bool
+		nilfeed   bool
+		zeroId    bool
+		termErr   stackType
+
+		delIndex int
+		noItems  bool
+	}
+	type exp struct {
+		expDelIndex int
+		errStr      string
+		callStack   []stackType
+	}
+	tests := []struct {
+		name string
+		p    args
+		e    exp
+	}{
+		// error tests, no db changes
+		{"empty path", args{emptyPath: true},
+			exp{errStr: "poddb is not initialized", expDelIndex: -1}},
+		{"open error", args{openErr: true},
+			exp{errStr: "error opening db", expDelIndex: -1, callStack: []stackType{open}}},
+		{"delete error", args{termErr: delete},
+			exp{errStr: "delete:foobar", expDelIndex: -1, callStack: []stackType{open, where, order, find, open, delete}}},
+
+		// list errors
+		{"nil feed", args{nilfeed: true},
+			exp{errStr: "feed cannot be nil", expDelIndex: -1}},
+		{"zero id", args{zeroId: true},
+			exp{errStr: "feed id cannot be zero", expDelIndex: -1}},
+
+		// success tests
+		{"delete first", args{delIndex: 0},
+			exp{expDelIndex: 0, callStack: defCallStack}},
+		{"delete second", args{delIndex: 1, noItems: true},
+			exp{expDelIndex: 1, callStack: noItemCallStack}},
+		{"delete third", args{delIndex: 2},
+			exp{expDelIndex: 2, callStack: defCallStack}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			gmock, teardown := setupGormMock(t, nil, true)
+			defer teardown(t, gmock)
+			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
+			gmock.openErr = tt.p.openErr
+			gmock.mockdb.termErr = []stackType{tt.p.termErr}
+			resetCallStack()
+
+			var feedList = []*FeedDBEntry{ptr(generateFeed(true)), ptr(generateFeed(true)), ptr(generateFeed(true))}
+			for idx, feed := range feedList {
+				if tt.p.noItems == false || idx != tt.p.delIndex {
+					// generate items
+					var numItems = rand.Intn(5) + 1
+					feed.ItemList = make([]*ItemDBEntry, 0, numItems)
+					for i := 0; i < numItems; i++ {
+						feed.ItemList = append(feed.ItemList, ptr(generateItem(0, true)))
+					}
+				}
+			}
+
+			// insert shit, full assoc
+			if err := gmock.mockdb.DB.AutoMigrate(&FeedDBEntry{}, &FeedXmlDBEntry{},
+				&ItemDBEntry{}, &ItemXmlDBEntry{}); err != nil {
+				t.Fatalf("error in automigrate: %v", err)
+			} else if res := gmock.mockdb.DB. /*Debug().*/
+								Session(&gorm.Session{FullSaveAssociations: true}).
+								Create(feedList); res.Error != nil {
+				t.Fatalf("error in insert: %v", res.Error)
+			} else {
+				fmt.Printf("inserted %v rows\n", res.RowsAffected)
+			}
+
+			// figure out which feed we're deleting, with error handling
+			var deletefeed *FeedDBEntry
+			if tt.p.nilfeed {
+				deletefeed = nil
+			} else if tt.p.zeroId {
+				deletefeed = &FeedDBEntry{}
+			} else {
+				deletefeed = feedList[tt.p.delIndex]
+			}
+
+			// finally, delete
+			err := poddb.deleteFeed(deletefeed)
+
+			testutils.AssertErrContains(t, tt.e.errStr, err)
+			compareCallstack(t, tt.e.callStack)
+
+			// check items in memory.. xml and feed should have DeletedAt entries
+			for idx, feed := range feedList {
+				var isDeleted = idx == tt.e.expDelIndex
+
+				testutils.Assert(t, feed.DeletedAt.Time.IsZero() != isDeleted,
+					fmt.Sprintf("DeletedAt.IsZero should be %v, got %v", isDeleted,
+						feed.DeletedAt.Time.Format(podutils.TimeFormatStr)))
+			}
+
+			// check DB structure.. grab the ID of the expected deleted feed
+			var (
+				dbFeedList = make([]*FeedDBEntry, 0)
+				expDelID   uint
+				dbq        = gmock.mockdb.DB /*.Debug()*/
+			)
+			if tt.e.expDelIndex >= 0 {
+				expDelID = feedList[tt.e.expDelIndex].ID
+			} else {
+				expDelID = 0
+			}
+
+			if res := dbq.Unscoped().Order("ID").Find(&dbFeedList); res.Error != nil {
+				t.Fatalf("error in find: %v", res.Error)
+			}
+
+			for _, dbfeed := range dbFeedList {
+				// grab xml, items, items xml
+
+				var notDeleted = dbfeed.ID != expDelID
+				dbfeed.ItemList = make([]*ItemDBEntry, 0)
+
+				// check feed
+				testutils.Assert(t, dbfeed.DeletedAt.Time.IsZero() == notDeleted,
+					fmt.Sprintf("feed.DeletedAt.IsZero should be %v, got %v", notDeleted,
+						dbfeed.DeletedAt.Time.Format(podutils.TimeFormatStr)))
+
+				// check feed xml
+				var feedXml FeedXmlDBEntry
+				if res := dbq.Unscoped().First(&feedXml, dbfeed.XmlId); res.Error != nil {
+					t.Fatalf("error in finding xml: %v", res.Error)
+				} else {
+					testutils.Assert(t, feedXml.DeletedAt.Time.IsZero() == notDeleted,
+						fmt.Sprintf("xml.DeletedAt.IsZero should be %v, got %v", notDeleted,
+							feedXml.DeletedAt.Time.Format(podutils.TimeFormatStr)))
+				}
+
+				// items
+				var itemList = make([]*ItemDBEntry, 0)
+				if res := dbq.Unscoped().Where("FeedId = ?", dbfeed.ID).Order("ID").Find(&itemList); res.Error != nil {
+					t.Fatalf("error in finding items: %v", res.Error)
+				} else {
+					for _, item := range itemList {
+						testutils.Assert(t, item.DeletedAt.Time.IsZero() == notDeleted,
+							fmt.Sprintf("item.DeletedAt.IsZero should be %v, got %v", notDeleted,
+								item.DeletedAt.Time.Format(podutils.TimeFormatStr)))
+
+						// grab item xml
+						var itemXml ItemXmlDBEntry
+						if res := dbq.Unscoped().First(&itemXml, item.XmlId); res.Error != nil {
+							t.Fatalf("error in finding items: %v", res.Error)
+						} else {
+							testutils.Assert(t, itemXml.DeletedAt.Time.IsZero() == notDeleted,
+								fmt.Sprintf("item.DeletedAt.IsZero should be %v, got %v", notDeleted,
+									itemXml.DeletedAt.Time.Format(podutils.TimeFormatStr)))
+						}
+					}
+				}
+			}
+
+		})
+	}
+}
+
 func TestPodDB_deleteItems(t *testing.T) {
 
 	var (
@@ -771,18 +952,7 @@ func TestPodDB_deleteItems(t *testing.T) {
 		item3, item4 = generateItem(1, true), generateItem(1, true)
 
 		missingId    = item1
-		defCallStack = []stackType{open, delete, where, delete}
-
-		dupCallStack = func(num int) []stackType {
-			var ret = make([]stackType, 0, num*len(defCallStack))
-			// first, including open
-			ret = append(ret, defCallStack...)
-			// append extra calls based on list
-			for x := 1; x < num; x++ {
-				ret = append(ret, delete, where, delete)
-			}
-			return ret
-		}
+		defCallStack = []stackType{open, delete, delete}
 	)
 
 	missingId.ID = 0
@@ -818,16 +988,16 @@ func TestPodDB_deleteItems(t *testing.T) {
 		// list errors
 		{"missing id", args{missingId: true, delIndex: []int{1}}, exp{errStr: "item missing ID"}},
 		{"delete non-existant item", args{notInserted: true, delIndex: []int{}},
-			exp{errStr: "might not exist", callStack: []stackType{open, delete}}},
+			exp{errStr: "", callStack: []stackType{open, delete, delete}}}, // will only warn in logs
 
 		// success tests
 		{"delete empty list", args{delIndex: []int{}}, exp{expDelIndex: []int{}}},
 		{"delete one", args{delIndex: []int{2}},
 			exp{expDelIndex: []int{2}, callStack: defCallStack}},
 		{"delete two", args{delIndex: []int{1, 3}},
-			exp{expDelIndex: []int{1, 3}, callStack: dupCallStack(2)}},
+			exp{expDelIndex: []int{1, 3}, callStack: defCallStack}},
 		{"delete all", args{delIndex: []int{0, 1, 2, 3}},
-			exp{expDelIndex: []int{0, 1, 2, 3}, callStack: dupCallStack(4)}},
+			exp{expDelIndex: []int{0, 1, 2, 3}, callStack: defCallStack}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -872,6 +1042,7 @@ func TestPodDB_deleteItems(t *testing.T) {
 			} else if tt.p.notInserted {
 				var newitem = cp(item4)
 				newitem.ID = 42
+				newitem.XmlId = 42
 				deletelist = append(deletelist, newitem)
 			}
 
@@ -891,10 +1062,11 @@ func TestPodDB_deleteItems(t *testing.T) {
 				testutils.Assert(t, item.DeletedAt.Time.IsZero(),
 					fmt.Sprintf("exist item has non-zero deletedAt entry:\n\t%v\n\t%v", item, item.DeletedAt))
 			}
-			for _, item := range resDelList {
-				testutils.Assert(t, item.DeletedAt.Time.IsZero() == false,
-					fmt.Sprintf("deleted item has zero deletedAt entry:\n\t%v\n\t%v", item, item.DeletedAt))
-			}
+			// future: deletedAt is not propegated with deleting based on IDs (as currently handled)
+			// for _, item := range resDelList {
+			// testutils.Assert(t, item.DeletedAt.Time.IsZero() == false,
+			// 	fmt.Sprintf("deleted item has zero deletedAt entry:\n\t%v\n\t%v", item, item.DeletedAt))
+			// }
 
 			// check DB structure
 
@@ -985,4 +1157,8 @@ func itemCompare(l, r *ItemDBEntry) bool {
 	}
 
 	return true
+}
+
+func ptr[T any](v T) *T {
+	return &v
 }

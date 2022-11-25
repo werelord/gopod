@@ -49,6 +49,7 @@ type gormDBImpl struct {
 	*gorm.DB
 }
 
+
 //	func (gdbi *gormDBImpl) AutoMigrate(dst ...any) error {
 //		return gdbi.AutoMigrate(dst...)
 //	}
@@ -80,6 +81,7 @@ func (gdbi *gormDBImpl) Raw(sql string, values ...any) gormDBInterface {
 	return &gormDBImpl{gdbi.DB.Raw(sql, values...)}
 }
 
+// finisher methods
 func (gdbi *gormDBImpl) FirstOrCreate(dest any, conds ...any) *gorm.DB {
 	return gdbi.DB.FirstOrCreate(dest, conds...)
 }
