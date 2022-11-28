@@ -85,6 +85,7 @@ func createNewItemEntry(
 
 	item.parentShortname = feedcfg.Shortname
 	item.Guid = xml.Guid
+	item.XmlData = &ItemXmlDBEntry{}
 	item.XmlData.XItemData = *xml
 	item.PubTimeStamp = xml.Pubdate
 	item.EpNum = epNum
@@ -225,7 +226,7 @@ func (i *Item) updateFromEntry(
 
 // --------------------------------------------------------------------------
 func (i *Item) loadItemXml(db *PodDB) error {
-	if i.XmlData.ID > 0 {
+	if (i.XmlData != nil) && (i.XmlData.ID > 0) {
 		// already loaded
 		return nil
 	} else if db == nil {
@@ -303,6 +304,10 @@ func (i *Item) updateXmlData(hash string, data *podutils.XItemData) error {
 
 	if i.Hash != hash {
 		err := fmt.Errorf("hashes do not match; something is wrong; itemhash:'%v' newhash:'%v'", i.Hash, hash)
+		i.log.Error(err)
+		return err
+	} else if i.XmlData == nil {
+		err := fmt.Errorf("unable to update xml data; xml is nil")
 		i.log.Error(err)
 		return err
 	} else if i.XmlData.ID == 0 {

@@ -125,11 +125,9 @@ func (f *Feed) LoadDBFeed(includeXml bool) error {
 	f.Hash = f.generateHash()
 
 	// check for feed deleted before loading
-	if deleted, err := db.isFeedDeleted(f.Hash); err != nil {
-		f.log.Error("error in checking deleted: ", err)
-		return err
-	} else if deleted {
-		err := fmt.Errorf("feed is deleted, cannot load feed")
+	if _, err := db.isFeedDeleted(f.Hash); err != nil {
+		//f.log.Error("error in checking deleted: ", err)
+		err := fmt.Errorf("cannot load feed; %w", err)
 		f.log.Error(err)
 		return err
 	}
@@ -139,7 +137,14 @@ func (f *Feed) LoadDBFeed(includeXml bool) error {
 		return err
 	}
 	// xml is loaded (if applicable) from above query, no reason to call explicitly
-	f.log.Infof("{%v} feed loaded, id: %v, xml id: %v", f.Shortname, f.ID, f.XmlFeedData.ID)
+
+	{
+		lg := f.log.WithField("id", f.ID)
+		if includeXml && f.XmlFeedData != nil {
+			lg = lg.WithField("xml id", f.XmlFeedData.ID)
+		}
+		lg.Info("feed loaded")
+	}
 
 	return nil
 }
@@ -165,7 +170,10 @@ func (f *Feed) loadDBFeedXml() error {
 		f.XmlFeedData = xml
 	}
 
-	f.log.Infof("{%v} feed xml loaded, id: %v, xml id: %v", f.Shortname, f.ID, f.XmlFeedData.ID)
+	f.log.WithFields(log.Fields{
+		"id":    f.ID,
+		"xmlId": f.XmlFeedData.ID,
+	}).Info("feed xml loaded")
 
 	return nil
 }
@@ -251,15 +259,17 @@ func (f *Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error
 		return err
 	}
 
-	f.log.Tracef("{%v} feed saved, id: %v, xml id: %v", f.Shortname, f.ID, f.XmlFeedData.ID)
+	f.log.WithFields(log.Fields{"id": f.ID, "xmlid": f.XmlFeedData.ID}).Trace("feed saved")
 	for _, i := range f.ItemList {
-		f.log.Tracef("{%v} item saved, id: %v, xmlId: %v", i.Filename, i.ID, i.XmlData.ID)
+		f.log.WithFields(log.Fields{"itemFilename": i.Filename, "itemId": i.ID, "itemXmlId": i.XmlData.ID}).Trace("item saved")
 	}
 
 	return nil
 }
 
 // --------------------------------------------------------------------------
+//
+//lint:ignore U1000 this may be used in the future
 func (f *Feed) saveDBFeedItems(itemlist []*Item) error {
 	// make sure we have an ID.. in loading, if this is a new feed, we're creating via FirstOrCreate
 	if f.ID == 0 {
@@ -306,6 +316,17 @@ func (f *Feed) genItemDBEntryList(itemlist []*Item) ([]*ItemDBEntry, error) {
 	}
 
 	return ret, nil
+}
+
+// --------------------------------------------------------------------------
+func (f Feed) delete() error {
+	if db == nil {
+		return errors.New("db is nil")
+	}
+	f.log.Debug("deleting feed (soft delete)")
+
+	// will do a recursive delete of entry, xml, items and itemxml
+	return db.deleteFeed(&f.FeedDBEntry)
 }
 
 // --------------------------------------------------------------------------

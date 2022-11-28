@@ -148,8 +148,8 @@ func RunTest(config podconfig.Config, feedMap map[string]*pod.Feed, db *pod.PodD
 
 // --------------------------------------------------------------------------
 func SetupDB(cfg podconfig.Config) (*pod.PodDB, error) {
-	dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod_test.db")
-	// dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod.db")
+	//dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod_test.db")
+	dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod.db")
 
 	if db, err := pod.NewDB(dbpath); err != nil {
 		return nil, err

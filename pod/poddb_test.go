@@ -1,6 +1,7 @@
 package pod
 
 import (
+	"errors"
 	"fmt"
 	"gopod/podutils"
 	"gopod/testutils"
@@ -150,7 +151,7 @@ func TestPodDB_IsFeedDeleted(t *testing.T) {
 
 		// success tests
 		{"not deleted", args{hash: feed1.Hash}, exp{deleted: false, callStack: defCallStack}},
-		{"deleted", args{hash: feed2.Hash}, exp{deleted: true, callStack: defCallStack}},
+		{"deleted", args{hash: feed2.Hash}, exp{deleted: true, errStr: "feed deleted", callStack: defCallStack}},
 		{"feed does not exist", args{hash: "foobar"}, exp{deleted: false, callStack: defCallStack}},
 	}
 	for _, tt := range tests {
@@ -167,6 +168,11 @@ func TestPodDB_IsFeedDeleted(t *testing.T) {
 			testutils.AssertErrContains(t, tt.e.errStr, err)
 			testutils.Assert(t, tt.e.deleted == isDel,
 				fmt.Sprintf("expecting deleted == %v, got %v", tt.e.deleted, isDel))
+			// make sure if deleted the error returned is the correct type
+			if isDel {
+				testutils.Assert(t, errors.Is(err, &ErrorFeedDeleted{}) == true,
+					fmt.Sprintf("expected error ErrorFeedDeleted, got %T", err))
+			}
 			compareCallstack(t, tt.e.callStack)
 
 		})

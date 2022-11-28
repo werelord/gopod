@@ -1,10 +1,10 @@
 package pod
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gopod/inputoption"
 	"gopod/podutils"
 	"os"
 	"path/filepath"
@@ -39,10 +39,14 @@ func (f *Feed) CheckDownloads() error {
 	// make sure db is loaded; don't need xml for this
 	if err = f.LoadDBFeed(false); err != nil {
 		f.log.Error("failed to load feed data from db: ", err)
+		if errors.Is(err, &ErrorFeedDeleted{}) {
+			// todo: for now, this works.. eventually put this message in main based on error
+			f.log.Warn("Feed deleted; make sure to remove from config file")
+		}
 		return err
 	} else {
 		// load all items (will be sorted desc); we do want item xml
-		if fcs.itemList, err = f.loadDBFeedItems(-1, true, cASC); err != nil {
+		if fcs.itemList, err = f.loadDBFeedItems(AllItems, true, cASC); err != nil {
 			f.log.Error("failed to load item entries: ", err)
 			return err
 		}
@@ -137,21 +141,26 @@ func (fcs *fileCheckStatus) checkCollisions() error {
 			}
 
 			// input choice
-			// todo: separate out into separate package??
 			if config.DoCollision {
-				scanner := bufio.NewScanner(os.Stdin)
-				fmt.Printf("Which to keep:\n\t'%v' (1)\n\t'%v' (2)\n\tSkip (no entry)\n\t(1|2|<skip>)> ", existItem.ID, item.ID)
-				scanner.Scan()
-				if scanner.Err() != nil {
-					log.Error("error in scanning; skipping by default: ", scanner.Err())
+
+				var (
+					inpExisting = inputoption.GenOption(fmt.Sprintf("%v", existItem.ID), '1', false)
+					inpCurrent  = inputoption.GenOption(fmt.Sprintf("%v", item.ID), '2', false)
+					inpSkip     = inputoption.GenOption("Skip (no entry)", '\n', true)
+				)
+
+				if opt, err := inputoption.RunSelection("which to keep:", inpExisting, inpCurrent, inpSkip); err != nil {
+					log.Errorf("error encountered: '%v' skipping by default", err)
 				} else {
-					switch scanner.Text() {
-					case "1":
+					switch opt {
+					case inpExisting:
 						log.Debugf("deleting current item: '%v'", item.ID)
 						deleteList = append(deleteList, item)
-					case "2":
+					case inpCurrent:
 						log.Debugf("deleting existing item: '%v'", existItem.ID)
 						deleteList = append(deleteList, existItem)
+					case inpSkip:
+						fallthrough
 					default:
 						log.Debug("Skipping collision; no action taken")
 					}
@@ -189,7 +198,11 @@ func (fcs *fileCheckStatus) checkCollisions() error {
 
 	if config.DoCollision {
 		if len(deleteList) > 0 {
-			fcs.feed.deleteFeedItems(deleteList)
+			if err := fcs.feed.deleteFeedItems(deleteList); err != nil {
+				log.Error(err)
+			} else {
+				log.Debugf("successfully deleted items, len: %v", len(deleteList))
+			}
 		} else {
 			log.Info("No collisions found, nothing to delete")
 		}

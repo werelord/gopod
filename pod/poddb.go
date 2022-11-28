@@ -14,23 +14,29 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type PodDBModel gorm.Model
+type (
+	PodDBModel       gorm.Model
+	direction        bool
+	ErrorFeedDeleted struct{}
+)
 
-type direction bool
+func (e *ErrorFeedDeleted) Error() string { return "feed deleted" }
 
 const ( // because constants should be capitalized, but I don't want to export these..
 	cASC  direction = false
 	cDESC direction = true
-)
 
-const allItems = -1
+	// shortcut for count of all items
+	AllItems = -1
+
+	// current model for database
+	currentModel = 1
+)
 
 type PodDB struct {
 	path   string
 	config gorm.Config
 }
-
-const currentModel = 1
 
 var defaultConfig = gorm.Config{
 	NamingStrategy: schema.NamingStrategy{
@@ -84,10 +90,11 @@ func (pdb PodDB) isFeedDeleted(hash string) (bool, error) {
 	var res = db. /*Debug().*/ Unscoped().Model(&FeedDBEntry{}).Where("Hash = ? AND DeletedAt not NULL", hash).Count(&count)
 	if res.Error != nil {
 		return false, res.Error
+	} else if count > 0 {
+		return true, &ErrorFeedDeleted{}
+	} else {
+		return false, nil
 	}
-
-	return count > 0, nil
-
 }
 
 // --------------------------------------------------------------------------
@@ -280,9 +287,13 @@ func (pdb PodDB) deleteFeed(feed *FeedDBEntry) error {
 		return fmt.Errorf("error opening db: %w", err)
 	}
 
+	// if true {
+	// 	db = db.Debug()
+	// }
+
 	// get all the items, for deletion
 	var itemlist = make([]*ItemDBEntry, 0)
-	if res := db. /*Debug().*/ Where(&ItemDBEntry{FeedId: feed.ID}).Order("ID").Find(&itemlist); res.Error != nil {
+	if res := db.Where(&ItemDBEntry{FeedId: feed.ID}).Order("ID").Find(&itemlist); res.Error != nil {
 		return fmt.Errorf("error finding items: %w", res.Error)
 	} else if err := pdb.deleteItems(itemlist); err != nil {
 		return fmt.Errorf("error deleting items: %w", err)
@@ -293,7 +304,7 @@ func (pdb PodDB) deleteFeed(feed *FeedDBEntry) error {
 		log.Warnf("feed xml is zero; xml entry might not exist")
 	} else {
 		var xmlentry = podutils.Tern(feed.XmlFeedData == nil, &FeedXmlDBEntry{}, feed.XmlFeedData)
-		if res := db. /*Debug().*/ Delete(xmlentry, feed.XmlId); res.Error != nil {
+		if res := db.Delete(xmlentry, feed.XmlId); res.Error != nil {
 			err := fmt.Errorf("failed deleting feed xml: %w", res.Error)
 			log.Error(err)
 			return err
@@ -305,7 +316,7 @@ func (pdb PodDB) deleteFeed(feed *FeedDBEntry) error {
 	}
 
 	// delete feed
-	if res := db. /*Debug().*/ Delete(feed, feed.ID); res.Error != nil {
+	if res := db.Delete(feed, feed.ID); res.Error != nil {
 		err := fmt.Errorf("failed deleting feed: %w", res.Error)
 		log.Error(err)
 		return err
@@ -351,9 +362,13 @@ func (pdb PodDB) deleteItems(list []*ItemDBEntry) error {
 		return fmt.Errorf("error opening db: %w", err)
 	}
 
+	// if true {
+	// 	db = db.Debug()
+	// }
+
 	// running delete on chuncks
 	for _, xmlchunk := range podutils.Chunk(xmlIdList, 100) {
-		if res := db. /*Debug().*/ Delete(&ItemXmlDBEntry{}, xmlchunk); res.Error != nil {
+		if res := db.Delete(&ItemXmlDBEntry{}, xmlchunk); res.Error != nil {
 			err := fmt.Errorf("failed deleting item xml: %w", res.Error)
 			log.Error(err)
 			return err
@@ -365,7 +380,7 @@ func (pdb PodDB) deleteItems(list []*ItemDBEntry) error {
 	}
 
 	for _, idchunk := range podutils.Chunk(itemIdList, 100) {
-		if res := db. /*Debug().*/ Delete(&ItemDBEntry{}, idchunk); res.Error != nil {
+		if res := db.Delete(&ItemDBEntry{}, idchunk); res.Error != nil {
 			err := fmt.Errorf("failed deleting item: %w", res.Error)
 			log.Error(err)
 			return err

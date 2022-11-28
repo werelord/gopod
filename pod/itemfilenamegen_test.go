@@ -32,6 +32,7 @@ func TestItem_generateFilename(t *testing.T) {
 		shortname string
 		regex     string
 		parse     string
+		xmlNil    bool
 		collFunc  func(string) bool
 	}
 	type itemarg struct {
@@ -56,6 +57,8 @@ func TestItem_generateFilename(t *testing.T) {
 		i    itemarg
 		e    exp
 	}{
+		{"item xml nil", cfgarg{xmlNil: true, shortname: "foo", parse: "foo#shortname#bar"}, itemarg{},
+			exp{errStr: "item xml is nil"}},
 		{"filenameParse empty", cfgarg{parse: ""}, itemarg{url: "http://foo.bar/meh.mp3"},
 			exp{filename: "meh.mp3"}},
 		{"shortname", cfgarg{shortname: "foo", parse: "foo#shortname#bar"}, itemarg{},
@@ -105,11 +108,22 @@ func TestItem_generateFilename(t *testing.T) {
 			var item = Item{}
 			item.Url = tt.i.url
 			item.EpNum = tt.i.itemcount
-			item.XmlData = &ItemXmlDBEntry{}
-			item.XmlData.Title = tt.i.title
-			item.XmlData.Link = tt.i.xLink
-			item.XmlData.EpisodeStr = tt.i.epStr
-			item.XmlData.SeasonStr = tt.i.sesnStr
+			if tt.c.xmlNil == false {
+				item.XmlData = &ItemXmlDBEntry{}
+				item.XmlData.Title = tt.i.title
+				item.XmlData.Link = tt.i.xLink
+				item.XmlData.EpisodeStr = tt.i.epStr
+				item.XmlData.SeasonStr = tt.i.sesnStr
+
+				if tt.i.defaultTime.IsZero() == false {
+					var oldTimeNow = timeNow
+					timeNow = func() time.Time { return tt.i.defaultTime }
+					defer func() { timeNow = oldTimeNow }()
+				} else {
+					item.XmlData.Pubdate = testTime
+				}
+
+			}
 			item.FilenameXta = tt.i.filenameXtra
 
 			var cfg = podconfig.FeedToml{}
@@ -124,14 +138,6 @@ func TestItem_generateFilename(t *testing.T) {
 					collFuncCalled = true
 					return tt.c.collFunc(s)
 				}
-			}
-
-			if tt.i.defaultTime.IsZero() == false {
-				var oldTimeNow = timeNow
-				timeNow = func() time.Time { return tt.i.defaultTime }
-				defer func() { timeNow = oldTimeNow }()
-			} else {
-				item.XmlData.Pubdate = testTime
 			}
 
 			filename, extra, err := item.generateFilename(cfg, collfuncHolder)

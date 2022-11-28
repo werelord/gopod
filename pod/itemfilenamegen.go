@@ -26,6 +26,10 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml, collFunc func(string) bo
 
 	// todo: need to check for filename collisions!! fucking shit
 
+	if i.XmlData == nil {
+		return "", "", errors.New("unable to generate filename; item xml is nil")
+	}
+
 	var (
 		filename       = cfg.FilenameParse
 		extra          string

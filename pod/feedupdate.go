@@ -91,7 +91,7 @@ func (fup *feedUpdate) loadDB() ([]*Item, error) {
 		return nil, reterr
 
 		// because we're doing filename collisions and guid collisions, grab all items
-	} else if itemList, err := f.loadDBFeedItems(-1, false, cDESC); err != nil {
+	} else if itemList, err := f.loadDBFeedItems(AllItems, false, cDESC); err != nil {
 		reterr := fmt.Errorf("failed to load item entries: %w", err)
 		log.Error(reterr)
 		return itemList, reterr
@@ -181,11 +181,11 @@ func (fup *feedUpdate) loadNewFeed() error {
 	}
 
 	// check url vs atom link & new feed url
-	if f.XmlFeedData.AtomLinkSelf.Href != "" && f.Url != f.XmlFeedData.AtomLinkSelf.Href {
-		f.log.Warnf("Feed url possibly changing: '%v':'%v'", f.Url, f.XmlFeedData.AtomLinkSelf.Href)
+	if fup.newXmlData.AtomLinkSelf.Href != "" && f.Url != fup.newXmlData.AtomLinkSelf.Href {
+		f.log.Warnf("Feed url possibly changing: '%v':'%v'", f.Url, fup.newXmlData.AtomLinkSelf.Href)
 		f.log.Warn("(change url in config.toml to reflect this change)")
-	} else if f.XmlFeedData.NewFeedUrl != "" && f.Url != f.XmlFeedData.NewFeedUrl {
-		f.log.Warnf("Feed url possibly changing: '%v':'%v'", f.Url, f.XmlFeedData.NewFeedUrl)
+	} else if fup.newXmlData.NewFeedUrl != "" && f.Url != fup.newXmlData.NewFeedUrl {
+		f.log.Warnf("Feed url possibly changing: '%v':'%v'", f.Url, fup.newXmlData.NewFeedUrl)
 		f.log.Warn("(change url in config.toml to reflect this change)")
 	}
 
@@ -415,6 +415,9 @@ func (fup feedUpdate) CancelOnPubDate(xmlPubDate time.Time) (cont bool) {
 
 	if config.ForceUpdate {
 		return false
+	} else if fup.feed.XmlFeedData == nil {
+		// likely new feed; not previously set
+		return false
 	}
 
 	//f.log.Tracef("Checking build date; \nFeed.Pubdate:'%v' \nxmlBuildDate:'%v'", f.XMLFeedData.PubDate.Unix(), xmlPubDate.Unix())
@@ -432,6 +435,9 @@ func (fup feedUpdate) CancelOnPubDate(xmlPubDate time.Time) (cont bool) {
 func (fup feedUpdate) CancelOnBuildDate(xmlBuildDate time.Time) (cont bool) {
 
 	if config.ForceUpdate {
+		return false
+	} else if fup.feed.XmlFeedData == nil {
+		// likely new feed, not prevously set.. no cancel
 		return false
 	}
 
