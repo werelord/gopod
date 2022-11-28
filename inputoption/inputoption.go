@@ -59,7 +59,7 @@ func RunRuneSelection(description string, opts ...*InputOption) (rune, error) {
 
 // perform yes/no selection with the default configuration
 func RunYesNoSelection(description string, def YesNo) (YesNo, error) {
-	return defaultconfig.RunYesNoSelection(description, def)
+	return defaultconfig.runYesNoSelection(description, def)
 }
 
 // perform option selection, returning rune associated with selected option
@@ -68,8 +68,7 @@ func (cfg Config) RunRuneSelection(description string, opts ...*InputOption) (ru
 	return ret.Rune, err
 }
 
-// perform yes/no selection.. one line and default rune upper-case is always set
-func (cfg Config) RunYesNoSelection(description string, def YesNo) (YesNo, error) {
+func (cfg Config) runYesNoSelection(description string, def YesNo) (YesNo, error) {
 	cfg.OneLine = true
 	cfg.DefaultRuneUpper = true
 

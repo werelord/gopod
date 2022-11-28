@@ -34,7 +34,7 @@ func TestConfig_RunYesNoSelection(t *testing.T) {
 				input: strings.NewReader(tt.p.input),
 			}
 
-			ret, err := testCfg.RunYesNoSelection("testing", tt.p.def)
+			ret, err := testCfg.runYesNoSelection("testing", tt.p.def)
 			fmt.Printf("\n")
 			testutils.Assert(t, err == nil, fmt.Sprintf("expecting error nil, got %v", err))
 			testutils.AssertEquals(t, tt.e.ret, ret)
