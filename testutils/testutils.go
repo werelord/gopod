@@ -35,7 +35,7 @@ func AssertEquals[T any](tb testing.TB, exp, act T) {
 	if diff := deep.Equal(exp, act); diff != nil {
 		str := "\033[31m\nObjects not equal:\033[39m\n"
 		for _, d := range diff {
-			str += fmt.Sprintf("\033[31m\t%v\033[39m\n", d)
+			str += fmt.Sprintf("\033[31m\t%#v\033[39m\n", d)
 		}
 		tb.Error(str)
 	}

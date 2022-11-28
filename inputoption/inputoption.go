@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -101,7 +102,7 @@ func (cfg Config) RunSelection(description string, opts ...*InputOption) (*Input
 	var (
 		optStr = cfg.buildOptionString(description, opts)
 	)
-	if r, err := cfg.runSelection(optStr); err != nil {
+	if r, err := cfg.selectionInput(optStr); err != nil {
 		return nil, err
 	} else {
 		return cfg.getSelectedOption(r, opts)
@@ -133,13 +134,13 @@ func (cfg Config) buildOptionString(desc string, opt []*InputOption) string {
 	return ret
 }
 
-func (cfg Config) runSelection(optStr string) (rune, error) {
+func (cfg Config) selectionInput(optStr string) (rune, error) {
 	scanner := bufio.NewScanner(cfg.input) // defaults to stdin
 	fmt.Print(optStr)
 	if scanner.Scan(); scanner.Err() != nil {
 		return 0, scanner.Err()
 	}
-	
+
 	r, _ := utf8.DecodeRuneInString(scanner.Text())
 	return r, nil
 }
@@ -152,7 +153,8 @@ func (cfg Config) getSelectedOption(r rune, opts []*InputOption) (*InputOption, 
 		if opt.Default {
 			defOpt = opt
 		}
-		if r == opt.Rune {
+		// case insensitive compare
+		if unicode.ToLower(r) == unicode.ToLower(opt.Rune) {
 			return opt, nil
 		}
 	}
