@@ -360,7 +360,7 @@ func TestRotateFiles(t *testing.T) {
 			sort.Strings(tt.expectedRemovals)
 			sort.Strings(tt.mockedfs.removeList)
 
-			testutils.AssertEquals(t, tt.expectedRemovals, tt.mockedfs.removeList)
+			testutils.AssertDiff(t, tt.expectedRemovals, tt.mockedfs.removeList)
 
 		})
 	}

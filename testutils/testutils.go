@@ -27,7 +27,7 @@ func Assert(tb testing.TB, condition bool, msg string) {
 }
 
 // equals fails the test if exp is not equal to act.
-func AssertEquals(tb testing.TB, exp, act any) {
+func AssertEquals[T any](tb testing.TB, exp, act T) {
 	tb.Helper()
 	// if !reflect.DeepEqual(exp, act) {
 	// 	tb.Errorf("\033[31m \nexp: %#v \ngot: %#v \033[39m", exp, act)
@@ -41,7 +41,7 @@ func AssertEquals(tb testing.TB, exp, act any) {
 	}
 }
 
-func AssertNotEquals(tb testing.TB, exp, act any) {
+func AssertNotEquals[T any](tb testing.TB, exp, act T) {
 	tb.Helper()
 	if reflect.DeepEqual(exp, act) {
 		tb.Errorf("\033[31m \nexp: %#v \ngot: %#v \033[39m", exp, act)
@@ -133,12 +133,12 @@ func RandStringBytes(n int) string {
 }
 
 func AssertDiffFunc[T comparable](tb testing.TB, wantList, gotList []T, comp func(T, T) bool) {
-	 tb.Helper()
+	tb.Helper()
 
 	var (
 		missing = make([]T, 0)
 		extra   = make([]T, 0)
-	)	
+	)
 
 	var indexOf = func(s []T, v T) int {
 		for i, e := range s {

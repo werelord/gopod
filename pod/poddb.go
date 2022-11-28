@@ -272,7 +272,7 @@ func (pdb PodDB) deleteFeed(feed *FeedDBEntry) error {
 		return errors.New("feed cannot be nil")
 	} else if feed.ID == 0 {
 		// this hopefully will never happen; fail if it does
-		return errors.New("feed id cannot be zero")
+		return errors.New("feed id cannot be zero; make sure it is loaded first")
 	}
 
 	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
