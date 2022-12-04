@@ -259,9 +259,19 @@ func (f *Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error
 		return err
 	}
 
-	f.log.WithFields(log.Fields{"id": f.ID, "xmlid": f.XmlFeedData.ID}).Trace("feed saved")
+	fl := f.log.WithField("id", f.ID)
+	if f.XmlFeedData != nil {
+		fl = fl.WithField("xmlid", f.XmlFeedData)
+	}
+	fl.Trace("feed saved")
+
 	for _, i := range f.ItemList {
-		f.log.WithFields(log.Fields{"itemFilename": i.Filename, "itemId": i.ID, "itemXmlId": i.XmlData.ID}).Trace("item saved")
+
+		il := f.log.WithFields(log.Fields{"itemFilename": i.Filename, "itemId": i.ID})
+		if i.XmlData != nil {
+			il = il.WithField("itemXmlId", i.XmlData.ID)
+		}
+		il.Trace("item saved")
 	}
 
 	return nil

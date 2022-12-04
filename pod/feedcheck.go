@@ -222,7 +222,9 @@ func (fcs *fileCheckStatus) checkArchiveStatus() error {
 	for _, item := range fcs.itemList {
 
 		var fileExists = fcs.fileExists(item)
-		if config.DoArchive && fileExists == false {
+
+		// don't need to do this for stuff already archived
+		if (config.DoArchive) && (item.Archived == false) && (fileExists == false) {
 			log.Infof("setting '%v' as archived", item.Filename)
 			item.Archived = true
 			dirtyList = append(dirtyList, item)
