@@ -2,6 +2,7 @@ package podutils
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -12,7 +13,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const filenamMaxLength = 200
+const filenamMaxLength = 240
 
 // --------------------------------------------------------------------------
 func SaveToFile(buf []byte, filename string) error {
@@ -53,9 +54,12 @@ func LoadFile(filename string) ([]byte, error) {
 }
 
 // --------------------------------------------------------------------------
-func CleanFilename(filename string) string {
+func CleanFilename(filename string, rep string) string {
 	// only error this generates is if the replacement is a reserved character
-	fname, _ := filenamify.Filenamify(filename, filenamify.Options{Replacement: "-", MaxLength: filenamMaxLength})
+	fname, _ := filenamify.FilenamifyV2(filename, func(options *filenamify.Options) {
+		options.Replacement = rep
+		options.MaxLength = filenamMaxLength
+	})
 	return fname
 }
 
@@ -163,7 +167,7 @@ func FindMostRecent(path, pattern string) (string, error) {
 		}
 	}
 	if latestFile.t.IsZero() || latestFile.filename == "" {
-		return "", errors.New("unable to find file")
+		return "", fmt.Errorf("unable to find file: %w", fs.ErrNotExist)
 	}
 	return filepath.Join(path, latestFile.filename), nil
 }

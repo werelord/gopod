@@ -162,7 +162,7 @@ func (fup *feedUpdate) loadNewFeed() error {
 		itemPairList []podutils.ItemPair
 	)
 
-	if body, err = fup.loadFeedXml(); err != nil {
+	if body, err = fup.loadNewXml(); err != nil {
 		log.Error("error in loading xml: ", err)
 		return err
 	} else if fup.newXmlData, itemPairList, err = podutils.ParseXml(body, fup); err != nil {
@@ -337,7 +337,7 @@ func (fup *feedUpdate) createNewEntry(hash string, xmldata *podutils.XItemData) 
 }
 
 // --------------------------------------------------------------------------
-func (fup feedUpdate) loadFeedXml() ([]byte, error) {
+func (fup feedUpdate) loadNewXml() ([]byte, error) {
 	var (
 		log  = fup.feed.log
 		body []byte
@@ -348,8 +348,12 @@ func (fup feedUpdate) loadFeedXml() ([]byte, error) {
 		// find the most recent xml based on the glob pattern
 		var filename string
 		if filename, err = podutils.FindMostRecent(filepath.Dir(fup.feed.xmlfile), fmt.Sprintf("%v.*.xml", fup.feed.Shortname)); err != nil {
+			// if errors.Is(err, fs.ErrNotExist) {
+			// todo: do a download
+			// } else {
 			log.Error("error finding most recent xml: ", err)
 			return nil, err
+			// }
 		}
 
 		log.Debug("loading xml file: ", filename)

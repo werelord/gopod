@@ -12,6 +12,7 @@ github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSs
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/flytam/filenamify v1.1.1 h1:508gP8QR6vtbv46S3oz2ob9l7JGFdDFfqqMeh/TwzTk=
 github.com/flytam/filenamify v1.1.1/go.mod h1:Dzf9kVycwcsBlr2ATg6uxjqiFgKGH+5SKFuhdeP5zu8=
+github.com/flytam/filenamify v1.1.2/go.mod h1:Dzf9kVycwcsBlr2ATg6uxjqiFgKGH+5SKFuhdeP5zu8=
 github.com/glebarez/go-sqlite v1.19.1/go.mod h1:9AykawGIyIcxoSfpYWiX1SgTNHTNsa/FVc75cDkbp4M=
 github.com/glebarez/go-sqlite v1.19.2 h1:mTtntWN3wk9UNjIf6F7Upqnfq96p+cjhfgCsupUd1hY=
 github.com/glebarez/go-sqlite v1.19.2/go.mod h1:DoubC3Kn5X6EBvDa2iaxAdIJqPNmY7M/sOCpfa8fus0=

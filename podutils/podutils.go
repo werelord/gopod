@@ -53,3 +53,4 @@ func Chunk[T any](slice []T, chunksize int) [][]T {
 
 	return chunks
 }
+

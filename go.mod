@@ -28,7 +28,7 @@ require (
 require (
 	github.com/DavidGamba/go-getoptions v0.25.4-0.20221201064042-43a2fe13488c
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
-	github.com/flytam/filenamify v1.1.1
+	github.com/flytam/filenamify v1.1.2
 	github.com/glebarez/sqlite v1.5.0
 	github.com/go-test/deep v1.0.8
 	github.com/google/uuid v1.3.0
@@ -36,3 +36,5 @@ require (
 	golang.org/x/exp v0.0.0-20221106115401-f9659909a136
 	golang.org/x/sys v0.1.0 // indirect
 )
+
+// replace github.com/flytam/filenamify => ..\filenamify
