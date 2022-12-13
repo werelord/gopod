@@ -57,12 +57,20 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml, collFunc func(string) bo
 		filename = i.replaceCount(filename, defReplacement, cfg)
 		filename = strings.Replace(filename, "#season#", i.XmlData.SeasonStr, 1)
 		filename = strings.Replace(filename, "#date#", defReplacement, 1)
+		filename = strings.Replace(filename, "#title#", i.XmlData.Title, 1)
 		if filename, err = i.replaceTitleRegex(filename, cfg.Regex); err != nil {
 			log.Error("failed parsing title:", err)
 			return "", "", err
 		}
-		filename = i.replaceUrlFilename(filename, cfg)
+		filename = strings.Replace(filename, "#urlfilename#", path.Base(i.Url), 1)
 	}
+
+	// make sure we have a clean filename..
+	var rep = "_" // default replacement
+	if cfg.CleanRep != nil {
+		rep = *cfg.CleanRep
+	}
+	filename = cleanFilename(filename, rep)
 
 	if i.FilenameXta != "" {
 		// filename collisions have already been handled, and the extra already exists..
@@ -89,7 +97,7 @@ func (i Item) replaceLinkFinalPath(str, failureStr string) string {
 			str = strings.Replace(str, "#linkfinalpath#", failureStr, 1)
 		} else if u, err := url.Parse(i.XmlData.Link); err == nil {
 			finalLink := path.Base(u.Path)
-			str = strings.Replace(str, "#linkfinalpath#", cleanFilename(finalLink), 1)
+			str = strings.Replace(str, "#linkfinalpath#", finalLink, 1)
 		} else {
 			log.Error("failed to parse link path: ", err)
 			log.Warn("Replacing with failure option: ", failureStr)
@@ -159,7 +167,10 @@ func (i Item) replaceTitleRegex(dststr, regex string) (string, error) {
 	matchSlice := r.FindStringSubmatch(i.XmlData.Title)
 
 	if len(matchSlice) < r.NumSubexp() {
-		log.Warn("regex doesn't match; replacing with blank strings")
+		log.WithFields(log.Fields{
+			"xmlTitle": i.XmlData.Title,
+			"regex":    regex,
+		}).Warn("regex doesn't match; replacing with blank strings")
 		// return "", errors.New("return slice of regex doesn't match slices needed")
 	}
 
@@ -185,19 +196,6 @@ func (i Item) replaceTitleRegex(dststr, regex string) (string, error) {
 	// replace any spaces with underscores
 	dststr = strings.ReplaceAll(dststr, " ", "_")
 	return dststr, nil
-}
-
-// --------------------------------------------------------------------------
-func (i Item) replaceUrlFilename(str string, cfg podconfig.FeedToml) string {
-	if strings.Contains(str, "#urlfilename#") {
-		// for now, only applies to urlfilename
-		var urlfilename = path.Base(i.Url)
-		if cfg.SkipFileTrim == false {
-			urlfilename = cleanFilename(urlfilename)
-		}
-		str = strings.Replace(str, "#urlfilename#", urlfilename, 1)
-	}
-	return str
 }
 
 // --------------------------------------------------------------------------

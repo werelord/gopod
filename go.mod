@@ -26,7 +26,7 @@ require (
 )
 
 require (
-	github.com/DavidGamba/go-getoptions v0.25.4-0.20221201064042-43a2fe13488c
+	github.com/DavidGamba/go-getoptions v0.26.0
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/flytam/filenamify v1.1.2
 	github.com/glebarez/sqlite v1.5.0

@@ -49,6 +49,7 @@ func TestItem_generateFilename(t *testing.T) {
 		filename       string
 		extra          string
 		collFuncCalled bool
+		cleanNotCalled    bool
 		errStr         string
 	}
 	tests := []struct {
@@ -58,7 +59,7 @@ func TestItem_generateFilename(t *testing.T) {
 		e    exp
 	}{
 		{"item xml nil", cfgarg{xmlNil: true, shortname: "foo", parse: "foo#shortname#bar"}, itemarg{},
-			exp{errStr: "item xml is nil"}},
+			exp{errStr: "item xml is nil", cleanNotCalled: true}},
 		{"filenameParse empty", cfgarg{parse: ""}, itemarg{url: "http://foo.bar/meh.mp3"},
 			exp{filename: "meh.mp3"}},
 		{"shortname", cfgarg{shortname: "foo", parse: "foo#shortname#bar"}, itemarg{},
@@ -83,7 +84,7 @@ func TestItem_generateFilename(t *testing.T) {
 			exp{filename: "foo_" + defstr + "_bar"}},
 		{"pubdate, replacement", cfgarg{parse: "foo_#date#_bar"}, itemarg{defaultTime: testTimeRep},
 			exp{filename: "foo_" + testTimeRep.Format(podutils.TimeFormatStr) + "_bar"}},
-		{"regex err", cfgarg{parse: "foo#titleregex:1#bar"}, itemarg{}, exp{errStr: "regex is empty"}},
+		{"regex err", cfgarg{parse: "foo#titleregex:1#bar"}, itemarg{}, exp{errStr: "regex is empty", cleanNotCalled: true}},
 		{"regex title", cfgarg{parse: "foo#titleregex:1##titleregex:2#bar", regex: regex},
 			itemarg{title: "foo (VOY S4E15)"},
 			exp{filename: "fooVOYS4E15bar"}},
@@ -104,6 +105,12 @@ func TestItem_generateFilename(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
+			// clean called should exist on all generate filenames
+			var cleanCalled bool
+			var oldClean = cleanFilename
+			cleanFilename = func(s, _ string) string { cleanCalled = true; return s }
+			defer func() { cleanFilename = oldClean }()
 
 			var item = Item{}
 			item.Url = tt.i.url
@@ -150,6 +157,8 @@ func TestItem_generateFilename(t *testing.T) {
 			testutils.AssertEquals(t, tt.e.extra, extra)
 			testutils.Assert(t, collFuncCalled == tt.e.collFuncCalled,
 				fmt.Sprintf("expected collision func called to be %v, got %v", tt.e.collFuncCalled, collFuncCalled))
+			testutils.Assert(t, cleanCalled != tt.e.cleanNotCalled,
+				fmt.Sprintf("clean called expected  %v, got %v", !tt.e.cleanNotCalled, cleanCalled))
 
 		})
 	}
@@ -315,48 +324,6 @@ func TestItem_replaceTitleRegex(t *testing.T) {
 			got, err := item.replaceTitleRegex(tt.p.str, tt.p.regex)
 			testutils.AssertErrContains(t, tt.e.errStr, err)
 			testutils.AssertEquals(t, tt.e.want, got)
-		})
-	}
-}
-
-func TestItem_replaceUrlFilename(t *testing.T) {
-	type args struct {
-		str      string
-		url      string
-		skiptrim bool
-	}
-	type exp struct {
-		want        string
-		cleanCalled bool
-	}
-	tests := []struct {
-		name string
-		p    args
-		e    exp
-	}{
-		{"empty string", args{url: ""}, exp{want: ""}},
-		{"no replacement", args{str: "foobar", url: ""}, exp{want: "foobar"}},
-		{"normal rep", args{str: "foo#urlfilename#bar", url: "http://foo.bar/meh/filename.mp3"},
-			exp{want: "foofilename.mp3bar", cleanCalled: true}},
-		{"skip trim", args{str: "foo#urlfilename#bar", url: "http://foo.bar/meh/filename.mp3", skiptrim: true},
-			exp{want: "foofilename.mp3bar", cleanCalled: false}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-
-			var cleanCalled bool
-			var oldClean = cleanFilename
-			cleanFilename = func(s string) string { cleanCalled = true; return s }
-			defer func() { cleanFilename = oldClean }()
-
-			var item = Item{}
-			item.Url = tt.p.url
-
-			var cfg = podconfig.FeedToml{SkipFileTrim: tt.p.skiptrim}
-			got := item.replaceUrlFilename(tt.p.str, cfg)
-			testutils.AssertEquals(t, tt.e.want, got)
-			testutils.Assert(t, cleanCalled == tt.e.cleanCalled, "clean called incorrect")
-
 		})
 	}
 }

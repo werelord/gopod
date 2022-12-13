@@ -25,6 +25,7 @@ func TestInitCommandLine(t *testing.T) {
 		"--rename",
 		"--collision",
 		"--savecollision",
+		"--set-downloaded",
 	}
 
 	ex, _ := os.Executable()
@@ -58,21 +59,26 @@ func TestInitCommandLine(t *testing.T) {
 		// will make this test fail to compile
 		{"global false", args{args: []string{"update", "--config", "barfoo.toml"}},
 			expect{cmdline: CommandLine{barFooConfig, Update, "", "",
-				CommandLineOptions{false, UpdateOpt{false, false, false}, CheckDownloadOpt{false, false, false, false}}}},
+				CommandLineOptions{false, UpdateOpt{false, false, false, false}, CheckDownloadOpt{false, false, false, false}}}},
 		},
 		{"global true", args{args: []string{"update", "--config", "barfoo.toml", "--feed=foo", "--debug", "--proxy=barfoo"}},
 			expect{cmdline: CommandLine{barFooConfig, Update, "foo", "barfoo",
-				CommandLineOptions{true, UpdateOpt{false, false, false}, CheckDownloadOpt{false, false, false, false}}}},
+				CommandLineOptions{true, UpdateOpt{false, false, false, false}, CheckDownloadOpt{false, false, false, false}}}},
 		},
 
 		// flags dependent on command, regardless on whether they're on the commandline or not
 		{"update dependant", args{args: CopyAndAppend([]string{"update"}, allFlags...)},
 			expect{cmdline: CommandLine{barFooConfig, Update, "foo", "barfoo",
-				CommandLineOptions{true, UpdateOpt{true, true, true}, CheckDownloadOpt{false, false, false, false}}}},
+				CommandLineOptions{true, UpdateOpt{true, true, true, true}, CheckDownloadOpt{false, false, false, false}}}},
 		},
 		{"check downloads dependant", args{args: CopyAndAppend([]string{"checkdownloads"}, allFlags...)},
 			expect{cmdline: CommandLine{barFooConfig, CheckDownloaded, "foo", "barfoo",
-				CommandLineOptions{true, UpdateOpt{false, false, false}, CheckDownloadOpt{true, true, true, true}}}},
+				CommandLineOptions{true, UpdateOpt{false, false, false, false}, CheckDownloadOpt{true, true, true, true}}}},
+		},
+		{"preview dependant", args{args: CopyAndAppend([]string{"preview"}, allFlags...)},
+			expect{cmdline: CommandLine{barFooConfig, Preview, "foo", "barfoo",
+				// also uses useRecent
+				CommandLineOptions{true, UpdateOpt{false, false, true, false}, CheckDownloadOpt{false, false, false, false}}}},
 		},
 	}
 	for _, tt := range tests {

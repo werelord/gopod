@@ -240,8 +240,11 @@ func (f *Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error
 	f.Hash = f.generateHash()
 	f.DBShortname = f.Shortname
 	if newxml != nil {
-		if f.XmlFeedData == nil {
+		if (f.XmlId != 0) && (f.XmlFeedData == nil) {
 			return errors.New("feed xml is not loaded; make sure it is loaded before saving new xml")
+		} else if (f.XmlId == 0) && (f.XmlFeedData == nil) {
+			f.log.Debug("xml id is 0, and feed data is nil; new feed xml detected")
+			f.XmlFeedData = &FeedXmlDBEntry{}
 		}
 		f.XmlFeedData.XChannelData = *newxml
 	}

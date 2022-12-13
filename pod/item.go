@@ -342,8 +342,7 @@ func (i Item) createProgressBar() *progressbar.ProgressBar {
 func (i *Item) Download(mp3path string) error {
 
 	var (
-		downloadTimestamp = time.Now()
-		destfile          = filepath.Join(mp3path, i.Filename)
+		destfile = filepath.Join(mp3path, i.Filename)
 	)
 
 	file, err := podutils.CreateTemp(filepath.Dir(destfile), filepath.Base(destfile)+"_temp*")
@@ -379,11 +378,22 @@ func (i *Item) Download(mp3path string) error {
 		return err
 	}
 
-	if err := podutils.Chtimes(destfile, downloadTimestamp, i.PubTimeStamp); err != nil {
+	i.SetDownloaded(mp3path)
+
+	return nil
+}
+
+//--------------------------------------------------------------------------
+func (i *Item) SetDownloaded(mp3path string) {
+	var (
+		destfile = filepath.Join(mp3path, i.Filename)
+	)
+
+	// set downloaded, and make sure timestamps match
+	if err := podutils.Chtimes(destfile, time.Now(), i.PubTimeStamp); err != nil {
 		i.log.Error("failed to change modified time: ", err)
 		// don't skip due to timestamp issue
 	}
 
 	i.Downloaded = true
-	return nil
 }

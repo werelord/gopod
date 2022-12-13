@@ -179,6 +179,8 @@ func parseCommand(cmd commandline.CommandType) commandFunc {
 		return runCheckDownloads
 	case commandline.Delete:
 		return runDelete
+	case commandline.Preview:
+		return runPreview
 	default:
 		return nil
 	}
@@ -211,5 +213,16 @@ func runDelete(f *pod.Feed) {
 			"feed":  f.Shortname,
 			"error": err,
 		}).Error("failed running delete")
+	}
+}
+
+// --------------------------------------------------------------------------
+func runPreview(f *pod.Feed) {
+	log.WithField("feed", f.Shortname).Info("running preview")
+	if err := f.Preview(); err != nil {
+		log.WithFields(log.Fields{
+			"feed":  f.Shortname,
+			"error": err,
+		}).Error("failed running preview")
 	}
 }

@@ -18,6 +18,7 @@ const ( // commands
 	Update
 	CheckDownloaded
 	Delete
+	Preview
 )
 
 // for testing purposes
@@ -28,6 +29,7 @@ var cmdMap = map[CommandType]string{
 	Update:          "update",
 	CheckDownloaded: "checkDownloaded",
 	Delete:          "delete",
+	Preview:         "preview",
 }
 
 func (cmd CommandType) Format(fs fmt.State, c rune) {
@@ -57,6 +59,7 @@ type UpdateOpt struct {
 	Simulate         bool
 	ForceUpdate      bool
 	UseMostRecentXml bool
+	MarkDownloaded   bool
 }
 
 // check downloads specific
@@ -94,6 +97,8 @@ func InitCommandLine(args []string) (*CommandLine, error) {
 		return nil, errors.New("command not recognized")
 	} else if c.Command == Delete && c.FeedShortname == "" {
 		return nil, errors.New("delete command requires feed specified (use --feed=<shortname>)")
+	} else if c.Command == Preview && c.FeedShortname == "" {
+		return nil, errors.New("preview command requires feed specified (use --feed=<shortname>)")
 	}
 
 	if c.ConfigFile == "" {
@@ -152,7 +157,10 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 	updateCommand.BoolVar(&c.ForceUpdate, "force", false,
 		opt.Description("force update on xml and items (will process everything in feed"))
 	updateCommand.BoolVar(&c.UseMostRecentXml, "use-recent", false, opt.Alias("use-recent-xml", "userecent"),
-		opt.Description("Use the most recent feed xml file fetched rather than checking for new; if recent doesn't exist, will still download.  Note: if there are no errors on previous run, will likely do nothing unless --force is specified"))
+		opt.Description("Use the most recent feed xml file fetched rather than checking for new"))
+	// if recent doesn't exist, will still download.  Note: if there are no errors on previous run, will likely do nothing unless --force is specified"))
+	updateCommand.BoolVar(&c.MarkDownloaded, "set-downloaded", false,
+		opt.Description("set already downloaded files as downloaded in db"))
 	updateCommand.SetCommandFn(c.generateCmdFunc(Update))
 
 	checkcommand := opt.NewCommand("checkdownloads", "check integrity of database and files")
@@ -169,6 +177,12 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 	deletecommand := opt.NewCommand("deletefeed", "delete feed and all items from database (performs a soft delete)")
 	deletecommand.SetCommandFn(c.generateCmdFunc(Delete))
 
+	previewCommand := opt.NewCommand("preview", "preview feed file naming, based solely on feed xml.  Does not require feed existing")
+	previewCommand.BoolVar(&c.UseMostRecentXml, "use-recent", false, opt.Alias("use-recent-xml", "userecent"),
+		opt.Description("Use the most recent feed xml file fetched rather than checking for new"))
+	// if recent doesn't exist, will still download.  Note: if there are no errors on previous run, will likely do nothing unless --force is specified"))
+	previewCommand.SetCommandFn(c.generateCmdFunc(Preview))
+
 	opt.HelpCommand("help", opt.Alias("h", "?"))
 	return opt
 }
@@ -180,6 +194,5 @@ func (c *CommandLine) generateCmdFunc(t CommandType) getoptions.CommandFn {
 		c.Command = t
 		return nil
 	}
-
 	return fn
 }

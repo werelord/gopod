@@ -501,8 +501,14 @@ func (fup *feedUpdate) downloadNewItems() []error {
 				continue
 			}
 		} else if fileExists == true {
-			f.log.Warnf("item downloaded '%v', archived: '%v', fileExists: '%v'", item.Downloaded, item.Archived, fileExists)
-			f.log.Warn("file already exists.. possible filename collision? skipping download")
+			if config.MarkDownloaded {
+				f.log.Info("file exists, and set downloaded flag set.. marking as downloaded")
+				item.SetDownloaded(f.mp3Path)
+
+			} else {
+				f.log.Warnf("item downloaded '%v', archived: '%v', fileExists: '%v'", item.Downloaded, item.Archived, fileExists)
+				f.log.Warn("file already exists.. possible filename collision? skipping download")
+			}
 			continue
 		}
 		if config.Simulate {
