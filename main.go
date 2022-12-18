@@ -44,7 +44,6 @@ func main() {
 		err error
 	)
 
-	// todo: flag to check item entries that aren't downloaded
 	if cmdline, err = commandline.InitCommandLine(os.Args[1:]); err != nil {
 		// if help called, no errors to output
 		if errors.Is(err, getoptions.ErrorHelpCalled) == false {
@@ -70,8 +69,6 @@ func main() {
 	config.CommandLineOptions = cmdline.CommandLineOptions
 
 	log.Infof("using config: %+v", config)
-
-	// todo: lock down pointer receivers where necessary
 
 	// todo: official poddb migration methods
 	if poddb, err = SetupDB(*config); err != nil {
@@ -110,10 +107,7 @@ func main() {
 
 	log.Debugf("running command: '%v'", cmdline.Command)
 
-	// todo: separate updating xml feed with downloading files (move to higher abstraction)
-
 	var cmdLog string
-
 	if cmdline.FeedShortname != "" {
 		if feed, exists := feedMap[cmdline.FeedShortname]; exists {
 			cmdLog = cmdFunc(feed)
@@ -134,8 +128,6 @@ func main() {
 		// just for console output, not logging
 		fmt.Printf("finished %v:\n%v", cmdline.Command, cmdLog)
 	}
-
-	// todo: db export to json
 
 	// rotate the log files
 	if config.LogFilesRetained > 0 {

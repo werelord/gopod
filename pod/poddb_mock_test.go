@@ -16,7 +16,6 @@ import (
 const inMemoryPath = ":memory:"
 
 type mockGorm struct {
-	// todo: what do we need
 	mockdb  *mockGormDB
 	openErr bool
 }
@@ -278,7 +277,6 @@ func setupGormMock(t *testing.T, mock *mockGorm, openDB bool) (*mockGorm, func(*
 	return mock, func(t *testing.T, mg *mockGorm) {
 		fmt.Printf("\nTeardown(%v)\n", t.Name())
 		// don't need to call close here...
-		// todo: anything else here??
 		gImpl = oldGorm
 	}
 }

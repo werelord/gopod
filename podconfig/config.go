@@ -44,7 +44,6 @@ type FeedToml struct {
 // --------------------------------------------------------------------------
 func LoadToml(filename string, timestamp time.Time) (*Config, *[]FeedToml, error) {
 
-	// todo: better handling of these objects (pointer?)
 	tomldoc := tomldocImport{}
 	tomldoc.Config.Timestamp = timestamp
 	tomldoc.Config.TimestampStr = timestamp.Format(podutils.TimeFormatStr)

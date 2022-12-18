@@ -22,10 +22,6 @@ var timeNow = time.Now
 func (i *Item) generateFilename(cfg podconfig.FeedToml, collFunc func(string) bool) (string, string, error) {
 	// check to see if we neeed to parse.. simple search/replace
 
-	// verify that export data is not null
-
-	// todo: need to check for filename collisions!! fucking shit
-
 	if i.XmlData == nil {
 		return "", "", errors.New("unable to generate filename; item xml is nil")
 	}
@@ -109,7 +105,6 @@ func (i Item) replaceLinkFinalPath(str, failureStr string) string {
 
 // --------------------------------------------------------------------------
 func (i Item) replaceEpisode(str, defaultRep string, cfg podconfig.FeedToml) string {
-	// todo: deprecate this; instead of using #episode#, maintain an episode count within the db
 	if strings.Contains(str, "#episode#") {
 		// default length of 3, unless otherwise defined
 		var padLen = podutils.Tern(cfg.EpisodePad > 0, cfg.EpisodePad, 3)

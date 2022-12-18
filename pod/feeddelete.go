@@ -7,12 +7,6 @@ import (
 
 func (f *Feed) RunDelete() error {
 
-	/* todo:
-
-	todo: check for deleted items still in master
-
-	*/
-
 	if err := f.LoadDBFeed(true); err != nil {
 		// f.log.Error("failed to load feed data from db: ", err)
 		return err

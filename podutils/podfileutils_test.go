@@ -109,15 +109,6 @@ func (mfi mockedFileInfo) ModTime() time.Time { return mfi.time }
 func (mfi mockedFileInfo) IsDir() bool        { return false }
 func (mfi mockedFileInfo) Sys() any           { return nil }
 
-// func (mfp mockedFilePath) WalkDir(root string, fn fs.WalkDirFunc) error {
-
-// 	// for _, entry := range mfp.walkFileList {
-// 	// 	err := fn(root, entry, )
-// 	// }
-// 	// todo: this
-// 	return nil
-// }
-
 // end of mocks
 //--------------------------------------------------------------------------
 
@@ -138,7 +129,6 @@ func TestSaveToFile(t *testing.T) {
 			argimp,
 			&mockedFileSystem{err: errors.New("foobar"), f: &mockedFile{}},
 			true,
-			// TODO: Add test cases.
 		}, {
 			"write error",
 			argimp,

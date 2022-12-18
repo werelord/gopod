@@ -26,9 +26,9 @@ var (
 )
 
 // --------------------------------------------------------------------------
-func NewLogrusFileHook(file string, levels []log.Level) (*LogrusFileHook, error) {
+func NewLogrusFileHook(file string, levels []log.Level, relpath string) (*LogrusFileHook, error) {
 
-	plainFormatter := &log.TextFormatter{DisableColors: true, CallerPrettyfier: gopodCallerPrettyfier}
+	plainFormatter := &log.TextFormatter{DisableColors: true, CallerPrettyfier: generatePrettyfier(relpath)}
 	// gc will close the file handle; fuck the finalizer
 	logFile, err := os.OpenFile(file, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0666)
 	if err != nil {
@@ -67,8 +67,10 @@ func (hook *LogrusFileHook) Levels() []log.Level {
 func InitLogging(workingdir string, shortname string, timestamp time.Time) error {
 	// todo: somehow differentiate between debug/release programmatically
 
+	var relPath = getRelPathCaller()
+
 	log.SetLevel(log.TraceLevel)
-	log.SetFormatter(&log.TextFormatter{ForceColors: true, FullTimestamp: true, CallerPrettyfier: gopodCallerPrettyfier})
+	log.SetFormatter(&log.TextFormatter{ForceColors: true, FullTimestamp: true, CallerPrettyfier: generatePrettyfier(relPath)})
 	log.SetLevel(log.TraceLevel)
 	log.SetOutput(os.Stdout)
 	log.SetReportCaller(true)
@@ -79,14 +81,14 @@ func InitLogging(workingdir string, shortname string, timestamp time.Time) error
 	errorLevelsFile := filepath.Join(logdir, fmt.Sprintf("%v.error.%v.%v", shortname,
 		timestamp.Format(podutils.TimeFormatStr), "log"))
 
-	if err := addFileHook(allLevelsFile, log.AllLevels); err != nil {
+	if err := addFileHook(allLevelsFile, log.AllLevels, relPath); err != nil {
 		fmt.Print("failed creating logfile hook (all levels): ", err)
 		return err
 
 	} else {
 		// set error/warn file hooks
 		errLevels := []log.Level{log.PanicLevel, log.FatalLevel, log.ErrorLevel, log.WarnLevel}
-		if err := addFileHook(errorLevelsFile, errLevels); err != nil {
+		if err := addFileHook(errorLevelsFile, errLevels, relPath); err != nil {
 			log.Error("failed creating logfile hook (error levels): ", err)
 			// don't fail on this one
 		}
@@ -108,32 +110,45 @@ func InitLogging(workingdir string, shortname string, timestamp time.Time) error
 }
 
 // --------------------------------------------------------------------------
-func gopodCallerPrettyfier(frame *runtime.Frame) (functionName string, fileName string) {
+func getRelPathCaller() string {
 
-	if frame != nil {
+	// this is relative to main.go.. if main ever moves, then this relative path may need to change
+	if _, file, _, ok := runtime.Caller(2); ok {
+		// fmt.Printf("dir:%#v\n", filepath.Dir(file))
+		return filepath.Dir(file)
 
-		// strip qualified path; first dot after first slash
-		var function = frame.Function
-		if idx := strings.Index(function, "/"); idx > -1 {
-			if idy := strings.Index(function[idx:], "."); idy > -1 {
-				function = function[idx+idy+1:]
-			}
-		}
-
-		// return relative path to file
-		// todo: check path programmatically??
-		var file = frame.File
-		if relPath, err := filepath.Rel(`d:\sc\gosrc\gopod`, frame.File); err == nil {
-			file = relPath
-		}
-		return fmt.Sprintf("%v()", function), fmt.Sprintf(" %s:%d", file, frame.Line)
+	} else {
+		return ""
 	}
-	return
 }
 
 // --------------------------------------------------------------------------
-func addFileHook(filename string, levels []log.Level) error {
-	if filehook, err := NewLogrusFileHook(filename, levels); err != nil {
+func generatePrettyfier(relPath string) func(*runtime.Frame) (string, string) {
+	return func(frame *runtime.Frame) (functionName string, filename string) {
+		if frame != nil {
+
+			// strip qualified path; first dot after first slash
+			var function = frame.Function
+			if idx := strings.Index(function, "/"); idx > -1 {
+				if idy := strings.Index(function[idx:], "."); idy > -1 {
+					function = function[idx+idy+1:]
+				}
+			}
+
+			// return relative path to file
+			var file = frame.File
+			if relPath, err := filepath.Rel(relPath, frame.File); err == nil {
+				file = relPath
+			}
+			return fmt.Sprintf("%v()", function), fmt.Sprintf(" %s:%d", file, frame.Line)
+		}
+		return
+	}
+}
+
+// --------------------------------------------------------------------------
+func addFileHook(filename string, levels []log.Level, relPath string) error {
+	if filehook, err := NewLogrusFileHook(filename, levels, relPath); err != nil {
 		return err
 
 	} else {

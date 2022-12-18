@@ -24,8 +24,6 @@ type fileCheckStatus struct {
 	itemList []*Item
 }
 
-// todo: additional command instead of option, based on how I'm handling shit here..
-
 // --------------------------------------------------------------------------
 func (f *Feed) CheckDownloads() error {
 
@@ -40,7 +38,7 @@ func (f *Feed) CheckDownloads() error {
 	if err = f.LoadDBFeed(false); err != nil {
 		f.log.Error("failed to load feed data from db: ", err)
 		if errors.Is(err, &ErrorFeedDeleted{}) {
-			// todo: for now, this works.. eventually put this message in main based on error
+			// future: for now, this works.. eventually put this message in main based on error
 			f.log.Warn("Feed deleted; make sure to remove from config file")
 		}
 		return err

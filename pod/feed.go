@@ -86,7 +86,6 @@ func (f *Feed) initFeed() error {
 	if len(f.Shortname) == 0 {
 		f.Shortname = f.Name
 	}
-	// todo: more error propegation
 
 	f.log = log.WithField("feed", f.Shortname)
 

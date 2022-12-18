@@ -104,7 +104,10 @@ type ItemPair struct {
 // --------------------------------------------------------------------------
 func ParseXml(xmldata []byte, fp FeedProcess) (feedData *XChannelData, newItems []ItemPair, err error) {
 
-	// todo: error on empty body (xmldata)
+	if len(xmldata) == 0 {
+		err = errors.New("xml data is empty")
+		return
+	}
 
 	feedData = &XChannelData{PersonList: make([]XPodcastPersonData, 0)}
 	newItems = make([]ItemPair, 0)

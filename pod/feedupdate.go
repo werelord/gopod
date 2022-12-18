@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"gopod/podutils"
+	"io/fs"
 	"path/filepath"
 	"time"
 
@@ -349,25 +350,28 @@ func (fup *feedUpdate) createNewEntry(hash string, xmldata *podutils.XItemData) 
 // --------------------------------------------------------------------------
 func (fup feedUpdate) loadNewXml() ([]byte, error) {
 	var (
-		log  = fup.feed.log
-		body []byte
-		err  error
+		log        = fup.feed.log
+		body       []byte
+		err        error
+		recentfile string
 	)
 
 	if config.UseMostRecentXml {
 		// find the most recent xml based on the glob pattern
-		var filename string
-		if filename, err = podutils.FindMostRecent(filepath.Dir(fup.feed.xmlfile), fmt.Sprintf("%v.*.xml", fup.feed.Shortname)); err != nil {
-			// if errors.Is(err, fs.ErrNotExist) {
-			// todo: do a download
-			// } else {
-			log.Error("error finding most recent xml: ", err)
-			return nil, err
-			// }
-		}
 
-		log.Debug("loading xml file: ", filename)
-		if body, err = podutils.LoadFile(filename); err != nil {
+		if recentfile, err = podutils.FindMostRecent(filepath.Dir(fup.feed.xmlfile), fmt.Sprintf("%v.*.xml", fup.feed.Shortname)); err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				log.Warn("most recent file not found, doing a download")
+			} else {
+				log.Error("error finding most recent xml: ", err)
+				return nil, err
+			}
+		}
+	}
+
+	if recentfile != "" {
+		log.Debug("loading xml file: ", recentfile)
+		if body, err = podutils.LoadFile(recentfile); err != nil {
 			log.Error("error loading xml file: ", err)
 			return nil, err
 		}

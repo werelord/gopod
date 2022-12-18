@@ -153,7 +153,8 @@ func FindMostRecent(path, pattern string) (string, error) {
 	for _, file := range filelist {
 		if file.IsDir() == false {
 			if fi, err := file.Info(); err != nil {
-				log.Warn("info returned error: ", err)
+				log.Error("info returned error: ", err)
+				return "", err
 			} else if match, err := filepath.Match(pattern, fi.Name()); err != nil {
 				log.Error("match returned error: ", err)
 				return "", err

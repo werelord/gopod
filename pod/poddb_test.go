@@ -70,7 +70,7 @@ func TestNewDB(t *testing.T) {
 				if createVer == 0 {
 					createVer = currentModel
 				}
-				// hack create version
+				// create version
 				if res := gmock.mockdb.DB.
 					Exec("CREATE TABLE poddb_model (ID integer); INSERT INTO poddb_model (ID) VALUES (?)",
 						createVer); res.Error != nil {
@@ -97,8 +97,6 @@ func TestPodDB_IsFeedDeleted(t *testing.T) {
 
 	var gmock, teardown = setupGormMock(t, nil, true)
 	defer teardown(t, gmock)
-
-	// todo: insert feeds, delete feeds..
 
 	var (
 		feed1, feed2 = generateFeed(false), generateFeed(false)

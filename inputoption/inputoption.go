@@ -26,7 +26,6 @@ type InputOption struct {
 }
 
 type Config struct {
-	// todo: here
 	OneLine          bool
 	DefaultRuneUpper bool
 
