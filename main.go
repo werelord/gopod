@@ -112,9 +112,11 @@ func main() {
 
 	// todo: separate updating xml feed with downloading files (move to higher abstraction)
 
+	var cmdLog string
+
 	if cmdline.FeedShortname != "" {
 		if feed, exists := feedMap[cmdline.FeedShortname]; exists {
-			cmdFunc(feed)
+			cmdLog = cmdFunc(feed)
 		} else {
 			log.Errorf("cannot find shortname '%v'; not running command %v!", cmdline.FeedShortname, cmdline.Command)
 			return
@@ -122,10 +124,15 @@ func main() {
 	} else {
 		log.Infof("running '%v' on all feeds", cmdline.Command)
 		for _, feed := range feedMap {
-			cmdFunc(feed)
+			cmdLog += cmdFunc(feed)
 
 			// future: parallel via channels??
 		}
+	}
+
+	if cmdLog != "" {
+		// just for console output, not logging
+		fmt.Printf("finished %v:\n%v", cmdline.Command, cmdLog)
 	}
 
 	// todo: db export to json
@@ -148,8 +155,8 @@ func RunTest(config podconfig.Config, feedMap map[string]*pod.Feed, db *pod.PodD
 
 // --------------------------------------------------------------------------
 func SetupDB(cfg podconfig.Config) (*pod.PodDB, error) {
-	//dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod_test.db")
-	dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod.db")
+	dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod_test.db")
+	// dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod.db")
 
 	if db, err := pod.NewDB(dbpath); err != nil {
 		return nil, err
@@ -188,25 +195,30 @@ func parseCommand(cmd commandline.CommandType) commandFunc {
 
 // command functions
 // --------------------------------------------------------------------------
-type commandFunc func(*pod.Feed)
+type commandFunc func(*pod.Feed) string
 
-func runUpdate(f *pod.Feed) {
+func runUpdate(f *pod.Feed) string {
 	log.Infof("runing update on '%v'", f.Shortname)
-	if err := f.Update(); err != nil {
+	if downloaded, err := f.Update(); err != nil {
 		log.Errorf("Error in updating feed '%v': %v", f.Shortname, err)
+		return ""
+	} else {
+		return downloaded
 	}
 }
 
 // --------------------------------------------------------------------------
-func runCheckDownloads(f *pod.Feed) {
+func runCheckDownloads(f *pod.Feed) string {
 	log.Infof("running check downloads on '%v'", f.Shortname)
 	if err := f.CheckDownloads(); err != nil {
 		log.Errorf("Error in checking downloads for feed '%v': %v", f.Shortname, err)
 	}
+	return ""
 }
 
 // --------------------------------------------------------------------------
-func runDelete(f *pod.Feed) {
+func runDelete(f *pod.Feed) string {
+	// todo: logging of what's deleted
 	log.WithField("feed", f.Shortname).Infof("running delete")
 	if err := f.RunDelete(); err != nil {
 		log.WithFields(log.Fields{
@@ -214,10 +226,11 @@ func runDelete(f *pod.Feed) {
 			"error": err,
 		}).Error("failed running delete")
 	}
+	return ""
 }
 
 // --------------------------------------------------------------------------
-func runPreview(f *pod.Feed) {
+func runPreview(f *pod.Feed) string {
 	log.WithField("feed", f.Shortname).Info("running preview")
 	if err := f.Preview(); err != nil {
 		log.WithFields(log.Fields{
@@ -225,4 +238,5 @@ func runPreview(f *pod.Feed) {
 			"error": err,
 		}).Error("failed running preview")
 	}
+	return ""
 }

@@ -16,14 +16,14 @@
                 // global args
                 //"--help",
                "--config", "e:\\gopod\\master.toml",
-                // "--feed=darknet",
+                // "--feed=cppclub",
                 //"--proxy", "http://localhost:8888",
 
                 // update commands
                 "update",
                 //"--force",
                 // "--use-recent",
-                //"--simulate",
+                "--simulate",
                 // "--set-downloaded",
 
                 // check commands

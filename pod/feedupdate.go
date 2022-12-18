@@ -23,7 +23,7 @@ type feedUpdate struct {
 }
 
 // --------------------------------------------------------------------------
-func (f *Feed) Update() error {
+func (f *Feed) Update() (string, error) {
 
 	var (
 		fUpdate = feedUpdate{
@@ -35,12 +35,12 @@ func (f *Feed) Update() error {
 	if itemlist, err := fUpdate.loadDB(); err != nil {
 		reterr := fmt.Errorf("failed loading db: %w", err)
 		f.log.Error(reterr)
-		return reterr
+		return "", reterr
 
 	} else if err := fUpdate.processDBItems(itemlist); err != nil {
 		reterr := fmt.Errorf("failed to populate item lists: %w", err)
 		f.log.Error(reterr)
-		return reterr
+		return "", reterr
 	}
 
 	f.log.Debug("Feed loaded from db for update: ", f.Shortname)
@@ -50,11 +50,11 @@ func (f *Feed) Update() error {
 
 		if errors.Is(err, podutils.ParseCanceledError{}) {
 			f.log.Info("parse cancelled: ", err)
-			return nil // this is not an error, just a shortcut to stop processing
+			return "", nil // this is not an error, just a shortcut to stop processing
 		} else {
 			reterr := fmt.Errorf("failed to process feed: %w", err)
 			f.log.Error(reterr)
-			return err
+			return "", err
 		}
 	}
 
@@ -64,17 +64,27 @@ func (f *Feed) Update() error {
 		for _, err := range errlist {
 			f.log.Errorf("\t%v", err)
 		}
-		return errlist[0]
+		return "", errlist[0]
 	}
 
 	// save everything here, as processing is done.. any errors should have exited out at some point
 	if err := f.saveDBFeed(fUpdate.newXmlData, fUpdate.newItems); err != nil {
 		f.log.Error("saving db failed: ", err)
-		return err
+		return "", err
 	}
 
 	f.log.Debugf("done processing feed")
-	return nil
+
+	if len(fUpdate.newItems) > 0 {
+		var downloadList = fmt.Sprintf("%v:\n", fUpdate.feed.Shortname)
+		for _, item := range fUpdate.newItems {
+			downloadList += fmt.Sprintf("\t%v\n", item.Filename)
+		}
+		return downloadList, nil
+	} else {
+		return "", nil
+	}
+
 }
 
 // --------------------------------------------------------------------------
