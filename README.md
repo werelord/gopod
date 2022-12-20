@@ -2,21 +2,25 @@
 #### _A commandline based podcatcher, written in Go (golang)_
 ---
 
-* [Features](#features)
 * [Technology & Compatibility](#technology--compatibility)
+* [Features](#features)
 * [Commandline options](#commandline-options)
-* [Basic Configuration Options](#basic-configuration-options)
+  * [Basic](#basic-options-gopod---help)
+  * [Update](#update-options-gopod---help-update)
+  * [Check Downloads](#check-downloads-options-gopod---help-checkdownloads)
+  * [Preview](#preview-options-gopod---help-preview)
+  * [Delete](#delete-gopod---help-delete)
+* [Config File](#config-file)
+  * [General configuration options](#general-configuration-options)
+  * [Feed entry options](#feed-entry-options)
+  * [Filename parsing options](#filename-parsing-options)
+* [Gopod directory structure](#gopod-directory-structure)
   * [Log files](#log-files)
   * [Database file](#database-file)
   * [Download directories](#download-directories)
   * [Feed xml files](#feed-xml-files)
-* [Configuration File](#config-file)
-  * [General configuration options](#general-configuration-options)
-  * [Feed entry options](#feed-entry-options)
-  * [Filename parsing options](#filename-parsing-options)
-* [Why gopod?](#why?)
+* [Why gopod?](#why)
 * [Future](#future)
-* [Dependencies](#dependencies)
 
 ---
 ## Technology & Compatibility
@@ -34,10 +38,12 @@ Gopod is written with pure Go; while it does use [sqlite](https://www.sqlite.org
 ---
 ## Commandline Options
 
-<details>
-<summary>Basic commandline options</summary>
+The following are options available to gopod on the commandline; each are available via `--help` switch.
+
+### Basic options (`gopod --help`)
 
 Basic options. Lists all the commands available, and the generic options that can apply to all commands
+<details>
 
 ```
 SYNOPSIS:
@@ -66,9 +72,11 @@ Use 'gopod.exe help <command>' for extra details.
 ```
 
 </details>
-<details>
-<summary>Update options</summary>
+
+### Update options (`gopod --help update`)
+
 Update downloads any new (or not downloaded) podcast files. Ability to use previously downloaded podcast feed (most recent) is available.  Simulate will not download any files, or make changes to the database (useful for troubleshooting)
+<details>
 
 ```
 NAME:
@@ -103,14 +111,15 @@ OPTIONS:
 ```
 
 </details>
-<details>
-<summary>Check Downloads options</summary>
+
+### Check Downloads options (`gopod --help checkDownloads`)
 Check Downloads checks the integrity of the files in the database, with the ability to make changes based on included commandline options.  Integrity checks include:
 
 * Setting files to archived (if removed from download directory)
 * checking filename collisions between feed entries (if any exists)
 * checking or renaming files, if the filename parsing has changed
 * handling of filename collisions, if occurred
+<details>
 
 ```
 NAME:
@@ -145,9 +154,10 @@ OPTIONS:
 ```
 
 </details>
-<details>
-<summary>Preview options</summary>
+
+### Preview options (`gopod --help preview`)
 Preview is basically used to check file naming conventions; most useful when adding a new feed to the configuration.  Will output the potential podcast episode filenames for a feed to the console, as well as save the filename lists to `<shortname>.preview.xml`.
+<details>
 
 ```
 NAME:
@@ -176,9 +186,9 @@ OPTIONS:
 
 </details>
 
+### Delete (`gopod --help delete`)
+Delete feed will delete the feed and all relevant podcast episodes from the database.  The delete is a soft delete; only marking the entries as "deleted"; no entries are actually removed.  Once a delete is performed, the user should remove the feed entry from the config file (gopod will warn if still used when deleted).
 <details>
-<summary>Delete feed</summary>
-Delete feed will delete the feed and all relevant podcast episodes from the database.  The delete is a soft delete; only marking the entries as "deleted"; no entries are actually removed.
 
 ```
 NAME:
@@ -205,30 +215,9 @@ OPTIONS:
 </details>
 
 ---
-## Basic Configuration options
-
-Gopod's configuration file details the general non-commandline options available, as well as the details for the feeds that gopod will check and update.  See the [example config](https://github.com/openai/whisper) for an example.
-
-Gopod will use the directory the config file is located for saving all downloaded files, log files, and the database. 
-
-### Log files
----
-Log files will be saved individually in the `<configDir>\.logs\` directory, while also creating a symlink in the config directory for both all log messages (`gopod.all.latest.log`) as well as error/warning logs specifically (`gopod.error.latest.log`); these symlinks will be updated to the latest log file on each run.  Each log file in the `.logs\` directory will be named with the timestamp of when gopod was run.  The number of log files to retain can be configured in the config file (see below).
-
-### Database file
----
-The Sqlite database file is located in the directory `<configDir>\.db\gopod.db`; This is your typical Sqlite db file; and can be explored (or modified) with whatever sqlite tool you want.
-
-### Download directories
----
-Gopod will save all the files downloaded from each feed in the config file directory, specifically in `<configDir>\<shortname>` directory for each feed.  Each file will be named as specified in the config file below (denoted by the `filenameparse` parameter, see below).  File timestamps (modified, specifically) are set to the pubdate for the episode in the feed.
-
-### Feed xml files
----
-If specified, gopod will save the feed's xml files in the shortname directory for that feed; specifically in `<configDir>\<shortname>\.xml\`.  Each xml file will be timestamped with the last time it was retrieved.  The number of files to retain can be specified in the config file; see below.
-
 ## Config File
----
+Below is a short description of the configuration options available in the config file; see the [sample config file](https://github.com/werelord/gopod/blob/main/config.example.toml) for an example.
+
 ### General configuration options
 The options available in the general configurations for gopod: 
 ```
@@ -251,8 +240,8 @@ Options for a feed are as follows:
 * `name` - Name of the feed; whatever you want; user friendly name
 * `shortname` - file friendly name of the feed; used in directory and/or filenames.. Should match your file system's naming rules
 * `url` - the RSS/XML/Atom url of the feed
-* `filenameParse` - the rules for naming each episode of the feed.  See [Filename parsing options]() below for details.
-* `regex` - regular expression string, if filename parsing has title regex included. See [Filename parsing options]() below for details.
+* `filenameParse` - the rules for naming each episode of the feed.  See [Filename parsing options](#filename-parsing-options) below for details.
+* `regex` - regular expression string, if filename parsing has title regex included. See [Filename parsing options](#filename-parsing-options) below for details.
 * `cleanReplacement` - If episode title is used in file names, this character is used to replace characters that are not valid in file names. If omitted from configuration, will use `_` (underscore) as the replacement character.
 * `episodePad` - in number-based file naming options, how many leading `0`s (zeros) will be used for that number. If omitted, default is 3 (i.e. if episode 42, filename would use "042")
 
@@ -275,9 +264,32 @@ With this in mind, the following options for filenameParse config option are ava
 * `#title#` - the title of the episode.  Couple caveats exist where using title:
   * Title may have characters that are [not allowed as filename characters ](https://en.wikipedia.org/wiki/Filename#Reserved_characters_and_words); those characters will be replaced by underscores (by default) or the character defined in `cleanReplacement`
   * Note that due to possible filename length restrictions the filename may be truncated.
-* `#titleregex:?#` - use in combination with the `regex` feed option above; constructing a regex in that option (with submatches) allows gopod to use those submatches in the filename generated.  Replace the `?` in the string with the number of the submatch desired (1 indexed, as the golang regexp package has index 0 as the full match of the string). See [`config.example.toml`]() for an example.
+* `#titleregex:?#` - use in combination with the `regex` feed option above; constructing a regex in that option (with submatches) allows gopod to use those submatches in the filename generated.  Replace the `?` in the string with the number of the submatch desired (1 indexed, as the golang regexp package has index 0 as the full match of the string). See [`config.example.toml`](https://github.com/werelord/gopod/blob/main/config.example.toml) for an example.
 
 By default, gopod will check for filename collisions in downloading new episodes; this may happen more often when a podcast feed updates an existing episode while keeping the same guid hash.  In those cases, gopod will append an character (A thru L) at the end of the filename to avoid the collision.  
+
+## Gopod directory structure
+---
+
+Gopod's configuration file details the general non-commandline options available, as well as the details for the feeds that gopod will check and update.  See the [example config](https://github.com/openai/whisper) for an example.
+
+Gopod will use the directory the config file is located for saving all downloaded files, log files, and the database. 
+
+### Log files
+---
+Log files will be saved individually in the `<configDir>\.logs\` directory, while also creating a symlink in the config directory for both all log messages (`gopod.all.latest.log`) as well as error/warning logs specifically (`gopod.error.latest.log`); these symlinks will be updated to the latest log file on each run.  Each log file in the `.logs\` directory will be named with the timestamp of when gopod was run.  The number of log files to retain can be configured in the config file (see below).
+
+### Database file
+---
+The Sqlite database file is located in the directory `<configDir>\.db\gopod.db`; This is your typical Sqlite db file; and can be explored (or modified) with whatever sqlite tool you want.
+
+### Download directories
+---
+Gopod will save all the files downloaded from each feed in the config file directory, specifically in `<configDir>\<shortname>` directory for each feed.  Each file will be named as specified in the config file below (denoted by the `filenameparse` parameter, see below).  File timestamps (modified, specifically) are set to the pubdate for the episode in the feed.
+
+### Feed xml files
+---
+If specified, gopod will save the feed's xml files in the shortname directory for that feed; specifically in `<configDir>\<shortname>\.xml\`.  Each xml file will be timestamped with the last time it was retrieved.  The number of files to retain can be specified in the config file; see below.
 
 ---
 ## Why?
