@@ -169,7 +169,7 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 	checkcommand.BoolVar(&c.DoRename, "rename", false,
 		opt.Description("perform rename on files dependant on Filename parse (useful when parse value changes"))
 	checkcommand.BoolVar(&c.DoCollision, "collision", false, opt.Alias("coll"),
-		opt.Description("Collision handling; will promt for which item to keep"))
+		opt.Description("Collision handling; will prompt for which item to keep"))
 	checkcommand.BoolVar(&c.SaveCollision, "savecollision", false, opt.Alias("savecoll"),
 		opt.Description("Save collision differences to <workingdir>\\.collisions\\"))
 	checkcommand.SetCommandFn(c.generateCmdFunc(CheckDownloaded))

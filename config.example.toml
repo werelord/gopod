@@ -1,0 +1,30 @@
+
+[config]
+logfilesretained = 3   # number of logfiles (error and all, individually) to keep; -1 to retain all
+dupcheckmax = 8        # number of duplicate items found before skipping remaining item in pod rss feed.. -1 to disable
+xmlfilesretained = 3   # number of xml files saved on disk for future reference; -1 to save all
+
+# for details on each feed options, see https://github.com/werelord/gopod#configuration
+
+[[feed]]
+name = "This Week in Tech"
+shortname = "twit"
+url = "https://feeds.twit.tv/twit.xml"
+filenameParse = "#shortname.ep#count#.mp3"
+episodePad = 4
+
+[[feed]]
+name = "Algorithms + Data Structures = Programs"
+shortname = "adsp"
+url = "https://feeds.buzzsprout.com/1501960.rss"
+filenameParse = "#shortname#.ep#count#.#urlfilename#"
+cleanReplacement = "-"
+
+
+[[feed]]
+name = "darknet diaries"
+shortname = "darknet"
+url = "https://feeds.megaphone.fm/darknetdiaries"
+filenameParse = "#shortname#.ep#episode#.#titleregex:3#.mp3"
+regex = "(Ep )?([0-9]*)?: (.*)"
+cleanReplacement = ""
