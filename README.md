@@ -268,27 +268,27 @@ With this in mind, the following options for filenameParse config option are ava
 
 By default, gopod will check for filename collisions in downloading new episodes; this may happen more often when a podcast feed updates an existing episode while keeping the same guid hash.  In those cases, gopod will append an character (A thru L) at the end of the filename to avoid the collision.  
 
-## Gopod directory structure
 ---
+## Gopod directory structure
 
 Gopod's configuration file details the general non-commandline options available, as well as the details for the feeds that gopod will check and update.  See the [example config](https://github.com/openai/whisper) for an example.
 
 Gopod will use the directory the config file is located for saving all downloaded files, log files, and the database. 
 
 ### Log files
----
+
 Log files will be saved individually in the `<configDir>\.logs\` directory, while also creating a symlink in the config directory for both all log messages (`gopod.all.latest.log`) as well as error/warning logs specifically (`gopod.error.latest.log`); these symlinks will be updated to the latest log file on each run.  Each log file in the `.logs\` directory will be named with the timestamp of when gopod was run.  The number of log files to retain can be configured in the config file (see below).
 
 ### Database file
----
+
 The Sqlite database file is located in the directory `<configDir>\.db\gopod.db`; This is your typical Sqlite db file; and can be explored (or modified) with whatever sqlite tool you want.
 
 ### Download directories
----
+
 Gopod will save all the files downloaded from each feed in the config file directory, specifically in `<configDir>\<shortname>` directory for each feed.  Each file will be named as specified in the config file below (denoted by the `filenameparse` parameter, see below).  File timestamps (modified, specifically) are set to the pubdate for the episode in the feed.
 
 ### Feed xml files
----
+
 If specified, gopod will save the feed's xml files in the shortname directory for that feed; specifically in `<configDir>\<shortname>\.xml\`.  Each xml file will be timestamped with the last time it was retrieved.  The number of files to retain can be specified in the config file; see below.
 
 ---
@@ -313,5 +313,6 @@ Stuff that should be done, sometime..
 * use goroutines, maybe
 * archive flag on feed, reducing update check (if a podcast has gone on hiatus, but possibly not dead)
 
+---
 
 [^1]: who knows, maybe someday some [new technology](https://github.com/openai/whisper) would come around and allow me to run my archive of hockey podcasts to pull out notable [Jeff Marek](https://twitter.com/jeffmarek) quotes... or something...
