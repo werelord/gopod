@@ -24,6 +24,10 @@ var (
 	runTimestamp time.Time
 )
 
+const (
+	Version = "v0.1.0-beta"
+)
+
 // --------------------------------------------------------------------------
 func init() {
 
@@ -34,11 +38,13 @@ func init() {
 // --------------------------------------------------------------------------
 func main() {
 
+	fmt.Printf("gopod %v\n", Version)
+
 	var (
 		cmdline  *commandline.CommandLine
 		poddb    *pod.PodDB
 		config   *podconfig.Config
-		feedList *[]podconfig.FeedToml
+		feedList []podconfig.FeedToml
 		feedMap  map[string]*pod.Feed
 
 		err error
@@ -79,7 +85,7 @@ func main() {
 
 	// move feedlist into shortname map
 	feedMap = make(map[string]*pod.Feed)
-	for _, feedtoml := range *feedList {
+	for _, feedtoml := range feedList {
 		f, err := pod.NewFeed(feedtoml)
 		if err != nil {
 			log.Error("failed to create new feed: ", err)
@@ -147,8 +153,8 @@ func RunTest(config podconfig.Config, feedMap map[string]*pod.Feed, db *pod.PodD
 
 // --------------------------------------------------------------------------
 func SetupDB(cfg podconfig.Config) (*pod.PodDB, error) {
-	dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod_test.db")
-	// dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod.db")
+	// dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod_test.db")
+	dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod.db")
 
 	if db, err := pod.NewDB(dbpath); err != nil {
 		return nil, err

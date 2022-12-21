@@ -42,7 +42,7 @@ type FeedToml struct {
 }
 
 // --------------------------------------------------------------------------
-func LoadToml(filename string, timestamp time.Time) (*Config, *[]FeedToml, error) {
+func LoadToml(filename string, timestamp time.Time) (*Config, []FeedToml, error) {
 
 	tomldoc := tomldocImport{}
 	tomldoc.Config.Timestamp = timestamp
@@ -68,6 +68,6 @@ func LoadToml(filename string, timestamp time.Time) (*Config, *[]FeedToml, error
 		return nil, nil, fmt.Errorf("toml.unmarshal failed: %v ", err)
 	}
 
-	return &tomldoc.Config, &tomldoc.Feedlist, nil
+	return &tomldoc.Config, tomldoc.Feedlist, nil
 
 }
