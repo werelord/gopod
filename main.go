@@ -14,6 +14,7 @@ import (
 	"gopod/logger"
 	"gopod/pod"
 	"gopod/podconfig"
+	"gopod/podutils"
 
 	"github.com/DavidGamba/go-getoptions"
 	log "github.com/sirupsen/logrus"
@@ -25,7 +26,7 @@ var (
 )
 
 const (
-	Version = "v0.1.0-beta"
+	Version = "v0.1.1-beta"
 )
 
 // --------------------------------------------------------------------------
@@ -44,8 +45,7 @@ func main() {
 		cmdline  *commandline.CommandLine
 		poddb    *pod.PodDB
 		config   *podconfig.Config
-		feedList []podconfig.FeedToml
-		feedMap  map[string]*pod.Feed
+		tomlList []podconfig.FeedToml
 
 		err error
 	)
@@ -66,7 +66,7 @@ func main() {
 	// logging initialized, lets output commandline struct
 	log.Debugf("cmdline: %+v", cmdline)
 
-	if config, feedList, err = podconfig.LoadToml(cmdline.ConfigFile, runTimestamp); err != nil {
+	if config, tomlList, err = podconfig.LoadToml(cmdline.ConfigFile, runTimestamp); err != nil {
 		log.Errorf("failed to read toml file: %v", err)
 		return
 	}
@@ -83,21 +83,9 @@ func main() {
 	}
 	pod.Init(config, poddb)
 
-	// move feedlist into shortname map
-	feedMap = make(map[string]*pod.Feed)
-	for _, feedtoml := range feedList {
-		f, err := pod.NewFeed(feedtoml)
-		if err != nil {
-			log.Error("failed to create new feed: ", err)
-			continue
-		}
-		feedMap[f.Shortname] = f
-	}
-
 	//------------------------------------- DEBUG -------------------------------------
-	if config.Debug && RunTest(*config, feedMap, poddb) {
-		// runtest was run, exit
-		return
+	if config.Debug {
+		RunTest(*config, tomlList, poddb)
 	}
 	//------------------------------------- DEBUG -------------------------------------
 
@@ -113,27 +101,7 @@ func main() {
 
 	log.Debugf("running command: '%v'", cmdline.Command)
 
-	var cmdLog string
-	if cmdline.FeedShortname != "" {
-		if feed, exists := feedMap[cmdline.FeedShortname]; exists {
-			cmdLog = cmdFunc(feed)
-		} else {
-			log.Errorf("cannot find shortname '%v'; not running command %v!", cmdline.FeedShortname, cmdline.Command)
-			return
-		}
-	} else {
-		log.Infof("running '%v' on all feeds", cmdline.Command)
-		for _, feed := range feedMap {
-			cmdLog += cmdFunc(feed)
-
-			// future: parallel via channels??
-		}
-	}
-
-	if cmdLog != "" {
-		// just for console output, not logging
-		fmt.Printf("finished %v:\n%v", cmdline.Command, cmdLog)
-	}
+	cmdFunc(cmdline.FeedShortname, tomlList)
 
 	// rotate the log files
 	if config.LogFilesRetained > 0 {
@@ -142,13 +110,12 @@ func main() {
 }
 
 // --------------------------------------------------------------------------
-func RunTest(config podconfig.Config, feedMap map[string]*pod.Feed, db *pod.PodDB) (exit bool) {
+func RunTest(config podconfig.Config, tomlList []podconfig.FeedToml, db *pod.PodDB) {
 	if config.Debug && false {
 
 		//doMigrate(feedMap, db)
-		return true
+		os.Exit(0)
 	}
-	return false
 }
 
 // --------------------------------------------------------------------------
@@ -191,50 +158,136 @@ func parseCommand(cmd commandline.CommandType) commandFunc {
 	}
 }
 
+// --------------------------------------------------------------------------
+func genFeedList(shortname string, tomlList []podconfig.FeedToml) ([]*pod.Feed, error) {
+	var feedList = make([]*pod.Feed, 0, len(tomlList))
+	if shortname != "" {
+		if feed, err := genFeed(shortname, tomlList); err != nil {
+			return nil, err
+		} else {
+			return []*pod.Feed{feed}, nil
+		}
+	} else {
+		for _, toml := range tomlList {
+
+			if feed, err := pod.NewFeed(toml); err != nil {
+				return nil, fmt.Errorf("failed to create new feed: %v", err)
+			} else {
+				feedList = append(feedList, feed)
+			}
+		}
+		return feedList, nil
+	}
+}
+
+// --------------------------------------------------------------------------
+func genFeed(shortname string, tomlList []podconfig.FeedToml) (*pod.Feed, error) {
+	// extra check
+	if shortname == "" {
+		return nil, fmt.Errorf("shortname cannot be blank")
+	}
+	for _, toml := range tomlList {
+		// shortname is optional; if it is, it's based on name
+		if toml.Shortname == shortname || toml.Name == shortname {
+			// convert
+			return pod.NewFeed(toml)
+		}
+	}
+	return nil, fmt.Errorf("cannot find feed with shortname '%v'", shortname)
+}
+
 // command functions
 // --------------------------------------------------------------------------
-type commandFunc func(*pod.Feed) string
+type commandFunc func(string, []podconfig.FeedToml)
 
-func runUpdate(f *pod.Feed) string {
-	log.Infof("runing update on '%v'", f.Shortname)
-	if downloaded, err := f.Update(); err != nil {
-		log.Errorf("Error in updating feed '%v': %v", f.Shortname, err)
-		return ""
+func runUpdate(shortname string, tomlList []podconfig.FeedToml) {
+
+	var res pod.DownloadResults
+
+	if feedList, err := genFeedList(shortname, tomlList); err != nil {
+		log.Error(err)
+		return
+	} else if len(feedList) == 0 {
+		log.Error("no feeds found to update (check config or passed-in shortname)")
+		return
 	} else {
-		return downloaded
+		res = pod.UpdateFeeds(feedList...)
+	}
+
+	// output success
+	for feedShortname, fileList := range res.Results {
+		fmt.Printf("%v:\n", feedShortname)
+		for _, file := range fileList {
+			fmt.Printf("\t%v\n", file)
+		}
+	}
+
+	// output totals
+	fmt.Printf("Downloaded %v files, %v", res.TotalDownloaded, podutils.FormatBytes(res.TotalDownloadedBytes))
+
+	// output errors
+	if len(res.Errors) > 0 {
+		log.Errorf("Errors in updating feeds:\n")
+		for _, err := range res.Errors {
+			log.Errorf("\t%v\n", err)
+		}
 	}
 }
 
 // --------------------------------------------------------------------------
-func runCheckDownloads(f *pod.Feed) string {
-	log.Infof("running check downloads on '%v'", f.Shortname)
-	if err := f.CheckDownloads(); err != nil {
-		log.Errorf("Error in checking downloads for feed '%v': %v", f.Shortname, err)
+func runCheckDownloads(shortname string, tomlList []podconfig.FeedToml) {
+
+	if feedList, err := genFeedList(shortname, tomlList); err != nil {
+		log.Error(err)
+		return
+	} else if len(feedList) == 0 {
+		log.Error("no feeds found to update (check config or passed-in shortname)")
+		return
+	} else {
+		for _, f := range feedList {
+			if err := f.CheckDownloads(); err != nil {
+				log.Errorf("Error in checking downloads for feed '%v': %v", f.Shortname, err)
+			}
+		}
 	}
-	return ""
 }
 
 // --------------------------------------------------------------------------
-func runDelete(f *pod.Feed) string {
-	// todo: logging of what's deleted
-	log.WithField("feed", f.Shortname).Infof("running delete")
-	if err := f.RunDelete(); err != nil {
-		log.WithFields(log.Fields{
-			"feed":  f.Shortname,
-			"error": err,
-		}).Error("failed running delete")
+func runDelete(shortname string, tomlList []podconfig.FeedToml) {
+
+	if shortname == "" {
+		log.Error("cannot only run delete on one feed at a time")
+		return
+	} else if f, err := genFeed(shortname, tomlList); err != nil {
+		log.Error(err)
+		return
+	} else {
+		// todo: logging of what's deleted
+		log.WithField("feed", f.Shortname).Infof("running delete")
+		if err := f.RunDelete(); err != nil {
+			log.WithFields(log.Fields{
+				"feed":  f.Shortname,
+				"error": err,
+			}).Error("failed running delete")
+		}
 	}
-	return ""
 }
 
 // --------------------------------------------------------------------------
-func runPreview(f *pod.Feed) string {
-	log.WithField("feed", f.Shortname).Info("running preview")
-	if err := f.Preview(); err != nil {
-		log.WithFields(log.Fields{
-			"feed":  f.Shortname,
-			"error": err,
-		}).Error("failed running preview")
+func runPreview(shortname string, tomlList []podconfig.FeedToml) {
+	if shortname == "" {
+		log.Error("cannot only run preview on one feed at a time")
+		return
+	} else if f, err := genFeed(shortname, tomlList); err != nil {
+		log.Error(err)
+		return
+	} else {
+		log.WithField("feed", f.Shortname).Info("running preview")
+		if err := f.Preview(); err != nil {
+			log.WithFields(log.Fields{
+				"feed":  f.Shortname,
+				"error": err,
+			}).Error("failed running preview")
+		}
 	}
-	return ""
 }

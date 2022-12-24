@@ -3,6 +3,7 @@ package podutils
 import (
 	"crypto/sha1"
 	"encoding/base64"
+	"fmt"
 )
 
 const TimeFormatStr = "20060102_150405"
@@ -54,3 +55,16 @@ func Chunk[T any](slice []T, chunksize int) [][]T {
 	return chunks
 }
 
+// --------------------------------------------------------------------------
+func FormatBytes(b uint64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := uint64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+}

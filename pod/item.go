@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/schollz/progressbar/v3"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/exp/slices"
 )
 
 type Item struct {
@@ -271,7 +272,10 @@ func parseUrl(urlstr, urlparse string) (string, error) {
 			}
 		}
 		if found == false {
-			log.WithFields(log.Fields{"url": u.String(), "UrlParse": urlparse}).Warn("failed parsing url; split failed")
+			// see if parseList contains current host; if it doesn't THEN log the warning
+			if slices.Contains(parseList, u.Host) == false {
+				log.WithFields(log.Fields{"url": u.String(), "UrlParse": urlparse}).Warn("failed parsing url; split failed")
+			}
 		}
 
 	}
@@ -339,24 +343,26 @@ func (i Item) createProgressBar() *progressbar.ProgressBar {
 }
 
 // --------------------------------------------------------------------------
-func (i *Item) Download(mp3path string) error {
+func (i *Item) Download(mp3path string) (int64, error) {
 
 	var (
 		destfile = filepath.Join(mp3path, i.Filename)
+		bytesWrote int64
 	)
 
 	file, err := podutils.CreateTemp(filepath.Dir(destfile), filepath.Base(destfile)+"_temp*")
 	if err != nil {
 		i.log.Error("Failed creating temp file: ", err)
-		return err
+		return bytesWrote, err
 	}
 	defer file.Close()
 
 	if bw, cd, err := podutils.DownloadBuffered(i.Url, file, i.createProgressBar()); err != nil {
 		i.log.Error("Failed downloading pod:", err)
-		return err
+		return bw, err
 	} else {
 		i.log.Debugf("file written {%v} bytes: %.2fKB", filepath.Base(file.Name()), float64(bw)/(1<<10))
+		bytesWrote = bw
 
 		if strings.Contains(cd, "filename") {
 			// content disposition header, for the hell of it
@@ -375,12 +381,12 @@ func (i *Item) Download(mp3path string) error {
 	// move tempfile to finished file
 	if err = podutils.Rename(file.Name(), destfile); err != nil {
 		i.log.Debug("error moving temp file: ", err)
-		return err
+		return bytesWrote, err
 	}
 
 	i.SetDownloaded(mp3path)
 
-	return nil
+	return bytesWrote, nil
 }
 
 //--------------------------------------------------------------------------

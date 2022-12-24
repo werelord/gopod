@@ -14,14 +14,15 @@
             "console": "integratedTerminal",
             "args": [
                 // global args
-                //"--help",
-               "--config", "e:\\gopod\\master.toml",
-                // "--feed=cppclub",
-                //"--proxy", "http://localhost:8888",
+                // "--help",
+                "--config", "e:\\gopod\\config.toml",
+                // "--config", "e:\\gopod-sim\\sim.toml", 
+                // "--feed=cppcast",
+                // "--proxy", "http://localhost:8888",
 
                 // update commands
                 "update",
-                //"--force",
+                // "--force",
                 // "--use-recent",
                 "--simulate",
                 // "--set-downloaded",
@@ -30,8 +31,8 @@
                 // "checkdownloads",
                 // "--archive",
                 // "--rename",
-                //"--coll",
-                //"--savecoll",
+                // "--coll",
+                // "--savecoll",
 
                 // delete command
                 // "deletefeed",

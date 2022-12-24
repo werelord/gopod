@@ -9,7 +9,28 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
+
+// common to all
+type DownloadResults struct {
+	currentLogger        *log.Entry
+	Results              map[string][]string
+	TotalDownloaded      uint
+	TotalDownloadedBytes uint64
+	Errors               []error
+}
+
+func (dr *DownloadResults) addError(errs ...error) {
+	for _, err := range errs {
+		if dr.currentLogger != nil {
+			log.Error(err)
+		} else {
+			dr.currentLogger.Error(err)
+		}
+	}
+	dr.Errors = append(dr.Errors, errs...)
+}
 
 type feedUpdate struct {
 	feed       *Feed
@@ -23,25 +44,41 @@ type feedUpdate struct {
 	collisionFunc func(string) bool
 }
 
+func UpdateFeeds(feeds ...*Feed) DownloadResults {
+
+	var dlRes = DownloadResults{
+		Results:              make(map[string][]string, len(feeds)),
+		TotalDownloaded:      0,
+		TotalDownloadedBytes: 0,
+		Errors:               make([]error, 0),
+	}
+
+	for _, feed := range feeds {
+		feed.log.Info("running update")
+		feed.update(&dlRes)
+	}
+
+	return dlRes
+}
+
 // --------------------------------------------------------------------------
-func (f *Feed) Update() (string, error) {
+func (f *Feed) update(results *DownloadResults) {
 
 	var (
 		fUpdate = feedUpdate{
 			feed: f,
 		}
 	)
+	results.currentLogger = f.log
 
 	// load feed and items
 	if itemlist, err := fUpdate.loadDB(); err != nil {
-		reterr := fmt.Errorf("failed loading db: %w", err)
-		f.log.Error(reterr)
-		return "", reterr
+		results.addError(fmt.Errorf("failed loading db: %w", err))
+		return
 
 	} else if err := fUpdate.processDBItems(itemlist); err != nil {
-		reterr := fmt.Errorf("failed to populate item lists: %w", err)
-		f.log.Error(reterr)
-		return "", reterr
+		results.addError(fmt.Errorf("failed to populate item lists: %w", err))
+		return
 	}
 
 	f.log.Debug("Feed loaded from db for update: ", f.Shortname)
@@ -51,41 +88,26 @@ func (f *Feed) Update() (string, error) {
 
 		if errors.Is(err, podutils.ParseCanceledError{}) {
 			f.log.Info("parse cancelled: ", err)
-			return "", nil // this is not an error, just a shortcut to stop processing
+			return // this is not an error, just a shortcut to stop processing
 		} else {
-			reterr := fmt.Errorf("failed to process feed: %w", err)
-			f.log.Error(reterr)
-			return "", err
+			results.addError(fmt.Errorf("failed to process feed: %w", err))
+			return
 		}
 	}
 
 	// process new entries
-	if errlist := fUpdate.downloadNewItems(); len(errlist) > 0 {
-		f.log.Error("errors in processing new items:\n")
-		for _, err := range errlist {
-			f.log.Errorf("\t%v", err)
-		}
-		return "", errlist[0]
+	if success := fUpdate.downloadNewItems(results); success == false {
+		f.log.Error("errors encountered; not saving db for future retries")
+		return
 	}
 
 	// save everything here, as processing is done.. any errors should have exited out at some point
 	if err := f.saveDBFeed(fUpdate.newXmlData, fUpdate.newItems); err != nil {
-		f.log.Error("saving db failed: ", err)
-		return "", err
+		results.addError(fmt.Errorf("saving db failed: %v", err))
+		return
 	}
 
 	f.log.Debugf("done processing feed")
-
-	if len(fUpdate.newItems) > 0 {
-		var downloadList = fmt.Sprintf("%v:\n", fUpdate.feed.Shortname)
-		for _, item := range fUpdate.newItems {
-			downloadList += fmt.Sprintf("\t%v\n", item.Filename)
-		}
-		return downloadList, nil
-	} else {
-		return "", nil
-	}
-
 }
 
 // --------------------------------------------------------------------------
@@ -476,17 +498,13 @@ func (fup feedUpdate) CalcItemHash(guid string, url string) (string, error) {
 }
 
 // --------------------------------------------------------------------------
-func (fup *feedUpdate) downloadNewItems() []error {
+func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 
 	var (
-		f       = fup.feed
-		errList = make([]error, 0)
+		f = fup.feed
+		// by default; any errors will set this to false
+		success = true
 	)
-
-	if len(fup.newItems) == 0 {
-		f.log.Info("no items to process; item list is empty")
-		return nil
-	}
 
 	for _, item := range fup.newItems {
 		f.log.Debugf("processing new item: {%v %v}", item.Filename, item.Hash)
@@ -496,8 +514,8 @@ func (fup *feedUpdate) downloadNewItems() []error {
 
 		fileExists, err := podutils.FileExists(podfile)
 		if err != nil {
-			f.log.Error("error in FileExists; not downloading: ", err)
-			errList = append(errList, err)
+			results.addError(fmt.Errorf("error in FileExists; not downloading: %v", err))
+			success = false
 			continue
 		}
 
@@ -525,17 +543,36 @@ func (fup *feedUpdate) downloadNewItems() []error {
 			}
 			continue
 		}
+
+		var bytes uint64
+
 		if config.Simulate {
 			f.log.Info("skipping downloading file due to sim flag")
-			continue
+			// fake the bytes downloaded
+			if item.XmlData.Enclosure.Length == 0 {
+				f.log.Warnf("simulate flag, and download length in xml is 0")
+			} else {
+				bytes = uint64(item.XmlData.Enclosure.Length)
+			}
+
+		} else {
+			if b, err := item.Download(f.mp3Path); err != nil {
+				results.addError(fmt.Errorf("Error downloading file: %v", err))
+				success = false
+				continue
+			} else {
+				bytes = uint64(b)
+			}
 		}
-		if err = item.Download(f.mp3Path); err != nil {
-			f.log.Error("Error downloading file: ", err)
-			errList = append(errList, err)
-		}
-		f.log.Info("finished processing file: ", podfile)
+
+		// add the success to the results
+		results.TotalDownloaded++
+		results.TotalDownloadedBytes += bytes
+		results.Results[fup.feed.Shortname] = append(results.Results[fup.feed.Shortname], item.Filename)
+
+		f.log.Info("finished downloading file: ", podfile)
 	}
 
 	f.log.Info("all new downloads completed")
-	return errList
+	return success
 }
