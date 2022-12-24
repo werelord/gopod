@@ -76,6 +76,12 @@ func InitLogging(workingdir string, shortname string, timestamp time.Time) error
 	log.SetReportCaller(true)
 
 	logdir = filepath.Join(workingdir, ".logs")
+	// make sure dir exists
+	if err := podutils.MkdirAll(logdir); err != nil {
+		fmt.Printf("error making xml directory: %v", err)
+		return err
+	}
+
 	allLevelsFile := filepath.Join(logdir, fmt.Sprintf("%v.all.%v.%v", shortname,
 		timestamp.Format(podutils.TimeFormatStr), "log"))
 	errorLevelsFile := filepath.Join(logdir, fmt.Sprintf("%v.error.%v.%v", shortname,
