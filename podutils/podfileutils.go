@@ -108,6 +108,12 @@ func RotateFiles(path, pattern string, numToKeep uint) error {
 	// remove the X number of files beyond the limit
 	// always keep the last entry in the list regardless of size,
 	// as that one likely has the most recent symlink attached
+
+	if uint(len(filelist)) < numToKeep {
+		log.Debugf("file count (%v) < numToKeep (%v), nothing to remove", len(filelist), numToKeep)
+		return nil
+	}
+
 	var keepCount uint = 0
 	var startIndex = len(filelist) - 1 // don't need to store this, just makes referencing it twice easier
 	for i := startIndex; i >= 0; i-- {

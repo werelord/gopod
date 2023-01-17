@@ -204,6 +204,15 @@ func (i *Item) updateFromEntry(
 		log.Error("failed parsing url: ", err)
 		return err
 	} else {
+		log.WithFields(log.Fields{
+			"oldUrl":    i.Url,
+			"newUrl":    cUrl,
+			"shortname": i.parentShortname,
+		}).Debug("new urls from hash")
+
+		if i.Url == cUrl {
+			return fmt.Errorf("urls are the same; this shouldn't happen")
+		}
 		i.Url = cUrl
 	}
 
@@ -346,7 +355,7 @@ func (i Item) createProgressBar() *progressbar.ProgressBar {
 func (i *Item) Download(mp3path string) (int64, error) {
 
 	var (
-		destfile = filepath.Join(mp3path, i.Filename)
+		destfile   = filepath.Join(mp3path, i.Filename)
 		bytesWrote int64
 	)
 
@@ -361,7 +370,7 @@ func (i *Item) Download(mp3path string) (int64, error) {
 		i.log.Error("Failed downloading pod:", err)
 		return bw, err
 	} else {
-		i.log.Debugf("file written {%v} bytes: %.2fKB", filepath.Base(file.Name()), float64(bw)/(1<<10))
+		i.log.Debugf("file written {%v} bytes: %v", filepath.Base(file.Name()), podutils.FormatBytes(uint64(bw)))
 		bytesWrote = bw
 
 		if strings.Contains(cd, "filename") {
@@ -389,7 +398,7 @@ func (i *Item) Download(mp3path string) (int64, error) {
 	return bytesWrote, nil
 }
 
-//--------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 func (i *Item) SetDownloaded(mp3path string) {
 	var (
 		destfile = filepath.Join(mp3path, i.Filename)

@@ -312,6 +312,7 @@ Stuff that should be done, sometime..
 * clean up log messages
 * use goroutines, maybe
 * archive flag on feed, reducing update check (if a podcast has gone on hiatus, but possibly not dead)
+* domain/path change but file remains the same ((hash collision, guid == guid, url != url) shouldn't redownload; check enclosure length)
 
 ---
 
