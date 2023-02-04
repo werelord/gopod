@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -311,13 +310,13 @@ func (fup *feedUpdate) checkExistingGuid(hash string, xmldata *podutils.XItemDat
 
 	var (
 		handled = false
-		log     = fup.feed.log
+		flog    = fup.feed.log
 	)
 
 	if itemEntry, exists := fup.guidCollList[xmldata.Guid]; exists {
 		handled = true
 		// guid collision, with no hash collision.. means the url has changed..
-		log.WithFields(logrus.Fields{
+		flog.WithFields(log.Fields{
 			"previousguid": itemEntry.Guid,
 			"newguid":      xmldata.Guid,
 			"oldhash":      itemEntry.Hash,
@@ -332,10 +331,10 @@ func (fup *feedUpdate) checkExistingGuid(hash string, xmldata *podutils.XItemDat
 
 		// make sure the previous is loaded for replacing the existing
 		if err := itemEntry.loadItemXml(db); err != nil {
-			log.Error("failed loading item xml: ", err)
+			flog.Error("failed loading item xml: ", err)
 			return true, err
 		} else if err := itemEntry.updateFromEntry(fup.feed.FeedToml, hash, xmldata, fup.collisionFunc); err != nil {
-			log.Error("failed updating existing item entry; skipping: ", err)
+			flog.Error("failed updating existing item entry; skipping: ", err)
 			return true, err
 		} else {
 			// add it to various lists; may do a replacement
