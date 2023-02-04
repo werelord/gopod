@@ -129,6 +129,13 @@ func (fup *feedUpdate) loadDB() ([]*Item, error) {
 		log.Error(reterr)
 		return itemList, reterr
 	} else {
+
+		// check episode count start; if a new feed (count == 0) double check config for countStart
+		if (f.EpisodeCount == 0) && (f.CountStart != 0) {
+			log.Debugf("new feed (?); episode count == 0 and countStart == %v; setting episodeCount to countStart", f.CountStart)
+			f.EpisodeCount = f.CountStart
+		}
+
 		return itemList, nil
 	}
 }
@@ -315,6 +322,8 @@ func (fup *feedUpdate) checkExistingGuid(hash string, xmldata *podutils.XItemDat
 			"newguid":      xmldata.Guid,
 			"oldhash":      itemEntry.Hash,
 			"newhash":      hash,
+			"oldUrl":       itemEntry.Url,
+			"newUrl":       xmldata.Enclosure.Url,
 		}).Infof("guid collision detected with no hash collision; likely new url for same item")
 
 		// hash will change.. filename might change if url is in filenameparse

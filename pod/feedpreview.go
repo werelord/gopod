@@ -56,9 +56,16 @@ func (f *Feed) Preview() error {
 			_, exists := fileCollList[filename]
 			return exists
 		}
-		itemCount    = f.EpisodeCount
+		itemCount    int
 		filenameList = make([]string, 0, len(itemPairs))
 	)
+
+	if (f.EpisodeCount == 0) && f.CountStart != 0 {
+		f.log.Debugf("new feed (?); episode count == 0 and countStart == %v; setting episodeCount to countStart", f.CountStart)
+		itemCount = f.CountStart
+	} else {
+		itemCount = f.EpisodeCount
+	}
 
 	// list comes out newest (top of xml feed) to oldest.. reverse that,
 	// go oldest to newest, to maintain item count

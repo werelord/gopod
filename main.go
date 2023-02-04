@@ -223,7 +223,7 @@ func runUpdate(shortname string, tomlList []podconfig.FeedToml) {
 	}
 
 	// output totals
-	fmt.Printf("Downloaded %v files, %v", res.TotalDownloaded, podutils.FormatBytes(res.TotalDownloadedBytes))
+	fmt.Printf("Downloaded %v files, %v\n", res.TotalDownloaded, podutils.FormatBytes(res.TotalDownloadedBytes))
 
 	// output errors
 	if len(res.Errors) > 0 {

@@ -39,6 +39,7 @@ type FeedToml struct {
 	UrlParse      string  `toml:"urlParse"`
 	CleanRep      *string `toml:"cleanReplacement"`
 	EpisodePad    int     `toml:"episodePad"`
+	CountStart    int     `toml:"countStart"`
 }
 
 // --------------------------------------------------------------------------
