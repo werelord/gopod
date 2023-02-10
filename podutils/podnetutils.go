@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/schollz/progressbar/v3"
 	log "github.com/sirupsen/logrus"
@@ -37,7 +38,10 @@ func dload(url string, writer io.Writer, pbar *progressbar.ProgressBar) (bytes i
 		resp *http.Response
 	)
 
-	client := &http.Client{}
+	// setting client timeout, see https://blog.cloudflare.com/the-complete-guide-to-golang-net-http-timeouts/
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
 
 	if req, err = createRequest(url); err != nil {
 		log.Error("failed creating request: ", err)

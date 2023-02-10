@@ -77,7 +77,7 @@ func main() {
 	log.Infof("using config: %+v", config)
 
 	// todo: official poddb migration methods
-	if poddb, err = SetupDB(*config); err != nil {
+	if poddb, err = SetupDB(config); err != nil {
 		log.Error("Failed setting up db: ", err)
 		return
 	}
@@ -119,9 +119,24 @@ func RunTest(config podconfig.Config, tomlList []podconfig.FeedToml, db *pod.Pod
 }
 
 // --------------------------------------------------------------------------
-func SetupDB(cfg podconfig.Config) (*pod.PodDB, error) {
+func SetupDB(cfg *podconfig.Config) (*pod.PodDB, error) {
 	// dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod_test.db")
 	dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod.db")
+
+	if cfg.BackupDb {
+		// todo: do a rotate??
+		var backupFile = filepath.Join(cfg.WorkspaceDir, ".db", fmt.Sprintf("gopod.bak.%s.db", cfg.TimestampStr))
+		if _, err := podutils.CopyFile(dbpath, backupFile); err != nil {
+			return nil, err
+		} else {
+			// make sure the modified/created time stay the same
+			if dbStat, err := os.Stat(dbpath); err != nil {
+				log.Warn("Error getting db stats for backup: %v", err)
+			} else {
+				podutils.Chtimes(backupFile, dbStat.ModTime(), dbStat.ModTime())
+			}
+		}
+	}
 
 	if db, err := pod.NewDB(dbpath); err != nil {
 		return nil, err

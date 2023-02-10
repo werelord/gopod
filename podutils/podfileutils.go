@@ -232,3 +232,32 @@ func Rename(oldpath, newpath string) error {
 func Chtimes(path string, access time.Time, modification time.Time) error {
 	return osimpl.Chtimes(path, access, modification)
 }
+
+func CopyFile(src, dst string) (int64, error) {
+	// todo: unit test
+
+	if srcStat, err := os.Stat(src); err != nil {
+		return 0, err
+	} else if srcStat.Mode().IsRegular() == false {
+		return 0, fmt.Errorf("%v is not a regular file", src)
+	}
+
+	var (
+		srcFile, dstFile *os.File
+		err              error
+	)
+
+	srcFile, err = os.Open(src)
+	if err != nil {
+		return 0, err
+	}
+	defer srcFile.Close()
+
+	dstFile, err = os.Create(dst)
+	if err != nil {
+		return 0, err
+	}
+	defer dstFile.Close()
+
+	return io.Copy(dstFile, srcFile)
+}

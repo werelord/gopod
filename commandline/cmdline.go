@@ -48,7 +48,8 @@ type CommandLine struct {
 
 type CommandLineOptions struct {
 	// global
-	Debug bool
+	BackupDb bool
+	Debug    bool
 
 	UpdateOpt
 	CheckDownloadOpt
@@ -147,6 +148,9 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 	opt.StringVar(&c.Proxy, "proxy", "",
 		opt.Description("use proxy url"),
 		opt.Alias("p", " proxy"))
+	opt.BoolVar(&c.BackupDb, "backup-db", false,
+		opt.Description("Backup database before opening"),
+		opt.Alias("bak"))
 	opt.BoolVar(&c.Debug, "debug", false,
 		opt.Description("Debug"),
 		opt.Alias("dbg"))
