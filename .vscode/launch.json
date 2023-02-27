@@ -19,13 +19,13 @@
                 // "--config", "e:\\gopod-sim\\sim.toml", 
                 // "--feed=lle",
                 // "--proxy", "http://localhost:8888",
-                // "--backup-db",
+                "--backup-db",
 
                 // update commands
                 "update",
                 // "--force",
                 // "--use-recent",
-                "--simulate",
+                // "--simulate",
                 // "--set-downloaded",
 
                 // check commands
