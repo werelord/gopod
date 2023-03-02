@@ -685,7 +685,6 @@ func TestPodDB_saveItems(t *testing.T) {
 		emptyPath   bool
 		openErr     bool
 		termErr     stackType
-		nilItem     bool
 		missingFeed bool
 		missingHash bool
 		missingGuid bool
