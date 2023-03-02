@@ -681,42 +681,20 @@ func TestPodDB_saveFeed(t *testing.T) {
 
 func TestPodDB_saveItems(t *testing.T) {
 
-	gmock, teardown := setupGormMock(t, nil, true)
-	defer teardown(t, gmock)
-
-	var (
-		orig1, orig2 = generateItem(1, true), generateItem(1, true)
-		item1, item2 = generateItem(1, true), generateItem(1, true)
-
-		missingFeedId = generateItem(0, true)
-		missingHash   = generateItem(1, true)
-		missingGuid   = generateItem(1, true)
-
-		defaultInsert = []*ItemDBEntry{&item1, &item2}
-	)
-
-	missingHash.Hash = ""
-	missingGuid.Guid = ""
-
-	// insert original
-	if err := gmock.mockdb.DB.AutoMigrate(&ItemDBEntry{}, &ItemXmlDBEntry{}); err != nil {
-		t.Fatalf("error in automigrate: %v", err)
-	} else if res := gmock.mockdb.DB.Create([]*ItemDBEntry{&orig1, &orig2}); res.Error != nil {
-		t.Fatalf("error in insert: %v", res.Error)
-	} else {
-		fmt.Printf("inserted %v rows\n", res.RowsAffected)
-	}
-
 	type args struct {
-		emptyPath  bool
-		openErr    bool
-		termErr    stackType
-		insertList []*ItemDBEntry
+		emptyPath   bool
+		openErr     bool
+		termErr     stackType
+		nilItem     bool
+		missingFeed bool
+		missingHash bool
+		missingGuid bool
+		modOrig     bool
+		numInsert   int
 	}
 	type exp struct {
-		expItemList []*ItemDBEntry
-		errStr      string
-		callStack   []stackType
+		errStr    string
+		callStack []stackType
 	}
 	tests := []struct {
 		name string
@@ -725,45 +703,100 @@ func TestPodDB_saveItems(t *testing.T) {
 	}{
 		//{"", args{}, exp{}},
 		// error tests, no db changes
-		{"empty path", args{emptyPath: true, insertList: defaultInsert},
+		{"empty path", args{emptyPath: true, numInsert: rand.Intn(4) + 1},
 			exp{errStr: "poddb is not initialized"}},
-		{"open error", args{openErr: true, insertList: defaultInsert},
+		{"open error", args{openErr: true, numInsert: rand.Intn(4) + 1},
 			exp{errStr: "error opening db", callStack: []stackType{open}}},
-		{"save error", args{termErr: save, insertList: defaultInsert},
+		{"save error", args{termErr: save, numInsert: rand.Intn(4) + 1},
 			exp{errStr: "save:foobar", callStack: []stackType{open, session, save}}},
 
 		// list errors
-		{"nil itemlist", args{insertList: nil}, exp{errStr: "list is empty"}},
-		{"empty itemlist", args{insertList: []*ItemDBEntry{}}, exp{errStr: "list is empty"}},
-		{"first missing feed id", args{insertList: []*ItemDBEntry{&missingFeedId, &item1}}, exp{errStr: "feed id is zero"}},
-		{"second missing feed id", args{insertList: []*ItemDBEntry{&item1, &missingFeedId}}, exp{errStr: "feed id is zero"}},
-		{"first missing hash", args{insertList: []*ItemDBEntry{&missingHash, &item1}}, exp{errStr: "hash is empty"}},
-		{"second missing hash", args{insertList: []*ItemDBEntry{&item1, &missingHash}}, exp{errStr: "hash is empty"}},
-		{"first missing guid", args{insertList: []*ItemDBEntry{&missingGuid, &item1}}, exp{errStr: "guid is empty"}},
-		{"second missing guid", args{insertList: []*ItemDBEntry{&item1, &missingGuid}}, exp{errStr: "guid is empty"}},
+		{"empty itemlist", args{numInsert: 0}, exp{errStr: "list is empty"}},
+		{"missing feed id", args{missingFeed: true, numInsert: rand.Intn(4) + 1}, exp{errStr: "feed id is zero"}},
+		{"missing hash", args{missingHash: true, numInsert: rand.Intn(4) + 1}, exp{errStr: "hash is empty"}},
+		{"missing guid", args{missingGuid: true, numInsert: rand.Intn(4) + 1}, exp{errStr: "guid is empty"}},
 
 		// success tests
-		{"success", args{insertList: defaultInsert},
-			exp{expItemList: []*ItemDBEntry{&orig1, &orig2, &item1, &item2}, callStack: []stackType{open, session, save}}},
+		{"success single, new insert", args{numInsert: 1},
+			exp{callStack: []stackType{open, session, save}}},
+		{"success multiple, new insert", args{numInsert: 3},
+			exp{callStack: []stackType{open, session, save}}},
+		{"success only modify", args{modOrig: true, numInsert: 0},
+			exp{callStack: []stackType{open, session, save}}},
+		{"success modify and new", args{modOrig: true, numInsert: 1},
+			exp{callStack: []stackType{open, session, save}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
+			var (
+				insertList, checkList []*ItemDBEntry
+			)
+
+			// setup db
+			gmock, teardown := setupGormMock(t, nil, true)
+			defer teardown(t, gmock)
+
+			// insert original
+			var orig1, orig2 = generateItem(1, true), generateItem(1, true)
+			if err := gmock.mockdb.DB.AutoMigrate(&ItemDBEntry{}, &ItemXmlDBEntry{}); err != nil {
+				t.Fatalf("error in automigrate: %v", err)
+			} else if res := gmock.mockdb.DB.Create([]*ItemDBEntry{&orig1, &orig2}); res.Error != nil {
+				t.Fatalf("error in insert: %v", res.Error)
+			} else {
+				// fmt.Printf("inserted %v rows\n", res.RowsAffected)
+				checkList = append(checkList, &orig1, &orig2)
+			}
+
+			// generate new inserts
+			insertList = make([]*ItemDBEntry, 0, tt.p.numInsert)
+
+			if tt.p.modOrig {
+				// modify original, insert it into insert list
+				var modIndex = rand.Intn(len(checkList))
+				var mod = checkList[modIndex]
+
+				mod.Filename = testutils.RandStringBytes(8)
+				mod.Downloaded = podutils.Tern(rand.Intn(2) == 1, true, false)
+				mod.XmlData.Title = testutils.RandStringBytes(8)
+				insertList = append(insertList, mod)
+			}
+
+			for x := 0; x < tt.p.numInsert; x++ {
+				var it = generateItem(1, true)
+
+				if x == (tt.p.numInsert - 1) {
+					if tt.p.missingFeed {
+						it.FeedId = 0
+					} else if tt.p.missingGuid {
+						it.Guid = ""
+					} else if tt.p.missingHash {
+						it.Hash = ""
+					}
+				}
+
+				insertList = append(insertList, &it)
+				checkList = append(checkList, &it)
+			}
+
 			resetCallStack()
+
 			var poddb = PodDB{path: podutils.Tern(tt.p.emptyPath, "", inMemoryPath)}
 			gmock.openErr = tt.p.openErr
 			gmock.mockdb.termErr = []stackType{tt.p.termErr}
 
-			err := poddb.saveItems(tt.p.insertList)
+			err := poddb.saveItems(insertList...)
 
 			if testutils.AssertErrContains(t, tt.e.errStr, err) {
 
-				var dbItems = make([]*ItemDBEntry, 0, len(tt.e.expItemList))
+				var dbItems = make([]*ItemDBEntry, 0, len(checkList))
 				var res = gmock.mockdb.DB. /*Debug().*/ Preload("XmlData").Where(&ItemDBEntry{FeedId: 1}).Find(&dbItems)
 				testutils.AssertErr(t, false, res.Error)
 				// comparing including gorm model will fail; use compare method
-				testutils.AssertDiffFunc(t, tt.e.expItemList, dbItems, itemCompare)
+				testutils.AssertDiffFunc(t, checkList, dbItems, itemCompare)
 			}
 			compareCallstack(t, tt.e.callStack)
+
 		})
 	}
 }

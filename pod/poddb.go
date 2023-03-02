@@ -243,7 +243,7 @@ func (pdb PodDB) saveFeed(feed *FeedDBEntry) error {
 }
 
 // --------------------------------------------------------------------------
-func (pdb PodDB) saveItems(itemlist []*ItemDBEntry) error {
+func (pdb PodDB) saveItems(itemlist ...*ItemDBEntry) error {
 	if pdb.path == "" {
 		return errors.New("poddb is not initialized; call NewDB() first")
 	} else if len(itemlist) == 0 {
@@ -251,7 +251,9 @@ func (pdb PodDB) saveItems(itemlist []*ItemDBEntry) error {
 	}
 	// check for hash & id
 	for _, entry := range itemlist {
-		if entry.FeedId == 0 {
+		if entry == nil {
+			return fmt.Errorf("entry is nil")
+		} else if entry.FeedId == 0 {
 			return fmt.Errorf("entry '%v' feed id is zero", entry.Filename)
 		} else if entry.Hash == "" {
 			return fmt.Errorf("entry '%v' hash is empty", entry.Filename)

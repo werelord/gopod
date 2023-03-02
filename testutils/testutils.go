@@ -156,6 +156,6 @@ func AssertDiffFunc[T comparable](tb testing.TB, wantList, gotList []T, comp fun
 			extra = append(extra, got)
 		}
 	}
-	Assert(tb, len(missing) == 0, fmt.Sprintf("Missing types in gotList: %v", missing))
+	Assert(tb, len(missing) == 0, fmt.Sprintf("Missing types in wantList: %v", missing))
 	Assert(tb, len(extra) == 0, fmt.Sprintf("Extra types in gotList: %v", extra))
 }

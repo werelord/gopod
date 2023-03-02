@@ -299,7 +299,7 @@ func (f *Feed) saveDBFeedItems(itemlist []*Item) error {
 
 	if commitList, err := f.genItemDBEntryList(itemlist); err != nil {
 		return err
-	} else if err := db.saveItems(commitList); err != nil {
+	} else if err := db.saveItems(commitList...); err != nil {
 		return err
 	}
 	return nil
