@@ -782,8 +782,6 @@ func TestPodDB_deleteFeed(t *testing.T) {
 	defCallStack = append(defCallStack, delete, delete)
 	noItemCallStack = append(noItemCallStack, delete, delete)
 
-	rand.Seed(time.Now().UnixNano())
-
 	type args struct {
 		emptyPath bool
 		openErr   bool

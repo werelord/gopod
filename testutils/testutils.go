@@ -6,15 +6,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/go-test/deep"
 	"golang.org/x/exp/slices"
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 // inspired by https://github.com/benbjohnson/testing
 

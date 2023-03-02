@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/go-test/deep"
 )
@@ -69,7 +68,6 @@ func TestTern(t *testing.T) {
 
 func TestChunk(t *testing.T) {
 
-	rand.Seed(time.Now().UnixNano())
 	type args struct {
 		nilSlice  bool
 		sliceSize int

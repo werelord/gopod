@@ -25,6 +25,5 @@
 # vendor/
 
 gopod.log
-master.json
 dbexport/
 *.7z

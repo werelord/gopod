@@ -374,7 +374,6 @@ func TestFindMostRecent(t *testing.T) {
 	}
 
 	// randomize the filelist, for some entropy
-	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(filelist), func(i, j int) { filelist[i], filelist[j] = filelist[j], filelist[i] })
 
 	var dirEntry = makefn("directory", true, today)

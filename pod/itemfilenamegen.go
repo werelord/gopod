@@ -53,7 +53,7 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml, collFunc func(string) bo
 		filename = i.replaceCount(filename, defReplacement, cfg)
 		filename = strings.Replace(filename, "#season#", i.XmlData.SeasonStr, 1)
 		filename = strings.Replace(filename, "#date#", defReplacement, 1)
-		filename = strings.Replace(filename, "#title#", i.XmlData.Title, 1)
+		filename = i.replaceTitle(filename)
 		if filename, err = i.replaceTitleRegex(filename, cfg.Regex); err != nil {
 			log.Error("failed parsing title:", err)
 			return "", "", err
@@ -140,6 +140,21 @@ func (i Item) replaceCount(str, defaultRep string, cfg podconfig.FeedToml) strin
 		str = strings.Replace(str, "#count#", countStr, 1)
 	}
 	return str
+}
+
+// --------------------------------------------------------------------------
+func (i Item) replaceTitle(str string) string {
+	// adding this as separate method, to make sure spaces are replaced
+	// todo: make a config value for controlling this
+
+	if strings.Contains(str, "#title#") {
+		str = strings.Replace(str, "#title#", i.XmlData.Title, 1)
+
+		str = strings.ReplaceAll(str, " ", "_")
+	}
+
+	return str
+
 }
 
 // --------------------------------------------------------------------------

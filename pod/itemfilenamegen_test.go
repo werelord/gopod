@@ -49,7 +49,7 @@ func TestItem_generateFilename(t *testing.T) {
 		filename       string
 		extra          string
 		collFuncCalled bool
-		cleanNotCalled    bool
+		cleanNotCalled bool
 		errStr         string
 	}
 	tests := []struct {
@@ -84,6 +84,12 @@ func TestItem_generateFilename(t *testing.T) {
 			exp{filename: "foo_" + defstr + "_bar"}},
 		{"pubdate, replacement", cfgarg{parse: "foo_#date#_bar"}, itemarg{defaultTime: testTimeRep},
 			exp{filename: "foo_" + testTimeRep.Format(podutils.TimeFormatStr) + "_bar"}},
+
+		{"title", cfgarg{parse: "foo_#title#_bar"}, itemarg{title: "armleg"},
+			exp{filename: "foo_armleg_bar"}},
+		{"title with spaces", cfgarg{parse: "foo_#title#_bar"}, itemarg{title: "arm leg foo bar"},
+			exp{filename: "foo_arm_leg_foo_bar_bar"}},
+
 		{"regex err", cfgarg{parse: "foo#titleregex:1#bar"}, itemarg{}, exp{errStr: "regex is empty", cleanNotCalled: true}},
 		{"regex title", cfgarg{parse: "foo#titleregex:1##titleregex:2#bar", regex: regex},
 			itemarg{title: "foo (VOY S4E15)"},
