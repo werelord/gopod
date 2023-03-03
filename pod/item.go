@@ -393,22 +393,12 @@ func (i *Item) Download(mp3path string) (int64, error) {
 		return bytesWrote, err
 	}
 
-	i.SetDownloaded(mp3path)
-
-	return bytesWrote, nil
-}
-
-// --------------------------------------------------------------------------
-func (i *Item) SetDownloaded(mp3path string) {
-	var (
-		destfile = filepath.Join(mp3path, i.Filename)
-	)
-
 	// set downloaded, and make sure timestamps match
 	if err := podutils.Chtimes(destfile, time.Now(), i.PubTimeStamp); err != nil {
 		i.log.Error("failed to change modified time: ", err)
 		// don't skip due to timestamp issue
 	}
-
 	i.Downloaded = true
+
+	return bytesWrote, nil
 }

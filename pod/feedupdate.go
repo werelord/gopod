@@ -75,7 +75,7 @@ func (f *Feed) update(results *DownloadResults) {
 		results.addError(fmt.Errorf("failed loading db: %w", err))
 		return
 
-	} else if err := fUpdate.processDBItems(itemlist); err != nil {
+	} else if err := fUpdate.loadDBItems(itemlist); err != nil {
 		results.addError(fmt.Errorf("failed to populate item lists: %w", err))
 		return
 	}
@@ -94,16 +94,15 @@ func (f *Feed) update(results *DownloadResults) {
 		}
 	}
 
-	// process new entries
-	if success := fUpdate.downloadNewItems(results); success == false {
-		f.log.Error("errors encountered; not saving db for future retries")
-		return
-	}
-
-	// save everything here, as processing is done.. any errors should have exited out at some point
+	// before download save feed & items.. downloads will update saved feeds
 	if err := f.saveDBFeed(fUpdate.newXmlData, fUpdate.newItems); err != nil {
 		results.addError(fmt.Errorf("saving db failed: %v", err))
 		return
+	}
+
+	// process new entries
+	if success := fUpdate.downloadNewItems(results); success == false {
+		f.log.Error("download errors encountered")
 	}
 
 	f.log.Debugf("done processing feed")
@@ -140,7 +139,7 @@ func (fup *feedUpdate) loadDB() ([]*Item, error) {
 }
 
 // --------------------------------------------------------------------------
-func (fup *feedUpdate) processDBItems(itemlist []*Item) error {
+func (fup *feedUpdate) loadDBItems(itemlist []*Item) error {
 
 	var (
 		f   = fup.feed
@@ -543,7 +542,9 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 		} else if fileExists == true {
 			if config.MarkDownloaded {
 				f.log.Info("file exists, and set downloaded flag set.. marking as downloaded")
-				item.SetDownloaded(f.mp3Path)
+
+				item.Downloaded = true
+				f.saveDBFeedItems(item)
 
 			} else {
 				f.log.Warnf("item downloaded '%v', archived: '%v', fileExists: '%v'", item.Downloaded, item.Archived, fileExists)
@@ -569,6 +570,7 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 				success = false
 				continue
 			} else {
+				f.saveDBFeedItems(item)
 				bytes = uint64(b)
 			}
 		}

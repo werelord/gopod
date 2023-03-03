@@ -280,9 +280,7 @@ func (f *Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error
 }
 
 // --------------------------------------------------------------------------
-//
-//lint:ignore U1000 this may be used in the future
-func (f *Feed) saveDBFeedItems(itemlist []*Item) error {
+func (f *Feed) saveDBFeedItems(itemlist ...*Item) error {
 	// make sure we have an ID.. in loading, if this is a new feed, we're creating via FirstOrCreate
 	if f.ID == 0 {
 		return errors.New("unable to save to db; feed id is zero")
