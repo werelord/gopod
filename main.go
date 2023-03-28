@@ -26,7 +26,7 @@ var (
 )
 
 const (
-	Version = "v0.1.2-beta"
+	Version = "v0.1.3-beta"
 )
 
 // --------------------------------------------------------------------------
@@ -123,7 +123,8 @@ func SetupDB(cfg *podconfig.Config) (*pod.PodDB, error) {
 	// dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod_test.db")
 	dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod.db")
 
-	if cfg.BackupDb {
+	// todo: don't do backup until a write actually happens to the db; then do it just before..
+	if cfg.BackupDb && (cfg.Simulate == false) {
 		// todo: do a rotate??
 		var backupFile = filepath.Join(cfg.WorkspaceDir, ".db", fmt.Sprintf("gopod.bak.%s.db", cfg.TimestampStr))
 		if _, err := podutils.CopyFile(dbpath, backupFile); err != nil {

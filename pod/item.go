@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -163,6 +164,46 @@ func loadFromDBEntry(parentCfg podconfig.FeedToml, entry *ItemDBEntry) (*Item, e
 	return &item, nil
 }
 
+func (i Item) isSameXmlEntry(new *podutils.XItemData) (bool, error) {
+
+	if (i.XmlData == nil) || (i.XmlData.ID <= 0) {
+		return false, errors.New("cannot compare to current; xml is not loaded from db")
+	}
+
+	var oldbase, newbase string
+
+	if oldUrl, err := url.Parse(i.XmlData.Enclosure.Url); err != nil {
+		return false, err
+	} else if newUrl, err := url.Parse(new.Enclosure.Url); err != nil {
+		return false, err
+	} else {
+		oldbase = path.Base(oldUrl.Path)
+		newbase = path.Base(newUrl.Path)
+	}
+
+	// i.log.WithFields(log.Fields{
+	// 	"old length": i.XmlData.Enclosure.Length,
+	// 	"new length": new.Enclosure.Length,
+	// 	"old url":    i.XmlData.Enclosure.Url,
+	// 	"new url":    new.Enclosure.Url,
+	// 	"old base":   oldbase,
+	// 	"new base":   newbase,
+	// }).Debug("item diffs")
+
+	// simple comparison here.. just check case insensitive filename and length
+	if strings.EqualFold(oldbase, newbase) && i.XmlData.Enclosure.Length == new.Enclosure.Length {
+		i.log.WithFields(log.Fields{
+			"old url":    i.XmlData.Enclosure.Url,
+			"new url":    new.Enclosure.Url,
+		}).Warn("new url, same item; new redirect?")
+		return true, nil
+	} else {
+		i.log.Debug("valid modified entry found")
+		return false, nil
+	}
+
+}
+
 // --------------------------------------------------------------------------
 func (i *Item) updateFromEntry(
 	feedcfg podconfig.FeedToml, hash string, xml *podutils.XItemData,
@@ -183,12 +224,15 @@ func (i *Item) updateFromEntry(
 		return errors.New("feed shortname does not match this item's parent shortname")
 	}
 
+	// before changing the xml data, see if this actuaelly changed
+	sameEntry, err := i.isSameXmlEntry(xml)
+	if err != nil {
+		return err
+	}
+
 	i.XmlData.XItemData = *xml
 	i.PubTimeStamp = xml.Pubdate
 	// episode count should not change
-
-	// filename collision detection should rename the filename; set downloaded to false
-	i.Downloaded = false
 
 	// verify hash; hash will change (old guid, new url)
 	if cHash, err := calcHash(xml.Guid, xml.Enclosure.Url, feedcfg.UrlParse); err != nil {
@@ -216,16 +260,23 @@ func (i *Item) updateFromEntry(
 		i.Url = cUrl
 	}
 
-	// generate filename
-	if filename, extra, err := i.generateFilename(feedcfg, collFunc); err != nil {
-		log.Error("failed to generate filename:", err)
-		// to make sure we can continue, shortname.uuid.mp3
-		i.Filename = feedcfg.Shortname + "." + strings.ReplaceAll(uuid.NewString(), "-", "") + ".mp3"
+	if sameEntry == false {
+		// filename collision detection should rename the filename; set downloaded to false
+		i.Downloaded = false
+
+		// generate filename
+		if filename, extra, err := i.generateFilename(feedcfg, collFunc); err != nil {
+			log.Error("failed to generate filename:", err)
+			// to make sure we can continue, shortname.uuid.mp3
+			i.Filename = feedcfg.Shortname + "." + strings.ReplaceAll(uuid.NewString(), "-", "") + ".mp3"
+		} else {
+			// at this point, we should have a valid filename
+			i.Filename = filename
+			i.FilenameXta = extra
+			log.Debug("using generated filename: ", i.Filename)
+		}
 	} else {
-		// at this point, we should have a valid filename
-		i.Filename = filename
-		i.FilenameXta = extra
-		log.Debug("using generated filename: ", i.Filename)
+		log.Debug("same item detected, not resetting downloaded or updating filename")
 	}
 
 	i.log = log.WithField("item", i.Filename)

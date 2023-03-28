@@ -17,7 +17,7 @@
                 // "--help",
                 "--config", "e:\\gopod\\config.toml",
                 // "--config", "e:\\gopod-sim\\sim.toml", 
-                // "--feed=lle",
+                // "--feed=russo",
                 // "--proxy", "http://localhost:8888",
                 "--backup-db",
 
@@ -25,7 +25,7 @@
                 "update",
                 // "--force",
                 // "--use-recent",
-                // "--simulate",
+                "--simulate",
                 // "--set-downloaded",
 
                 // check commands
