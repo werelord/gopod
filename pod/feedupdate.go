@@ -527,7 +527,7 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 		}
 
 		if item.Downloaded == true {
-			f.log.Warnf("item downloaded '%v', archived: '%v', fileExists: '%v'", item.Downloaded, item.Archived, fileExists)
+			f.log.Debugf("item downloaded '%v', archived: '%v', fileExists: '%v'", item.Downloaded, item.Archived, fileExists)
 			if fileExists == false {
 				if item.Archived == true {
 					f.log.Info("skipping download due to archived flag")
@@ -536,7 +536,7 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 					f.log.Warn("downloading item; archive flag not set")
 				}
 			} else {
-				f.log.Warn("skipping download; file already downloaded.. ")
+				f.log.Debug("skipping download; file already downloaded.. ")
 				continue
 			}
 		} else if fileExists == true {
