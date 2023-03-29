@@ -31,15 +31,16 @@ type tomldocImport struct {
 }
 
 type FeedToml struct {
-	Name          string  `toml:"name"`
-	Shortname     string  `toml:"shortname"`
-	Url           string  `toml:"url"`
-	FilenameParse string  `toml:"filenameParse"`
-	Regex         string  `toml:"regex"`
-	UrlParse      string  `toml:"urlParse"`
-	CleanRep      *string `toml:"cleanReplacement"`
-	EpisodePad    int     `toml:"episodePad"`
-	CountStart    int     `toml:"countStart"`
+	Name              string  `toml:"name"`
+	Shortname         string  `toml:"shortname"`
+	Url               string  `toml:"url"`
+	FilenameParse     string  `toml:"filenameParse"`
+	Regex             string  `toml:"regex"`
+	UrlParse          string  `toml:"urlParse"`
+	CleanRep          *string `toml:"cleanReplacement"`
+	EpisodePad        int     `toml:"episodePad"`
+	CountStart        int     `toml:"countStart"`
+	DupFilenameBypass string  `toml:"dupFilenameBypass"`
 }
 
 // --------------------------------------------------------------------------

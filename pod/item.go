@@ -164,7 +164,8 @@ func loadFromDBEntry(parentCfg podconfig.FeedToml, entry *ItemDBEntry) (*Item, e
 	return &item, nil
 }
 
-func (i Item) isSameXmlEntry(new *podutils.XItemData) (bool, error) {
+// --------------------------------------------------------------------------
+func (i Item) isSameXmlEntry(new *podutils.XItemData, cfg podconfig.FeedToml) (bool, error) {
 
 	if (i.XmlData == nil) || (i.XmlData.ID <= 0) {
 		return false, errors.New("cannot compare to current; xml is not loaded from db")
@@ -191,14 +192,31 @@ func (i Item) isSameXmlEntry(new *podutils.XItemData) (bool, error) {
 	// }).Debug("item diffs")
 
 	// simple comparison here.. just check case insensitive filename and length
-	if strings.EqualFold(oldbase, newbase) && i.XmlData.Enclosure.Length == new.Enclosure.Length {
-		i.log.WithFields(log.Fields{
-			"old url":    i.XmlData.Enclosure.Url,
-			"new url":    new.Enclosure.Url,
-		}).Warn("new url, same item; new redirect?")
-		return true, nil
+	// not so fucking simple.. simplecast fucks with filenames all the time; if url contains the string
+	// in dupFilenameBypass ignore the base filename and go only on enclosure length
+	if i.XmlData.Enclosure.Length == new.Enclosure.Length {
+		var logtemp = i.log.WithFields(log.Fields{
+			"old url":           i.XmlData.Enclosure.Url,
+			"new url":           new.Enclosure.Url,
+			"dupFilenameBypass": cfg.DupFilenameBypass,
+		})
+
+		if (cfg.DupFilenameBypass != "") && strings.Contains(new.Enclosure.Url, cfg.DupFilenameBypass) {
+			logtemp.Debug("same lengths and dupFilenameBypass found; marking as identical")
+			return true, nil
+
+			// now do simple comparison
+		} else if strings.EqualFold(oldbase, newbase) {
+			logtemp.Warn("new url, same item; new redirect?")
+			return true, nil
+
+		} else {
+			logtemp.Debug("valid modified entry found")
+			return false, nil
+		}
+
 	} else {
-		i.log.Debug("valid modified entry found")
+		i.log.Debug("no match due to different lengths; valid modified entry found")
 		return false, nil
 	}
 
@@ -225,10 +243,14 @@ func (i *Item) updateFromEntry(
 	}
 
 	// before changing the xml data, see if this actuaelly changed
-	sameEntry, err := i.isSameXmlEntry(xml)
+	sameEntry, err := i.isSameXmlEntry(xml, feedcfg)
 	if err != nil {
 		return err
 	}
+
+	// todo: rather than change already existing xml entry, create a new one.. will require db changes
+	// moving relationship to one to many, requiring ItemXmlDBEntry to retain reference to ItemDBEntry
+	// and be potentially "orphaned"
 
 	i.XmlData.XItemData = *xml
 	i.PubTimeStamp = xml.Pubdate
