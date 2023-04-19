@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/araddon/dateparse"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -510,14 +511,39 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 	var (
 		f = fup.feed
 		// by default; any errors will set this to false
-		success = true
+		success       = true
+		downloadAfter time.Time
 	)
+
+	if config.DownloadAfter != "" {
+		if date, err := dateparse.ParseAny(config.DownloadAfter); err != nil {
+			werr := fmt.Errorf("downloadAfter not recognized: %w", err)
+			f.log.WithField("downloadAfter", config.DownloadAfter).Error(werr)
+			results.addError(werr)
+			return false
+
+		} else if date.IsZero() {
+			f.log.Warn("download after date is zero")
+		} else {
+			downloadAfter = date
+		}
+	}
 
 	for _, item := range fup.newItems {
 		f.log.Debugf("processing new item: {%v %v}", item.Filename, item.Hash)
 
 		podfile := filepath.Join(f.mp3Path, item.Filename)
 		var fileExists bool
+
+		// check download after flag; if set, only download items after given date..
+		// anything before given date just mark as downloaded and archived
+		if (downloadAfter.IsZero() == false) && (item.PubTimeStamp.Before(downloadAfter)) {
+			f.log.Debugf("pubtimestamp before downloadAfter; skipping and marking as downloaded")
+			item.Downloaded = true
+			item.Archived = true
+			f.saveDBFeedItems(item)
+			continue
+		}
 
 		fileExists, err := podutils.FileExists(podfile)
 		if err != nil {

@@ -22,15 +22,17 @@ const ( // commands
 )
 
 // for testing purposes
-var fileExists = podutils.FileExists
+var (
+	fileExists = podutils.FileExists
 
-var cmdMap = map[CommandType]string{
-	Unknown:         "unknown command",
-	Update:          "update",
-	CheckDownloaded: "checkDownloaded",
-	Delete:          "delete",
-	Preview:         "preview",
-}
+	cmdMap = map[CommandType]string{
+		Unknown:         "unknown command",
+		Update:          "update",
+		CheckDownloaded: "checkDownloaded",
+		Delete:          "delete",
+		Preview:         "preview",
+	}
+)
 
 func (cmd CommandType) Format(fs fmt.State, c rune) {
 	fs.Write([]byte(cmdMap[cmd]))
@@ -61,6 +63,7 @@ type UpdateOpt struct {
 	ForceUpdate      bool
 	UseMostRecentXml bool
 	MarkDownloaded   bool
+	DownloadAfter    string
 }
 
 // check downloads specific
@@ -165,6 +168,7 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 	// if recent doesn't exist, will still download.  Note: if there are no errors on previous run, will likely do nothing unless --force is specified"))
 	updateCommand.BoolVar(&c.MarkDownloaded, "set-downloaded", false,
 		opt.Description("set already downloaded files as downloaded in db"))
+	updateCommand.StringVar(&c.DownloadAfter, "download-after", "")
 	updateCommand.SetCommandFn(c.generateCmdFunc(Update))
 
 	checkcommand := opt.NewCommand("checkdownloads", "check integrity of database and files")
