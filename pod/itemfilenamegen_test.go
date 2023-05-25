@@ -84,6 +84,8 @@ func TestItem_generateFilename(t *testing.T) {
 			exp{filename: "foo_" + defstr + "_bar"}},
 		{"pubdate, replacement", cfgarg{parse: "foo_#date#_bar"}, itemarg{defaultTime: testTimeRep},
 			exp{filename: "foo_" + testTimeRep.Format(podutils.TimeFormatStr) + "_bar"}},
+		{"extension", cfgarg{parse: "foo_bar#extension#"}, itemarg{url: "http://foo.bar/meh.baz"},
+			exp{filename: "foo_bar.baz"}},
 
 		{"title", cfgarg{parse: "foo_#title#_bar"}, itemarg{title: "armleg"},
 			exp{filename: "foo_armleg_bar"}},

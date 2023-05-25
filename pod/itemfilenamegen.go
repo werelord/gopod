@@ -58,6 +58,7 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml, collFunc func(string) bo
 			log.Error("failed parsing title:", err)
 			return "", "", err
 		}
+		filename = strings.Replace(filename, "#extension#", path.Ext(i.Url), 1)
 		filename = strings.Replace(filename, "#urlfilename#", path.Base(i.Url), 1)
 	}
 
