@@ -226,10 +226,11 @@ func (i Item) checkFilenameCollisions(fname string, collFunc func(string) bool) 
 		for _, r := range "ABCDEFGHIJKL" {
 			ext := filepath.Ext(filename)
 			base := filename[:len(filename)-len(ext)]
-			newfilename := fmt.Sprintf("%s%s%s", base, string(r), ext)
+			newExtra := fmt.Sprintf(".%v", string(r)) // append dot to extra
+			newfilename := fmt.Sprintf("%s%s%s", base, newExtra, ext)
 			if collFunc(newfilename) == false {
 				filename = newfilename
-				extra = string(r)
+				extra = newExtra
 				break
 			}
 		}

@@ -22,7 +22,7 @@ func TestItem_generateFilename(t *testing.T) {
 
 		noCollFunc   = func(string) bool { return false }
 		allCollFunc  = func(string) bool { return true }
-		collFooList  = []string{"foo.bar", "fooA.bar", "fooB.bar", "fooC.bar"}
+		collFooList  = []string{"foo.bar", "foo.A.bar", "foo.B.bar", "foo.C.bar"}
 		specificColl = func(s string) bool {
 			return slices.Contains(collFooList, s)
 		}
@@ -104,11 +104,11 @@ func TestItem_generateFilename(t *testing.T) {
 		{"all collisions", cfgarg{collFunc: allCollFunc, parse: "foobar.mp3"}, itemarg{},
 			exp{errStr: "still collides", collFuncCalled: true}},
 		{"specific collision", cfgarg{parse: "foo.bar", collFunc: specificColl}, itemarg{},
-			exp{filename: "fooD.bar", extra: "D", collFuncCalled: true}},
+			exp{filename: "foo.D.bar", extra: ".D", collFuncCalled: true}},
 		{"specific collision from url", cfgarg{collFunc: specificColl}, itemarg{url: "http://foo.com/foo.bar"},
-			exp{filename: "fooD.bar", extra: "D", collFuncCalled: true}},
-		{"extra already defined", cfgarg{collFunc: allCollFunc, parse: "foobar.mp3"}, itemarg{filenameXtra: "Z"},
-			exp{filename: "foobarZ.mp3", extra: "Z", collFuncCalled: false}},
+			exp{filename: "foo.D.bar", extra: ".D", collFuncCalled: true}},
+		{"extra already defined", cfgarg{collFunc: allCollFunc, parse: "foobar.mp3"}, itemarg{filenameXtra: ".Z"},
+			exp{filename: "foobar.Z.mp3", extra: ".Z", collFuncCalled: false}},
 	}
 
 	for _, tt := range tests {
@@ -341,7 +341,7 @@ func TestItem_checkFilenameCollisions(t *testing.T) {
 	var (
 		noCollFunc   = func(string) bool { return false }
 		allCollFunc  = func(string) bool { return true }
-		collFooList  = []string{"foo.bar", "fooA.bar", "fooB.bar", "fooC.bar"}
+		collFooList  = []string{"foo.bar", "foo.A.bar", "foo.B.bar", "foo.C.bar"}
 		specificColl = func(s string) bool {
 			return slices.Contains(collFooList, s)
 		}
@@ -363,7 +363,7 @@ func TestItem_checkFilenameCollisions(t *testing.T) {
 	}{
 		{"no collisions", arg{collFunc: noCollFunc}, exp{filename: "foo.bar"}},
 		{"all collisions", arg{collFunc: allCollFunc}, exp{errStr: "still collides"}},
-		{"specific collision", arg{collFunc: specificColl}, exp{filename: "fooD.bar", extra: "D"}},
+		{"specific collision", arg{collFunc: specificColl}, exp{filename: "foo.D.bar", extra: ".D"}},
 		{"collision func nil", arg{}, exp{filename: "foo.bar"}},
 	}
 	for _, tt := range tests {
