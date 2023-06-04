@@ -113,7 +113,12 @@ func main() {
 func RunTest(config podconfig.Config, tomlList []podconfig.FeedToml, db *pod.PodDB) {
 	if config.Debug && false {
 
-		//doMigrate(feedMap, db)
+		if pod, err := genFeed("techpolicy", tomlList); err != nil {
+			log.Errorf("well shit: %v", err)
+		} else {
+			check(pod, db)
+		}
+
 		os.Exit(0)
 	}
 }
@@ -132,7 +137,7 @@ func SetupDB(cfg *podconfig.Config) (*pod.PodDB, error) {
 		} else {
 			// make sure the modified/created time stay the same
 			if dbStat, err := os.Stat(dbpath); err != nil {
-				log.Warn("Error getting db stats for backup: %v", err)
+				log.Warnf("Error getting db stats for backup: %v", err)
 			} else {
 				podutils.Chtimes(backupFile, dbStat.ModTime(), dbStat.ModTime())
 			}
