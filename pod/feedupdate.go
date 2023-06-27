@@ -530,7 +530,7 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 	}
 
 	for _, item := range fup.newItems {
-		f.log.Debugf("processing new item: {%v %v}", item.Filename, item.Hash)
+		f.log.Debugf("processing new item: {%v : %v : %v}", item.Filename, item.Hash, item.Url)
 
 		podfile := filepath.Join(f.mp3Path, item.Filename)
 		var fileExists bool
