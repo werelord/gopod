@@ -102,32 +102,37 @@ func TestDownload(t *testing.T) {
 func TestDownloadBuffered(t *testing.T) {
 
 	tests := []struct {
-		name    string
-		srvResp serverConfig
-		wantBuf string
-		wantErr bool
+		name       string
+		srvResp    serverConfig
+		callOnResp bool
+		wantBuf    string
+		wantErr    bool
 	}{
 		{
 			"bad url (no host)",
 			serverConfig{removeHost: true, statusCode: http.StatusOK, response: "foobar"},
+			false,
 			"",
 			true,
 		},
 		{
 			"3XX error", // redirects shouldn't appear unless stuff changes, then this test will fail
 			serverConfig{statusCode: http.StatusMovedPermanently, response: "foobar"},
+			false,
 			"",
 			true,
 		},
 		{
 			"4XX error",
 			serverConfig{statusCode: http.StatusForbidden, response: "foobar"},
+			false,
 			"",
 			true,
 		},
 		{
 			"5XX error",
 			serverConfig{statusCode: http.StatusInternalServerError, response: "foobar"},
+			false,
 			"",
 			true,
 		},
@@ -137,6 +142,17 @@ func TestDownloadBuffered(t *testing.T) {
 				statusCode: http.StatusOK,
 				headers:    map[string]string{"Content-Disposition": "filename=\"foobar.mp3\""},
 				response:   "foobar"},
+			true,
+			"foobar",
+			false,
+		},
+		{
+			"success, no OnResponse called",
+			serverConfig{
+				statusCode: http.StatusOK,
+				headers:    map[string]string{},
+				response:   "foobar"},
+			false,
 			"foobar",
 			false,
 		},
@@ -146,14 +162,26 @@ func TestDownloadBuffered(t *testing.T) {
 
 			var server = createServer(tt.srvResp)
 			defer server.Close()
+			var gotcd string
+			var onRespCalled bool
+
+			var head = func(resp *http.Response) {
+				gotcd = resp.Header.Get("Content-Disposition")
+				onRespCalled = true
+			}
+
+			if tt.callOnResp == false {
+				head = nil
+			}
 
 			var buf = bytes.NewBufferString("")
-			bw, gotcd, err := DownloadBuffered(server.URL, buf, nil)
+			bw, err := DownloadBuffered(server.URL, buf, head)
 
 			testutils.AssertErr(t, tt.wantErr, err)
 			testutils.Assert(t, bw == int64(len(tt.wantBuf)), fmt.Sprintf("bytes written expected to be 0; got %v", bw))
 			testutils.AssertEquals(t, tt.wantBuf, buf.String())
 			testutils.AssertEquals(t, tt.srvResp.headers["Content-Disposition"], gotcd)
+			testutils.AssertEquals(t, tt.callOnResp, onRespCalled)
 		})
 	}
 }

@@ -7,9 +7,10 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/schollz/progressbar/v3"
 	log "github.com/sirupsen/logrus"
 )
+
+type OnResponseFunc func(resp *http.Response)
 
 // --------------------------------------------------------------------------
 // download unbuffered
@@ -18,19 +19,19 @@ func Download(url string) (body []byte, err error) {
 
 	// we're going to store the entire thing into buffer regardless
 	// make sure result is at least empty string
-	var result = bytes.NewBufferString("")
+	var result = new(bytes.Buffer)
 
-	_, _, err = dload(url, result, nil)
+	_, err = dload(url, result, nil)
 
 	return result.Bytes(), err
 }
 
-func DownloadBuffered(url string, writer io.Writer, pbar *progressbar.ProgressBar) (int64, string, error) {
-	return dload(url, writer, pbar)
+func DownloadBuffered(url string, writer io.Writer, onResp OnResponseFunc) (int64, error) {
+	return dload(url, writer, onResp)
 }
 
 // --------------------------------------------------------------------------
-func dload(url string, writer io.Writer, pbar *progressbar.ProgressBar) (bytes int64, contentDisposition string, err error) {
+func dload(url string, outWriter io.Writer, onResp OnResponseFunc) (bytes int64, err error) {
 
 	var (
 		req  *http.Request
@@ -60,24 +61,17 @@ func dload(url string, writer io.Writer, pbar *progressbar.ProgressBar) (bytes i
 		return
 	}
 
-	// grab content disposition, if it exists
-	// future: if more headers are needed use a func param map for grabbing them
-	contentDisposition = resp.Header.Get("Content-Disposition")
-	//log.Debug("Content-Disposition: ", contentDisposition)
-
-	podWriter := bufio.NewWriter(writer)
-	// because progress bar needs to have max from response, can't combine these into
-	// a multiwriter outside of this function.. do it here
-	var outWriter io.Writer
-	if pbar != nil {
-		pbar.ChangeMax64(resp.ContentLength)
-		outWriter = io.MultiWriter(podWriter, pbar)
-	} else {
-		outWriter = podWriter
+	// if any handling needs outside this func
+	if onResp != nil {
+		onResp(resp)
 	}
 
-	bytes, err = io.Copy(outWriter, resp.Body)
+	// make sure its buffered, at least here..
+	podWriter := bufio.NewWriter(outWriter)
+
+	bytes, err = io.Copy(podWriter, resp.Body)
 	podWriter.Flush()
+
 	if err != nil {
 		log.Error("error downloading: ", err)
 		return

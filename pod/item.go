@@ -3,6 +3,8 @@ package pod
 import (
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -118,7 +120,7 @@ func createNewItemEntry(
 		// at this point, we should have a valid filename
 		item.Filename = filename
 		item.FilenameXta = extra
-		log.Debug("using generated filename: ", item.Filename)
+		log.Debugf("using generated filename: %v (%v)", item.Filename, item.XmlData.Title)
 	}
 
 	item.log = log.WithField("item", item.Filename)
@@ -439,7 +441,19 @@ func (i *Item) Download(mp3path string) (int64, error) {
 	}
 	defer file.Close()
 
-	if bw, cd, err := podutils.DownloadBuffered(i.Url, file, i.createProgressBar()); err != nil {
+	var (
+		cd          string
+		pbar        = i.createProgressBar()
+		multiWriter = io.MultiWriter(file, pbar)
+	)
+
+	// get content disposition, set the length of progress bar
+	var onResp = func(resp *http.Response) {
+		cd = resp.Header.Get("Content-Disposition")
+		pbar.ChangeMax64(resp.ContentLength)
+	}
+
+	if bw, err := podutils.DownloadBuffered(i.Url, multiWriter, onResp); err != nil {
 		i.log.Error("Failed downloading pod:", err)
 		return bw, err
 	} else {
