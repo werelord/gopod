@@ -117,13 +117,13 @@ func (fup *feedUpdate) loadDB() ([]*Item, error) {
 	)
 
 	// make sure db is loaded
-	if err := f.LoadDBFeed(true); err != nil {
+	if err := f.LoadDBFeed(loadOptions{includeXml: true}); err != nil {
 		reterr := fmt.Errorf("failed to load feed data from db: %w", err)
 		log.Error(reterr)
 		return nil, reterr
 
 		// because we're doing filename collisions and guid collisions, grab all items
-	} else if itemList, err := f.loadDBFeedItems(AllItems, false, cDESC); err != nil {
+	} else if itemList, err := f.loadDBFeedItems(AllItems, loadOptions{includeXml: false, direction: cDESC}); err != nil {
 		reterr := fmt.Errorf("failed to load item entries: %w", err)
 		log.Error(reterr)
 		return itemList, reterr

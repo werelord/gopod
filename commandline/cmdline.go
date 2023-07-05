@@ -210,7 +210,7 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 	exportCommand.StringVar(&c.formatStr, "format", "json",
 		opt.Description("format for export (db or json)"))
 	exportCommand.StringVar(&c.ExportPath, "export-path", "",
-		opt.Description("path for export (default to current directory)"))
+		opt.Description("path for export (default to '#configDir#\\shortname\\')"))
 	exportCommand.SetCommandFn(c.OnExportFunc)
 
 	deletecommand := opt.NewCommand("deletefeed", "delete feed and all items from database (performs a soft delete)")

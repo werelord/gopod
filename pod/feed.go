@@ -107,13 +107,13 @@ func (f *Feed) initFeed() error {
 }
 
 // --------------------------------------------------------------------------
-func (f *Feed) LoadDBFeed(includeXml bool) error {
+func (f *Feed) LoadDBFeed(opt loadOptions) error {
 
 	if db == nil {
 		return errors.New("db is nil")
 	} else if f.ID > 0 {
 		// feed already initialized; run load XML directly
-		if includeXml {
+		if opt.includeXml {
 			return f.loadDBFeedXml()
 		} else {
 			// not loading xml, we're done
@@ -121,17 +121,19 @@ func (f *Feed) LoadDBFeed(includeXml bool) error {
 		}
 	}
 	// make sure hash is prepopulated
-	f.Hash = f.generateHash()
+	f.generateHash()
 
-	// check for feed deleted before loading
-	if _, err := db.isFeedDeleted(f.Hash); err != nil {
-		//f.log.Error("error in checking deleted: ", err)
-		err := fmt.Errorf("cannot load feed; %w", err)
-		f.log.Error(err)
-		return err
+	if (opt.includeDeleted == false) {
+		// check for feed deleted before loading
+		if _, err := db.isFeedDeleted(f.Hash); err != nil {
+			//f.log.Error("error in checking deleted: ", err)
+			err := fmt.Errorf("cannot load feed; %w", err)
+			f.log.Error(err)
+			return err
+		}
 	}
 
-	if err := db.loadDBFeed(&f.FeedDBEntry, includeXml); err != nil {
+	if err := db.loadFeed(&f.FeedDBEntry, opt); err != nil {
 		f.log.Error("failed loading feed: ", err)
 		return err
 	}
@@ -139,7 +141,7 @@ func (f *Feed) LoadDBFeed(includeXml bool) error {
 
 	{
 		lg := f.log.WithField("id", f.ID)
-		if includeXml && f.XmlFeedData != nil {
+		if opt.includeXml && f.XmlFeedData != nil {
 			lg = lg.WithField("xml id", f.XmlFeedData.ID)
 		}
 		lg.Info("feed loaded")
@@ -178,12 +180,12 @@ func (f *Feed) loadDBFeedXml() error {
 }
 
 // --------------------------------------------------------------------------
-func (f Feed) generateHash() string {
-	return podutils.GenerateHash(f.Shortname)
+func (f *Feed) generateHash() {
+	f.Hash = podutils.GenerateHash(f.Shortname)
 }
 
 // --------------------------------------------------------------------------
-func (f *Feed) loadDBFeedItems(numItems int, includeXml bool, dtn direction) ([]*Item, error) {
+func (f *Feed) loadDBFeedItems(numItems int, opt loadOptions) ([]*Item, error) {
 	var (
 		err       error
 		entryList []*ItemDBEntry
@@ -195,7 +197,7 @@ func (f *Feed) loadDBFeedItems(numItems int, includeXml bool, dtn direction) ([]
 
 	// load itemlist.. if numitems is negative, load everything..
 	// otherwise limit to numLatest
-	entryList, err = db.loadFeedItems(f.ID, numItems, includeXml, dtn)
+	entryList, err = db.loadFeedItems(f.ID, numItems, opt)
 	if err != nil {
 		f.log.Error("Failed to get item data from db: ", err)
 		return nil, err
@@ -236,7 +238,7 @@ func (f *Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error
 	// inserting everything into feed db; by full assoc should save everything
 
 	// make sure hash and shortname is set
-	f.Hash = f.generateHash()
+	f.generateHash()
 	f.DBShortname = f.Shortname
 	if newxml != nil {
 		if (f.XmlId != 0) && (f.XmlFeedData == nil) {

@@ -77,7 +77,7 @@ func main() {
 	log.Infof("using config: %+v", config)
 
 	// todo: official poddb migration methods
-	if poddb, err = SetupDB(config); err != nil {
+	if poddb, err = setupDB(config); err != nil {
 		log.Error("Failed setting up db: ", err)
 		return
 	}
@@ -85,7 +85,7 @@ func main() {
 
 	//------------------------------------- DEBUG -------------------------------------
 	if config.Debug {
-		RunTest(*config, tomlList, poddb)
+		runTest(*config, tomlList, poddb)
 	}
 	//------------------------------------- DEBUG -------------------------------------
 
@@ -110,7 +110,7 @@ func main() {
 }
 
 // --------------------------------------------------------------------------
-func RunTest(config podconfig.Config, tomlList []podconfig.FeedToml, db *pod.PodDB) {
+func runTest(config podconfig.Config, tomlList []podconfig.FeedToml, db *pod.PodDB) {
 	if config.Debug && false {
 
 		if pod, err := genFeed("mlife", tomlList); err != nil {
@@ -124,7 +124,7 @@ func RunTest(config podconfig.Config, tomlList []podconfig.FeedToml, db *pod.Pod
 }
 
 // --------------------------------------------------------------------------
-func SetupDB(cfg *podconfig.Config) (*pod.PodDB, error) {
+func setupDB(cfg *podconfig.Config) (*pod.PodDB, error) {
 	// dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod_test.db")
 	dbpath := filepath.Join(cfg.WorkspaceDir, ".db", "gopod.db")
 
@@ -181,7 +181,6 @@ func parseCommand(cmd commandline.CommandType) commandFunc {
 
 // --------------------------------------------------------------------------
 func genFeedList(shortname string, tomlList []podconfig.FeedToml) ([]*pod.Feed, error) {
-	var feedList = make([]*pod.Feed, 0, len(tomlList))
 	if shortname != "" {
 		if feed, err := genFeed(shortname, tomlList); err != nil {
 			return nil, err
@@ -189,6 +188,7 @@ func genFeedList(shortname string, tomlList []podconfig.FeedToml) ([]*pod.Feed, 
 			return []*pod.Feed{feed}, nil
 		}
 	} else {
+		var feedList = make([]*pod.Feed, 0, len(tomlList))
 		for _, toml := range tomlList {
 
 			if feed, err := pod.NewFeed(toml); err != nil {
@@ -262,7 +262,7 @@ func runCheckDownloads(shortname string, tomlList []podconfig.FeedToml) {
 		log.Error(err)
 		return
 	} else if len(feedList) == 0 {
-		log.Error("no feeds found to update (check config or passed-in shortname)")
+		log.Error("no feeds found to check downloads (check config or passed-in shortname)")
 		return
 	} else {
 		for _, f := range feedList {

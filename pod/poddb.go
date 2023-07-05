@@ -73,6 +73,13 @@ func NewDB(path string) (*PodDB, error) {
 	return &poddb, nil
 }
 
+type loadOptions struct {
+	dontCreate     bool // because default should be to create
+	includeXml     bool
+	includeDeleted bool
+	direction      direction
+}
+
 // --------------------------------------------------------------------------
 func (pdb PodDB) isFeedDeleted(hash string) (bool, error) {
 	if pdb.path == "" {
@@ -98,7 +105,7 @@ func (pdb PodDB) isFeedDeleted(hash string) (bool, error) {
 }
 
 // --------------------------------------------------------------------------
-func (pdb PodDB) loadDBFeed(feedEntry *FeedDBEntry, loadXml bool) error {
+func (pdb PodDB) loadFeed(feedEntry *FeedDBEntry, opt loadOptions) error {
 
 	if pdb.path == "" {
 		return errors.New("poddb is not initialized; call NewDB() first")
@@ -115,12 +122,21 @@ func (pdb PodDB) loadDBFeed(feedEntry *FeedDBEntry, loadXml bool) error {
 
 	// right now, only hash or ID
 	var tx = db.Where(&FeedDBEntry{PodDBModel: PodDBModel{ID: feedEntry.ID}, Hash: feedEntry.Hash})
-	if loadXml {
+	if opt.includeDeleted {
+		tx = tx.Unscoped()
+	}
+	if opt.includeXml {
 		tx = tx.Preload("XmlFeedData")
 	}
 
-	// if this is a new feed, will create a new entry
-	var res = tx.FirstOrCreate(feedEntry)
+	var res *gorm.DB
+	if opt.dontCreate {
+		res = tx.First(feedEntry)
+	} else {
+		// if this is a new feed, will create a new entry
+		res = tx.FirstOrCreate(feedEntry)
+	}
+
 	if res.Error != nil {
 		return res.Error
 	}
@@ -154,7 +170,7 @@ func (pdb PodDB) loadDBFeedXml(xmlId uint) (*FeedXmlDBEntry, error) {
 }
 
 // --------------------------------------------------------------------------
-func (pdb PodDB) loadFeedItems(feedId uint, numItems int, includeXml bool, dtn direction) ([]*ItemDBEntry, error) {
+func (pdb PodDB) loadFeedItems(feedId uint, numItems int, opt loadOptions) ([]*ItemDBEntry, error) {
 
 	if pdb.path == "" {
 		return nil, errors.New("poddb is not initialized; call NewDB() first")
@@ -170,13 +186,13 @@ func (pdb PodDB) loadFeedItems(feedId uint, numItems int, includeXml bool, dtn d
 	// even tho order doesn't matter in the end, as this list is transitioned to map, for testing
 	// purposes and to retain consistency (ordered in all possible runs) adding order here
 	var tx = db.Where(&ItemDBEntry{FeedId: feedId}).
-		Order(clause.OrderByColumn{Column: clause.Column{Name: "PubTimeStamp"}, Desc: bool(dtn)})
+		Order(clause.OrderByColumn{Column: clause.Column{Name: "PubTimeStamp"}, Desc: bool(opt.direction)})
 	// if numitems is negative, load everything..
 	// we don't care about order; will be transitioned to map anyways
 	if numItems > 0 {
 		tx = tx.Limit(numItems)
 	}
-	if includeXml {
+	if opt.includeXml {
 		tx = tx.Preload("XmlData")
 	}
 

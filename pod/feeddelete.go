@@ -7,7 +7,7 @@ import (
 
 func (f *Feed) RunDelete() error {
 
-	if err := f.LoadDBFeed(true); err != nil {
+	if err := f.LoadDBFeed(loadOptions{includeXml: true}); err != nil {
 		// f.log.Error("failed to load feed data from db: ", err)
 		return err
 	}

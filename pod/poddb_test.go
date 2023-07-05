@@ -258,7 +258,8 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 			resetCallStack()
 			var fq = tt.p.fq
 
-			err := poddb.loadDBFeed(podutils.Tern(tt.p.entryNil, nil, &fq), tt.p.loadXml)
+			opt := loadOptions{includeXml: tt.p.loadXml}
+			err := poddb.loadFeed(podutils.Tern(tt.p.entryNil, nil, &fq), opt)
 			if testutils.AssertErrContains(t, tt.e.errStr, err) {
 				// general expected structure
 				testutils.Assert(t, fq.ID > 0, fmt.Sprintf("Id > 0, got %v", fq.ID))
@@ -471,7 +472,8 @@ func TestPodDB_loadFeedItems(t *testing.T) {
 
 			var direction = podutils.Tern(tt.p.asc == true, cASC, cDESC)
 
-			res, err := poddb.loadFeedItems(tt.p.feedId, tt.p.numItems, tt.p.includeXml, direction)
+			var opt = loadOptions{includeXml: tt.p.includeXml, direction: direction}
+			res, err := poddb.loadFeedItems(tt.p.feedId, tt.p.numItems, opt)
 			testutils.AssertErrContains(t, tt.e.errStr, err)
 
 			// var wtflist = make([]*ItemDBEntry, 0)

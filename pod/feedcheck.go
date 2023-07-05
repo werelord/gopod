@@ -35,7 +35,7 @@ func (f *Feed) CheckDownloads() error {
 	)
 
 	// make sure db is loaded; don't need xml for this
-	if err = f.LoadDBFeed(false); err != nil {
+	if err = f.LoadDBFeed(loadOptions{}); err != nil {
 		f.log.Error("failed to load feed data from db: ", err)
 		if errors.Is(err, &ErrorFeedDeleted{}) {
 			// future: for now, this works.. eventually put this message in main based on error
@@ -44,7 +44,7 @@ func (f *Feed) CheckDownloads() error {
 		return err
 	} else {
 		// load all items (will be sorted desc); we do want item xml
-		if fcs.itemList, err = f.loadDBFeedItems(AllItems, true, cASC); err != nil {
+		if fcs.itemList, err = f.loadDBFeedItems(AllItems, loadOptions{includeXml: true, direction: cASC}); err != nil {
 			f.log.Error("failed to load item entries: ", err)
 			return err
 		}
