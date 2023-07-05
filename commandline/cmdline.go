@@ -7,17 +7,26 @@ import (
 	"gopod/podutils"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/DavidGamba/go-getoptions"
 )
 
 type CommandType int
 
+type ExportType int
+
+const (
+	ExportJson ExportType = iota
+	ExportDB
+)
+
 const ( // commands
 	Unknown CommandType = iota
 	Update
 	CheckDownloaded
 	Delete
+	Export
 	Preview
 )
 
@@ -50,11 +59,16 @@ type CommandLine struct {
 
 type CommandLineOptions struct {
 	// global
-	BackupDb bool
-	Debug    bool
-
+	GlobalOpt
 	UpdateOpt
 	CheckDownloadOpt
+	ExportOpt
+}
+
+// global options
+type GlobalOpt struct {
+	BackupDb bool
+	Debug    bool
 }
 
 // update specific
@@ -72,6 +86,14 @@ type CheckDownloadOpt struct {
 	DoRename      bool
 	SaveCollision bool
 	DoCollision   bool
+}
+
+// export specific
+type ExportOpt struct {
+	IncludeDeleted bool
+	Format         ExportType
+	formatStr      string
+	ExportPath     string
 }
 
 // --------------------------------------------------------------------------
@@ -146,7 +168,7 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 		opt.Alias("c"),
 		opt.ArgName("config.toml"))
 	opt.StringVar(&c.FeedShortname, "feed", "",
-		opt.Description("feed to compile on (use shortname)"),
+		opt.Description("feed to compile on (use shortname), or empty for all feeds"),
 		opt.Alias("f"), opt.ArgName("shortname"))
 	opt.StringVar(&c.Proxy, "proxy", "",
 		opt.Description("use proxy url"),
@@ -182,6 +204,15 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 		opt.Description("Save collision differences to <workingdir>\\.collisions\\"))
 	checkcommand.SetCommandFn(c.generateCmdFunc(CheckDownloaded))
 
+	exportCommand := opt.NewCommand("export", "export feed from database (either entire or specific feed)")
+	exportCommand.BoolVar(&c.IncludeDeleted, "include-deleted", false,
+		opt.Description("include deleted feeds in archive"))
+	exportCommand.StringVar(&c.formatStr, "format", "json",
+		opt.Description("format for export (db or json)"))
+	exportCommand.StringVar(&c.ExportPath, "export-path", "",
+		opt.Description("path for export (default to current directory)"))
+	exportCommand.SetCommandFn(c.OnExportFunc)
+
 	deletecommand := opt.NewCommand("deletefeed", "delete feed and all items from database (performs a soft delete)")
 	deletecommand.SetCommandFn(c.generateCmdFunc(Delete))
 
@@ -203,4 +234,19 @@ func (c *CommandLine) generateCmdFunc(t CommandType) getoptions.CommandFn {
 		return nil
 	}
 	return fn
+}
+
+func (c *CommandLine) OnExportFunc(ctx context.Context, opt *getoptions.GetOpt, list []string) error {
+	c.Command = Export
+	fmt.Printf("command export")
+
+	if strings.EqualFold(c.formatStr, "json") {
+		c.Format = ExportJson
+	} else if strings.EqualFold(c.formatStr, "db") {
+		c.Format = ExportDB
+	} else {
+		return fmt.Errorf("unrecognized export format '%v'", c.formatStr)
+	}
+
+	return nil
 }
