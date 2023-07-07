@@ -167,7 +167,7 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 		opt.Description("feed to compile on (use shortname), or empty for all feeds"),
 		opt.Alias("f"), opt.ArgName("shortname"))
 	opt.StringVar(&c.Proxy, "proxy", "",
-		opt.Description("use proxy url"),
+		opt.Description("use proxy url for network requests"),
 		opt.Alias("p", " proxy"))
 	opt.BoolVar(&c.BackupDb, "backup-db", false,
 		opt.Description("Backup database before opening"),
@@ -200,13 +200,13 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 		opt.Description("Save collision differences to <workingdir>\\.collisions\\"))
 	checkcommand.SetCommandFn(c.generateCmdFunc(CheckDownloaded))
 
-	exportCommand := opt.NewCommand("export", "export feed from database (either entire or specific feed)")
+	exportCommand := opt.NewCommand("export", "export feed from database (either all or specific feed)")
 	exportCommand.BoolVar(&c.IncludeDeleted, "include-deleted", false,
 		opt.Description("include deleted feeds in archive"))
 	exportCommand.StringVar(&c.formatStr, "format", "json",
-		opt.Description("format for export (db or json)"))
+		opt.Description("format for export - json (default) or db"))
 	exportCommand.StringVar(&c.ExportPath, "export-path", "",
-		opt.Description("path for export (default to '#configDir#\\shortname\\')"))
+		opt.Description("path for export (default to '#configDir#\\#shortname#\\')"))
 	exportCommand.SetCommandFn(c.OnExportFunc)
 
 	deletecommand := opt.NewCommand("deletefeed", "delete feed and all items from database (performs a soft delete)")

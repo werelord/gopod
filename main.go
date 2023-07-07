@@ -113,10 +113,11 @@ func main() {
 func runTest(config podconfig.Config, tomlList []podconfig.FeedToml, db *pod.PodDB) {
 	if config.Debug && false {
 
-		if pod, err := genFeed("mlife", tomlList); err != nil {
+		if pod, err := genFeed("pt", tomlList); err != nil {
 			log.Errorf("well shit: %v", err)
 		} else {
-			check(pod, db)
+			log.Debugf("runtest %v", pod.Shortname)
+			// pod.RunTest()
 		}
 
 		os.Exit(0)

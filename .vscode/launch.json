@@ -42,8 +42,8 @@
                 // export command
                 "export",
                 "--include-deleted",
-                "--format=db",
-                // "--export-path=e:\\gopod\\.export\\",
+                // "--format=db",
+                "--export-path=e:\\gopod\\.export\\",
 
                 // preview command
                 // "preview",

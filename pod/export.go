@@ -1,11 +1,15 @@
 package pod
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+
 	"gopod/commandline"
 	"gopod/podconfig"
-	"path/filepath"
+	"gopod/podutils"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -46,6 +50,10 @@ func (f *Feed) export(path string) error {
 
 	var reterr error
 
+	if config.ExportPath != "" {
+		podutils.MkdirAll(config.ExportPath)
+	}
+
 	if err := f.exportConfig(path); err != nil {
 		reterr = errors.Join(reterr, err)
 	} else if err := f.exportData(path); err != nil {
@@ -70,32 +78,48 @@ func (f Feed) exportData(path string) error {
 			direction:      cASC,
 			includeDeleted: config.IncludeDeleted,
 		}
-		itemlist []*Item
 	)
 	if err := f.LoadDBFeed(opt); err != nil {
 		return err
-	} else if itemlist, err = f.loadDBFeedItems(AllItems, opt); err != nil {
+	} else if itemlist, err := f.loadDBFeedItems(AllItems, opt); err != nil {
+		return err
+	} else if f.ItemList, err = f.genItemDBEntryList(itemlist); err != nil {
 		return err
 	}
 
-	log.Debug(itemlist)
+	// log.Debug(itemlist)
 
 	if config.ExportFormat == commandline.ExportJson {
 		var filename = filepath.Join(path, fmt.Sprintf("%v.json", f.Shortname))
-		return f.exportToJson(itemlist, filename)
+		return exportToJson(&f.FeedDBEntry, filename)
 	} else if config.ExportFormat == commandline.ExportDB {
 		var filename = filepath.Join(path, fmt.Sprintf("%v.db", f.Shortname))
-		return f.exportToDb(itemlist, filename)
+		return exportToDb(&f.FeedDBEntry, filename)
 	}
 
 	return fmt.Errorf("export format not handled: %v", config.ExportFormat)
 }
 
-func (f Feed) exportToJson(items []*Item, file string) error {
+func exportToJson(feed *FeedDBEntry, file string) error {
+	log.Debugf("exporting feed %v to %v", feed.DBShortname, file)
 
-	return errors.New("not yet implemented")
+	out, err := os.Create(file)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "    ")
+	enc.SetEscapeHTML(true)
+
+	if err := enc.Encode(feed); err != nil {
+		return err
+	}
+	return nil
+
 }
 
-func (f Feed) exportToDb(items []*Item, file string) error {
+func exportToDb(feed *FeedDBEntry, file string) error {
 	return errors.New("not yet implemented")
 }

@@ -123,7 +123,7 @@ func (f *Feed) LoadDBFeed(opt loadOptions) error {
 	// make sure hash is prepopulated
 	f.generateHash()
 
-	if (opt.includeDeleted == false) {
+	if opt.includeDeleted == false {
 		// check for feed deleted before loading
 		if _, err := db.isFeedDeleted(f.Hash); err != nil {
 			//f.log.Error("error in checking deleted: ", err)
@@ -181,7 +181,9 @@ func (f *Feed) loadDBFeedXml() error {
 
 // --------------------------------------------------------------------------
 func (f *Feed) generateHash() {
-	f.Hash = podutils.GenerateHash(f.Shortname)
+	if f.Hash == "" {
+		f.Hash = podutils.GenerateHash(f.Shortname)
+	}
 }
 
 // --------------------------------------------------------------------------
