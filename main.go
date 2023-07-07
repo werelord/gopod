@@ -174,6 +174,8 @@ func parseCommand(cmd commandline.CommandType) commandFunc {
 		return runDelete
 	case commandline.Preview:
 		return runPreview
+	case commandline.Export:
+		return runExport
 	default:
 		return nil
 	}
@@ -310,5 +312,18 @@ func runPreview(shortname string, tomlList []podconfig.FeedToml) {
 				"error": err,
 			}).Error("failed running preview")
 		}
+	}
+}
+
+// --------------------------------------------------------------------------
+func runExport(shortname string, tomlList []podconfig.FeedToml) {
+
+	if feedList, err := genFeedList(shortname, tomlList); err != nil {
+		log.Error(err)
+		return
+	} else if len(feedList) == 0 {
+		log.Error("no feeds found to check downloads (check config or passed-in shortname)")
+	} else if err := pod.Export(feedList); err != nil {
+		log.Errorf("Error in exporting feeds: %v", err)
 	}
 }

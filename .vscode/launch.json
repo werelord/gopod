@@ -17,12 +17,12 @@
                 // "--help",
                 "--config", "e:\\gopod\\config.toml",
                 // "--config", "e:\\gopod-sim\\sim.toml", 
-                // "--feed=gotime",
+                "--feed=pt",
                 // "--proxy", "http://localhost:8888",
                 "--backup-db",
 
                 // update commands
-                "update",
+                // "update",
                 // "--simulate",
                 // "--force",
                 // "--use-recent",
@@ -38,6 +38,12 @@
 
                 // delete command
                 // "deletefeed",
+
+                // export command
+                "export",
+                "--include-deleted",
+                "--format=db",
+                // "--export-path=e:\\gopod\\.export\\",
 
                 // preview command
                 // "preview",

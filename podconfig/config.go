@@ -1,10 +1,10 @@
 package podconfig
 
 import (
+	"errors"
 	"fmt"
 	"gopod/commandline"
 	"gopod/podutils"
-	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -25,28 +25,27 @@ type Config struct {
 }
 
 // --------------------------------------------------------------------------
-type tomldocImport struct {
-	Config   Config     `toml:"config"`
-	Feedlist []FeedToml `toml:"feed"`
-}
-
 type FeedToml struct {
 	Name              string  `toml:"name"`
 	Shortname         string  `toml:"shortname"`
 	Url               string  `toml:"url"`
-	FilenameParse     string  `toml:"filenameParse"`
-	Regex             string  `toml:"regex"`
-	UrlParse          string  `toml:"urlParse"`
-	CleanRep          *string `toml:"cleanReplacement"`
-	EpisodePad        int     `toml:"episodePad"`
-	CountStart        int     `toml:"countStart"`
-	DupFilenameBypass string  `toml:"dupFilenameBypass"`
+	FilenameParse     string  `toml:"filenameParse,omitempty"`
+	Regex             string  `toml:"regex,omitempty"`
+	UrlParse          string  `toml:"urlParse,omitempty"`
+	CleanRep          *string `toml:"cleanReplacement,omitempty"`
+	EpisodePad        int     `toml:"episodePad,omitempty"`
+	CountStart        int     `toml:"countStart,omitempty"`
+	DupFilenameBypass string  `toml:"dupFilenameBypass,omitempty"`
 }
 
 // --------------------------------------------------------------------------
 func LoadToml(filename string, timestamp time.Time) (*Config, []FeedToml, error) {
 
-	tomldoc := tomldocImport{}
+	var tomldoc = struct {
+		Config   Config     `toml:"config"`
+		Feedlist []FeedToml `toml:"feed"`
+	}{}
+
 	tomldoc.Config.Timestamp = timestamp
 	tomldoc.Config.TimestampStr = timestamp.Format(podutils.TimeFormatStr)
 	tomldoc.Config.WorkspaceDir = filepath.Dir(filename)
@@ -61,15 +60,41 @@ func LoadToml(filename string, timestamp time.Time) (*Config, []FeedToml, error)
 	}
 	defer file.Close()
 
-	buf, err := io.ReadAll(file)
-	if err != nil {
-		return nil, nil, fmt.Errorf("readall '%v' failed: %v", filename, err)
-	}
+	var decoder = toml.NewDecoder(file).DisallowUnknownFields()
+	if err := decoder.Decode(&tomldoc); err != nil {
+		// if err := toml.Unmarshal(buf, &tomldoc); err != nil {
+		var details *toml.StrictMissingError
 
-	if err := toml.Unmarshal(buf, &tomldoc); err != nil {
-		return nil, nil, fmt.Errorf("toml.unmarshal failed: %v ", err)
+		if errors.As(err, &details) {
+			return nil, nil, fmt.Errorf("toml.Decode failed: %w\ndetails: %v", details, details.String())
+		}
+		return nil, nil, fmt.Errorf("toml.Decode failed: %w", err)
 	}
 
 	return &tomldoc.Config, tomldoc.Feedlist, nil
 
+}
+
+func ExportToml(feed FeedToml, file string) error {
+
+	// match import config, without the config section
+	type exportDoc struct {
+		Feedlist []FeedToml `toml:"feed"`
+	}
+
+	var exportData = exportDoc{Feedlist: make([]FeedToml, 0)}
+
+	exportData.Feedlist = append(exportData.Feedlist, feed)
+
+	out, err := os.Create(file)
+	if err != nil {
+		return err
+	}
+
+	enc := toml.NewEncoder(out)
+	if err := enc.Encode(exportData); err != nil {
+		return err
+	}
+
+	return nil
 }

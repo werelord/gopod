@@ -21,6 +21,10 @@ const (
 	ExportDB
 )
 
+func (e ExportType) String() string {
+	return [...]string{"json", "sqlite"}[e]
+}
+
 const ( // commands
 	Unknown CommandType = iota
 	Update
@@ -30,22 +34,14 @@ const ( // commands
 	Preview
 )
 
+func (c CommandType) String() string {
+	return [...]string{"unknown", "update", "checkDownloaded", "delete", "export", "preview"}[c]
+}
+
 // for testing purposes
 var (
 	fileExists = podutils.FileExists
-
-	cmdMap = map[CommandType]string{
-		Unknown:         "unknown command",
-		Update:          "update",
-		CheckDownloaded: "checkDownloaded",
-		Delete:          "delete",
-		Preview:         "preview",
-	}
 )
-
-func (cmd CommandType) Format(fs fmt.State, c rune) {
-	fs.Write([]byte(cmdMap[cmd]))
-}
 
 // --------------------------------------------------------------------------
 type CommandLine struct {
@@ -91,7 +87,7 @@ type CheckDownloadOpt struct {
 // export specific
 type ExportOpt struct {
 	IncludeDeleted bool
-	Format         ExportType
+	ExportFormat   ExportType
 	formatStr      string
 	ExportPath     string
 }
@@ -241,9 +237,9 @@ func (c *CommandLine) OnExportFunc(ctx context.Context, opt *getoptions.GetOpt, 
 	fmt.Printf("command export")
 
 	if strings.EqualFold(c.formatStr, "json") {
-		c.Format = ExportJson
+		c.ExportFormat = ExportJson
 	} else if strings.EqualFold(c.formatStr, "db") {
-		c.Format = ExportDB
+		c.ExportFormat = ExportDB
 	} else {
 		return fmt.Errorf("unrecognized export format '%v'", c.formatStr)
 	}

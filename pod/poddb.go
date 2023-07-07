@@ -187,6 +187,9 @@ func (pdb PodDB) loadFeedItems(feedId uint, numItems int, opt loadOptions) ([]*I
 	// purposes and to retain consistency (ordered in all possible runs) adding order here
 	var tx = db.Where(&ItemDBEntry{FeedId: feedId}).
 		Order(clause.OrderByColumn{Column: clause.Column{Name: "PubTimeStamp"}, Desc: bool(opt.direction)})
+	if opt.includeDeleted {
+		tx = tx.Unscoped()
+	}
 	// if numitems is negative, load everything..
 	// we don't care about order; will be transitioned to map anyways
 	if numItems > 0 {
