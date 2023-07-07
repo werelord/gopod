@@ -50,9 +50,9 @@ type gormDBImpl struct {
 }
 
 
-//	func (gdbi *gormDBImpl) AutoMigrate(dst ...any) error {
-//		return gdbi.AutoMigrate(dst...)
-//	}
+func (gdbi *gormDBImpl) AutoMigrate(dst ...any) error {
+	return gdbi.DB.AutoMigrate(dst...)
+}
 func (gdbi *gormDBImpl) Where(query any, args ...any) gormDBInterface {
 	return &gormDBImpl{gdbi.DB.Where(query, args...)}
 }

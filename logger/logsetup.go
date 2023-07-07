@@ -78,7 +78,7 @@ func InitLogging(workingdir string, shortname string, timestamp time.Time) error
 	logdir = filepath.Join(workingdir, ".logs")
 	// make sure dir exists
 	if err := podutils.MkdirAll(logdir); err != nil {
-		fmt.Printf("error making xml directory: %v", err)
+		fmt.Printf("error making log directory: %v", err)
 		return err
 	}
 

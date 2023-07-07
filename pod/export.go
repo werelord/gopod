@@ -14,16 +14,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// todo: here
 
 func Export(feedlist []*Feed) error {
 
 	var reterr error
-
-	// log.Debug("running export")
-
-	// todo: export config
-	// todo: create export dir
 
 	if config == nil {
 		return errors.New("cannot export feeds; config is nil")

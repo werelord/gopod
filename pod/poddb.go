@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"gopod/podutils"
+	"path/filepath"
 
 	//"gorm.io/driver/sqlite"
 	"github.com/glebarez/sqlite"
@@ -51,6 +52,15 @@ func NewDB(path string) (*PodDB, error) {
 	}
 
 	var poddb = PodDB{path: path, config: defaultConfig}
+
+	if exists, err := podutils.FileExists(path); err != nil {
+		return nil, err
+	} else if exists == false {
+		if err := poddb.createNewDb(path); err != nil {
+			return nil, err
+		}
+	}
+
 	if db, err := gImpl.Open(sqlite.Open(poddb.path), &poddb.config); err != nil {
 		return nil, fmt.Errorf("error opening db: %w", err)
 
@@ -59,11 +69,8 @@ func NewDB(path string) (*PodDB, error) {
 
 		if res := db.Raw("SELECT ID from poddb_model").Scan(&result); res.Error != nil {
 			// handle new database file; this will happen on that error
-			log.Debug("finding model id failed; attempting to create new model")
-			var sqlStr = "CREATE TABLE poddb_model (ID integer); INSERT INTO poddb_model (ID) VALUES (?)"
-			if res := db.Exec(sqlStr, currentModel); res.Error != nil {
-				return nil, fmt.Errorf("error finding db version: %w", res.Error)
-			}
+			return nil, fmt.Errorf("error checking model version: %w", res.Error)
+
 		} else if result.ID != currentModel {
 			// future: custom error for calling migration methods
 			return nil, fmt.Errorf("model doesn't match current; migrate needs to happen")
@@ -71,6 +78,35 @@ func NewDB(path string) (*PodDB, error) {
 	}
 
 	return &poddb, nil
+}
+
+// creates a new database at the specified path with associated tables
+func (pdb PodDB) createNewDb(path string) error {
+	log.Debug("db file not found; attempting to create new")
+
+	// todo: unit test this shit
+
+	// if this is a new instance, make sure the db path exists; otherwise shit fails
+	if err := podutils.MkdirAll(filepath.Dir(path)); err != nil {
+		return err
+	}
+
+	if db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config); err != nil {
+		return fmt.Errorf("error opening db: %w", err)
+
+	} else {
+		var sqlStr = "CREATE TABLE poddb_model (ID integer); INSERT INTO poddb_model (ID) VALUES (?)"
+		if res := db.Exec(sqlStr, currentModel); res.Error != nil {
+			return fmt.Errorf("error creating db version: %w", res.Error)
+		}
+
+		// in the case of a new db, need to set up tables and such..
+		if err := db.AutoMigrate(&FeedDBEntry{}, &FeedXmlDBEntry{}, &ItemDBEntry{}, &ItemXmlDBEntry{}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 type loadOptions struct {
