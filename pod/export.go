@@ -14,7 +14,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-
 func Export(feedlist []*Feed) error {
 
 	var reterr error
@@ -59,8 +58,13 @@ func (f *Feed) export(path string) error {
 
 func (f Feed) exportConfig(path string) error {
 	var tomlFile = filepath.Join(path, fmt.Sprintf("%v.toml", f.Shortname))
-	return podconfig.ExportToml(f.FeedToml, tomlFile)
 
+	if err := podconfig.ExportToml(f.FeedToml, tomlFile); err != nil {
+		return err
+	} else {
+		f.log.Infof("config exported to %v", tomlFile)
+		return nil
+	}
 }
 
 func (f Feed) exportData(path string) error {
@@ -81,8 +85,6 @@ func (f Feed) exportData(path string) error {
 		return err
 	}
 
-	// log.Debug(itemlist)
-
 	if config.ExportFormat == commandline.ExportJson {
 		var filename = filepath.Join(path, fmt.Sprintf("%v.json", f.Shortname))
 		return exportToJson(&f.FeedDBEntry, filename)
@@ -95,7 +97,10 @@ func (f Feed) exportData(path string) error {
 }
 
 func exportToJson(feed *FeedDBEntry, file string) error {
-	log.Debugf("exporting feed %v to %v", feed.DBShortname, file)
+
+	var lg = log.WithField("feed", feed.DBShortname)
+
+	lg.Debugf("exporting feed to %v", file)
 
 	out, err := os.Create(file)
 	if err != nil {
@@ -110,10 +115,27 @@ func exportToJson(feed *FeedDBEntry, file string) error {
 	if err := enc.Encode(feed); err != nil {
 		return err
 	}
+
+	lg.Infof("feed exported to '%v'", file)
 	return nil
 
 }
 
 func exportToDb(feed *FeedDBEntry, file string) error {
-	return errors.New("not yet implemented")
+
+	var lg = log.WithField("feed", feed.DBShortname)
+
+	lg.Debugf("exporting feed to %v", file)
+
+	if export, err := NewDB(file); err != nil {
+		return err
+	} else {
+		// export with the already given IDs from the master db
+		if err := export.saveFeed(feed); err != nil {
+			return err
+		}
+	}
+
+	lg.Infof("feed exported to '%v'", file)
+	return nil
 }

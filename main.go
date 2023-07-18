@@ -217,7 +217,7 @@ func genFeed(shortname string, tomlList []podconfig.FeedToml) (*pod.Feed, error)
 			return pod.NewFeed(toml)
 		}
 	}
-	return nil, fmt.Errorf("cannot find feed with shortname '%v'", shortname)
+	return nil, fmt.Errorf("cannot find feed config with shortname '%v'", shortname)
 }
 
 // command functions
