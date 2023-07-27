@@ -16,14 +16,14 @@
                 // global args
                 // "--help",
                 "--config", "e:\\gopod\\config.toml",
-                // "--config", "e:\\gopod-sim\\sim.toml", 
-                "--feed=pt",
+                // "--config", "e:\\gopod-sim\\sim.toml",
+                "--feed=cppchat",
                 // "--proxy", "http://localhost:8888",
                 "--backup-db",
 
                 // update commands
-                // "update",
-                // "--simulate",
+                "update",
+                "--simulate",
                 // "--force",
                 // "--use-recent",
                 // "--set-downloaded",
@@ -40,10 +40,10 @@
                 // "deletefeed",
 
                 // export command
-                "export",
-                "--include-deleted",
+                // "export",
+                // "--include-deleted",
                 // "--format=db",
-                "--export-path=e:\\gopod\\.export\\",
+                // "--export-path=e:\\gopod\\.export\\",
 
                 // preview command
                 // "preview",

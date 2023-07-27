@@ -11,7 +11,8 @@ import (
 	"gopod/podconfig"
 	"gopod/podutils"
 
-	log "github.com/sirupsen/logrus"
+	// log "github.com/sirupsen/logrus"
+	log "gopod/multilogger"
 )
 
 func Export(feedlist []*Feed) error {
@@ -98,7 +99,7 @@ func (f Feed) exportData(path string) error {
 
 func exportToJson(feed *FeedDBEntry, file string) error {
 
-	var lg = log.WithField("feed", feed.DBShortname)
+	var lg = log.With("feed", feed.DBShortname)
 
 	lg.Debugf("exporting feed to %v", file)
 
@@ -123,7 +124,7 @@ func exportToJson(feed *FeedDBEntry, file string) error {
 
 func exportToDb(feed *FeedDBEntry, file string) error {
 
-	var lg = log.WithField("feed", feed.DBShortname)
+	var lg = log.With("feed", feed.DBShortname)
 
 	lg.Debugf("exporting feed to %v", file)
 

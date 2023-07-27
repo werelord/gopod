@@ -8,7 +8,8 @@ import (
 
 	"github.com/araddon/dateparse"
 	"github.com/beevik/etree"
-	log "github.com/sirupsen/logrus"
+
+	log "gopod/multilogger"
 )
 
 // todo: move to either sax or xml tag parsing before writing tests..

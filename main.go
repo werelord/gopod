@@ -15,9 +15,9 @@ import (
 	"gopod/pod"
 	"gopod/podconfig"
 	"gopod/podutils"
+	log "gopod/multilogger"
 
 	"github.com/DavidGamba/go-getoptions"
-	log "github.com/sirupsen/logrus"
 )
 
 // --------------------------------------------------------------------------
@@ -287,12 +287,9 @@ func runDelete(shortname string, tomlList []podconfig.FeedToml) {
 		return
 	} else {
 		// todo: logging of what's deleted
-		log.WithField("feed", f.Shortname).Infof("running delete")
+		log.With("feed", f.Shortname).Infof("running delete")
 		if err := f.RunDelete(); err != nil {
-			log.WithFields(log.Fields{
-				"feed":  f.Shortname,
-				"error": err,
-			}).Error("failed running delete")
+			log.With("feed", f.Shortname, "error", err).Error("failed running delete")
 		}
 	}
 }
@@ -306,12 +303,9 @@ func runPreview(shortname string, tomlList []podconfig.FeedToml) {
 		log.Error(err)
 		return
 	} else {
-		log.WithField("feed", f.Shortname).Info("running preview")
+		log.With("feed", f.Shortname).Info("running preview")
 		if err := f.Preview(); err != nil {
-			log.WithFields(log.Fields{
-				"feed":  f.Shortname,
-				"error": err,
-			}).Error("failed running preview")
+			log.With("feed", f.Shortname, "error", err).Error("failed running preview")
 		}
 	}
 }

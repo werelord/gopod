@@ -3,16 +3,16 @@ package pod
 import (
 	"errors"
 	"fmt"
-	"gopod/podconfig"
-	"gopod/podutils"
 	"net/url"
 	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
-
-	log "github.com/sirupsen/logrus"
+	
+	"gopod/podconfig"
+	"gopod/podutils"
+	log "gopod/multilogger"
 )
 
 var cleanFilename = podutils.CleanFilename
@@ -178,10 +178,10 @@ func (i Item) replaceTitleRegex(dststr, regex string) (string, error) {
 	matchSlice := r.FindStringSubmatch(i.XmlData.Title)
 
 	if len(matchSlice) < r.NumSubexp() {
-		log.WithFields(log.Fields{
-			"xmlTitle": i.XmlData.Title,
-			"regex":    regex,
-		}).Warn("regex doesn't match; replacing with blank strings")
+		log.With(
+			"xmlTitle", i.XmlData.Title,
+			"regex", regex,
+		).Warn("regex doesn't match; replacing with blank strings")
 		// return "", errors.New("return slice of regex doesn't match slices needed")
 	}
 

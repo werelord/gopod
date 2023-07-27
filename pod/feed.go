@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"path/filepath"
 
+	log "gopod/multilogger"
 	"gopod/podconfig"
 	"gopod/podutils"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // --------------------------------------------------------------------------
@@ -29,7 +28,7 @@ type feedInternal struct {
 	xmlfile string
 	mp3Path string
 
-	log *log.Entry
+	log log.Logger
 }
 
 type FeedDBEntry struct {
@@ -87,7 +86,7 @@ func (f *Feed) initFeed() error {
 		f.Shortname = f.Name
 	}
 
-	f.log = log.WithField("feed", f.Shortname)
+	f.log = log.With("feed", f.Shortname)
 
 	// attempt create the dirs
 	var xmlFilePath = filepath.Join(config.WorkspaceDir, f.Shortname, ".xml")
@@ -140,9 +139,9 @@ func (f *Feed) LoadDBFeed(opt loadOptions) error {
 	// xml is loaded (if applicable) from above query, no reason to call explicitly
 
 	{
-		lg := f.log.WithField("id", f.ID)
+		lg := f.log.With("id", f.ID)
 		if opt.includeXml && f.XmlFeedData != nil {
-			lg = lg.WithField("xml id", f.XmlFeedData.ID)
+			lg = lg.With("xml id", f.XmlFeedData.ID)
 		}
 		lg.Info("feed loaded")
 	}
@@ -171,10 +170,7 @@ func (f *Feed) loadDBFeedXml() error {
 		f.XmlFeedData = xml
 	}
 
-	f.log.WithFields(log.Fields{
-		"id":    f.ID,
-		"xmlId": f.XmlFeedData.ID,
-	}).Info("feed xml loaded")
+	f.log.With("id", f.ID, "xmlId", f.XmlFeedData.ID).Info("feed xml loaded")
 
 	return nil
 }
@@ -231,7 +227,7 @@ func (f *Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error
 	if f.ID == 0 {
 		return errors.New("unable to save to db; id is zero")
 	}
-	f.log.Infof("Saving db, xml:%v, itemCount:%v", newxml, len(newitems))
+	f.log.Infof("Saving db, xml:%v, itemCount:%v", newxml.Title, len(newitems))
 
 	if config.Simulate {
 		f.log.Info("skipping saving database due to sim flag")
@@ -265,19 +261,19 @@ func (f *Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error
 		return err
 	}
 
-	fl := f.log.WithField("id", f.ID)
+	fl := f.log.With("id", f.ID)
 	if f.XmlFeedData != nil {
-		fl = fl.WithField("xmlid", f.XmlFeedData)
+		fl = fl.With("xmlid", f.XmlFeedData)
 	}
-	fl.Trace("feed saved")
+	fl.Debug("feed saved")
 
 	for _, i := range f.ItemList {
 
-		il := f.log.WithFields(log.Fields{"itemFilename": i.Filename, "itemId": i.ID})
+		il := f.log.With("itemFilename", i.Filename, "itemId", i.ID)
 		if i.XmlData != nil {
-			il = il.WithField("itemXmlId", i.XmlData.ID)
+			il = il.With("itemXmlId", i.XmlData.ID)
 		}
-		il.Trace("item saved")
+		il.Debug("item saved")
 	}
 
 	return nil

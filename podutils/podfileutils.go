@@ -10,7 +10,8 @@ import (
 	"time"
 
 	"github.com/flytam/filenamify"
-	log "github.com/sirupsen/logrus"
+
+	log "gopod/multilogger"
 )
 
 const filenamMaxLength = 240

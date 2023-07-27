@@ -3,18 +3,19 @@ package pod
 import (
 	"errors"
 	"fmt"
-	"gopod/podutils"
 	"io/fs"
 	"path/filepath"
 	"time"
 
+	"gopod/podutils"
+	log "gopod/multilogger"
+
 	"github.com/araddon/dateparse"
-	log "github.com/sirupsen/logrus"
 )
 
 // common to all
 type DownloadResults struct {
-	currentLogger        *log.Entry
+	currentLogger        log.Logger
 	Results              map[string][]string
 	TotalDownloaded      uint
 	TotalDownloadedBytes uint64
@@ -316,14 +317,14 @@ func (fup *feedUpdate) checkExistingGuid(hash string, xmldata *podutils.XItemDat
 	if itemEntry, exists := fup.guidCollList[xmldata.Guid]; exists {
 		handled = true
 		// guid collision, with no hash collision.. means the url has changed..
-		flog.WithFields(log.Fields{
-			"previousguid": itemEntry.Guid,
-			"newguid":      xmldata.Guid,
-			"oldhash":      itemEntry.Hash,
-			"newhash":      hash,
-			"oldUrl":       itemEntry.Url,
-			"newUrl":       xmldata.Enclosure.Url,
-		}).Infof("guid collision detected with no hash collision; likely new url for same item")
+		flog.With(
+			"previousguid", itemEntry.Guid,
+			"newguid", xmldata.Guid,
+			"oldhash", itemEntry.Hash,
+			"newhash", hash,
+			"oldUrl", itemEntry.Url,
+			"newUrl", xmldata.Enclosure.Url,
+		).Infof("guid collision detected with no hash collision; likely new url for same item")
 
 		// hash will change.. filename might change if url is in filenameparse
 		// filename might change based on filenameparse.. xml definitely changed (diff url)
@@ -518,7 +519,7 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 	if config.DownloadAfter != "" {
 		if date, err := dateparse.ParseAny(config.DownloadAfter); err != nil {
 			werr := fmt.Errorf("downloadAfter not recognized: %w", err)
-			f.log.WithField("downloadAfter", config.DownloadAfter).Error(werr)
+			f.log.With("downloadAfter", config.DownloadAfter).Error(werr)
 			results.addError(werr)
 			return false
 
@@ -606,7 +607,7 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 		results.TotalDownloadedBytes += bytes
 		results.Results[fup.feed.Shortname] = append(results.Results[fup.feed.Shortname], item.Filename)
 
-		f.log.Info("finished downloading file: ", podfile)
+		f.log.Infof("finished downloading file: %v", podfile)
 	}
 
 	f.log.Info("all new downloads completed")

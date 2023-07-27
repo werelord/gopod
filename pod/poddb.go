@@ -3,16 +3,17 @@ package pod
 import (
 	"errors"
 	"fmt"
-	"gopod/podutils"
 	"path/filepath"
-
+	
+	"gopod/podutils"
+	log "gopod/multilogger"
+	
 	//"gorm.io/driver/sqlite"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
 
-	log "github.com/sirupsen/logrus"
 )
 
 type (

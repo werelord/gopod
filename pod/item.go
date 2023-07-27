@@ -13,13 +13,15 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/exp/slices"
+
 	"gopod/podconfig"
 	"gopod/podutils"
+	log "gopod/multilogger"
 
 	"github.com/google/uuid"
 	"github.com/schollz/progressbar/v3"
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/exp/slices"
+
 )
 
 type Item struct {
@@ -33,7 +35,7 @@ type Item struct {
 type itemInternal struct {
 	parentShortname string // for logging purposes
 
-	log *log.Entry
+	log log.Logger
 }
 
 type ItemDBEntry struct {
@@ -123,7 +125,7 @@ func createNewItemEntry(
 		log.Debugf("using generated filename: %v (%v)", item.Filename, item.XmlData.Title)
 	}
 
-	item.log = log.WithField("item", item.Filename)
+	item.log = log.With("item", item.Filename)
 
 	// everything should be set
 	return &item, nil
@@ -147,7 +149,7 @@ func loadFromDBEntry(parentCfg podconfig.FeedToml, entry *ItemDBEntry) (*Item, e
 			ItemDBEntry: *entry,
 			itemInternal: itemInternal{
 				parentShortname: parentCfg.Shortname,
-				log:             log.WithField("item", entry.Filename),
+				log:             log.With("item", entry.Filename),
 			},
 		}
 	)
@@ -197,11 +199,11 @@ func (i Item) isSameXmlEntry(new *podutils.XItemData, cfg podconfig.FeedToml) (b
 	// not so fucking simple.. simplecast fucks with filenames all the time; if url contains the string
 	// in dupFilenameBypass ignore the base filename and go only on enclosure length
 	if i.XmlData.Enclosure.Length == new.Enclosure.Length {
-		var logtemp = i.log.WithFields(log.Fields{
-			"old url":           i.XmlData.Enclosure.Url,
-			"new url":           new.Enclosure.Url,
-			"dupFilenameBypass": cfg.DupFilenameBypass,
-		})
+		var logtemp = i.log.With(
+			"old url", i.XmlData.Enclosure.Url,
+			"new url", new.Enclosure.Url,
+			"dupFilenameBypass", cfg.DupFilenameBypass,
+		)
 
 		if (cfg.DupFilenameBypass != "") && strings.Contains(new.Enclosure.Url, cfg.DupFilenameBypass) {
 			logtemp.Debug("same lengths and dupFilenameBypass found; marking as identical")
@@ -272,11 +274,11 @@ func (i *Item) updateFromEntry(
 		log.Error("failed parsing url: ", err)
 		return err
 	} else {
-		log.WithFields(log.Fields{
-			"oldUrl":    i.Url,
-			"newUrl":    cUrl,
-			"shortname": i.parentShortname,
-		}).Debug("new urls from hash")
+		log.With(
+			"oldUrl", i.Url,
+			"newUrl", cUrl,
+			"shortname", i.parentShortname,
+		).Debug("new urls from hash")
 
 		if i.Url == cUrl {
 			return fmt.Errorf("urls are the same; this shouldn't happen")
@@ -303,7 +305,7 @@ func (i *Item) updateFromEntry(
 		log.Debug("same item detected, not resetting downloaded or updating filename")
 	}
 
-	i.log = log.WithField("item", i.Filename)
+	i.log = log.With("item", i.Filename)
 
 	// everything should be set
 	return nil
@@ -358,7 +360,7 @@ func parseUrl(urlstr, urlparse string) (string, error) {
 		if found == false {
 			// see if parseList contains current host; if it doesn't THEN log the warning
 			if slices.Contains(parseList, u.Host) == false {
-				log.WithFields(log.Fields{"url": u.String(), "UrlParse": urlparse}).Warn("failed parsing url; split failed")
+				log.With("url", u.String(), "UrlParse", urlparse).Warn("failed parsing url; split failed")
 			}
 		}
 
