@@ -27,23 +27,24 @@ type multilog struct {
 	logList []*charmlog.Logger
 }
 
-var defaultLogger = multilog{console: charmlog.Default()}
+var def = multilog{console: charmlog.Default()}
 
 func SetConsoleWithOptions(w io.Writer, opt charmlog.Options) {
-	defaultLogger.console = charmlog.NewWithOptions(w, opt)
+	def.console = charmlog.NewWithOptions(w, opt)
 }
 
-func AddWithOptions(w io.Writer, opt charmlog.Options) { defaultLogger.AddWithOptions(w, opt) }
+func AddWithOptions(w io.Writer, opt charmlog.Options) { def.AddWithOptions(w, opt) }
 func (m *multilog) AddWithOptions(w io.Writer, opt charmlog.Options) {
-	m.logList = append(defaultLogger.logList, charmlog.NewWithOptions(w, opt))
+	m.logList = append(def.logList, charmlog.NewWithOptions(w, opt))
 }
 
 func Debug(msg interface{}, keyvals ...interface{}) {
-	defaultLogger.console.Helper()
-	for _, log := range defaultLogger.logList {
+	def.console.Helper()
+	def.console.Debug(msg, keyvals...)
+	for _, log := range def.logList {
 		log.Helper()
+		log.Debug(msg, keyvals...)
 	}
-	defaultLogger.Debug(msg, keyvals...)
 }
 func (m multilog) Debug(msg interface{}, keyvals ...interface{}) {
 	m.console.Helper()
@@ -53,12 +54,14 @@ func (m multilog) Debug(msg interface{}, keyvals ...interface{}) {
 		log.Debug(msg, keyvals...)
 	}
 }
+
 func Info(msg interface{}, keyvals ...interface{}) {
-	defaultLogger.console.Helper()
-	for _, log := range defaultLogger.logList {
+	def.console.Helper()
+	def.console.Info(msg, keyvals...)
+	for _, log := range def.logList {
 		log.Helper()
+		log.Info(msg, keyvals...)
 	}
-	defaultLogger.Info(msg, keyvals...)
 }
 func (m multilog) Info(msg interface{}, keyvals ...interface{}) {
 	m.console.Helper()
@@ -69,11 +72,12 @@ func (m multilog) Info(msg interface{}, keyvals ...interface{}) {
 	}
 }
 func Warn(msg interface{}, keyvals ...interface{}) {
-	defaultLogger.console.Helper()
-	for _, log := range defaultLogger.logList {
+	def.console.Helper()
+	def.console.Warn(msg, keyvals...)
+	for _, log := range def.logList {
 		log.Helper()
+		log.Warn(msg, keyvals...)
 	}
-	defaultLogger.Warn(msg, keyvals...)
 }
 func (m multilog) Warn(msg interface{}, keyvals ...interface{}) {
 	m.console.Helper()
@@ -84,11 +88,12 @@ func (m multilog) Warn(msg interface{}, keyvals ...interface{}) {
 	}
 }
 func Error(msg interface{}, keyvals ...interface{}) {
-	defaultLogger.console.Helper()
-	for _, log := range defaultLogger.logList {
+	def.console.Helper()
+	def.console.Error(msg, keyvals...)
+	for _, log := range def.logList {
 		log.Helper()
+		log.Error(msg, keyvals...)
 	}
-	defaultLogger.Error(msg, keyvals...)
 }
 func (m multilog) Error(msg interface{}, keyvals ...interface{}) {
 	m.console.Helper()
@@ -99,11 +104,12 @@ func (m multilog) Error(msg interface{}, keyvals ...interface{}) {
 	}
 }
 func Print(msg interface{}, keyvals ...interface{}) {
-	defaultLogger.console.Helper()
-	for _, log := range defaultLogger.logList {
+	def.console.Helper()
+	def.console.Print(msg, keyvals...)
+	for _, log := range def.logList {
 		log.Helper()
+		log.Print(msg, keyvals...)
 	}
-	defaultLogger.Print(msg, keyvals...)
 }
 func (m multilog) Print(msg interface{}, keyvals ...interface{}) {
 	m.console.Helper()
@@ -114,11 +120,12 @@ func (m multilog) Print(msg interface{}, keyvals ...interface{}) {
 	}
 }
 func Debugf(format string, args ...interface{}) {
-	defaultLogger.console.Helper()
-	for _, log := range defaultLogger.logList {
+	def.console.Helper()
+	def.console.Debugf(format, args...)
+	for _, log := range def.logList {
 		log.Helper()
+		log.Debugf(format, args...)
 	}
-	defaultLogger.Debugf(format, args...)
 }
 func (m multilog) Debugf(format string, args ...interface{}) {
 	m.console.Helper()
@@ -129,11 +136,12 @@ func (m multilog) Debugf(format string, args ...interface{}) {
 	}
 }
 func Infof(format string, args ...interface{}) {
-	defaultLogger.console.Helper()
-	for _, log := range defaultLogger.logList {
+	def.console.Helper()
+	def.console.Infof(format, args...)
+	for _, log := range def.logList {
 		log.Helper()
+		log.Infof(format, args...)
 	}
-	defaultLogger.Infof(format, args...)
 }
 func (m multilog) Infof(format string, args ...interface{}) {
 	m.console.Helper()
@@ -144,11 +152,12 @@ func (m multilog) Infof(format string, args ...interface{}) {
 	}
 }
 func Warnf(format string, args ...interface{}) {
-	defaultLogger.console.Helper()
-	for _, log := range defaultLogger.logList {
+	def.console.Helper()
+	def.console.Warnf(format, args...)
+	for _, log := range def.logList {
 		log.Helper()
+		log.Warnf(format, args...)
 	}
-	defaultLogger.Warnf(format, args...)
 }
 func (m multilog) Warnf(format string, args ...interface{}) {
 	m.console.Helper()
@@ -159,11 +168,12 @@ func (m multilog) Warnf(format string, args ...interface{}) {
 	}
 }
 func Errorf(format string, args ...interface{}) {
-	defaultLogger.console.Helper()
-	for _, log := range defaultLogger.logList {
+	def.console.Helper()
+	def.console.Errorf(format, args...)
+	for _, log := range def.logList {
 		log.Helper()
+		log.Errorf(format, args...)
 	}
-	defaultLogger.Errorf(format, args...)
 }
 func (m multilog) Errorf(format string, args ...interface{}) {
 	m.console.Helper()
@@ -174,11 +184,12 @@ func (m multilog) Errorf(format string, args ...interface{}) {
 	}
 }
 func Printf(format string, args ...interface{}) {
-	defaultLogger.console.Helper()
-	for _, log := range defaultLogger.logList {
+	def.console.Helper()
+	def.console.Printf(format, args...)
+	for _, log := range def.logList {
 		log.Helper()
+		log.Printf(format, args...)
 	}
-	defaultLogger.Printf(format, args...)
 }
 func (m multilog) Printf(format string, args ...interface{}) {
 	m.console.Helper()
@@ -189,7 +200,7 @@ func (m multilog) Printf(format string, args ...interface{}) {
 	}
 }
 
-func With(keyvals ...interface{}) Logger { return defaultLogger.With(keyvals...) }
+func With(keyvals ...interface{}) Logger { return def.With(keyvals...) }
 func (m multilog) With(keyvals ...interface{}) Logger {
 	var withLogger = multilog{
 		m.console.With(keyvals...),
