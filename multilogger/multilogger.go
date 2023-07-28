@@ -1,6 +1,8 @@
 package multilogger
 
 import (
+	"io"
+
 	charmlog "github.com/charmbracelet/log"
 )
 
@@ -27,13 +29,13 @@ type multilog struct {
 
 var defaultLogger = multilog{console: charmlog.Default()}
 
-func SetConsoleLogger(log *charmlog.Logger) {
-	defaultLogger.console = log
+func SetConsoleWithOptions(w io.Writer, opt charmlog.Options) {
+	defaultLogger.console = charmlog.NewWithOptions(w, opt)
 }
 
-func AddLogger(log *charmlog.Logger) { defaultLogger.AddLogger(log) }
-func (m *multilog) AddLogger(log *charmlog.Logger) {
-	m.logList = append(defaultLogger.logList, log)
+func AddWithOptions(w io.Writer, opt charmlog.Options) { defaultLogger.AddWithOptions(w, opt) }
+func (m *multilog) AddWithOptions(w io.Writer, opt charmlog.Options) {
+	m.logList = append(defaultLogger.logList, charmlog.NewWithOptions(w, opt))
 }
 
 func Debug(msg interface{}, keyvals ...interface{}) {

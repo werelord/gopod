@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"gopod/podutils"
 	log "gopod/multilogger"
+	"gopod/podutils"
 
 	"github.com/araddon/dateparse"
 )
@@ -82,13 +82,13 @@ func (f *Feed) update(results *DownloadResults) {
 		return
 	}
 
-	f.log.Debug("Feed loaded from db for update: ", f.Shortname)
+	f.log.Debugf("Feed loaded from db for update: %v", f.Shortname)
 
 	// download/load feed xml
 	if err := fUpdate.loadNewFeed(); err != nil {
 
 		if errors.Is(err, podutils.ParseCanceledError{}) {
-			f.log.Info("parse cancelled: ", err)
+			f.log.Infof("parse cancelled: %v", err)
 			return // this is not an error, just a shortcut to stop processing
 		} else {
 			results.addError(fmt.Errorf("failed to process feed: %w", err))

@@ -6,6 +6,7 @@ require (
 	github.com/DavidGamba/go-getoptions v0.27.0
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/beevik/etree v1.2.0
+	github.com/charmbracelet/lipgloss v0.7.1
 	github.com/flytam/filenamify v1.2.0
 	github.com/glebarez/sqlite v1.9.0
 	github.com/go-test/deep v1.1.0
@@ -18,7 +19,6 @@ require (
 
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
-	github.com/charmbracelet/lipgloss v0.7.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/glebarez/go-sqlite v1.21.2 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect

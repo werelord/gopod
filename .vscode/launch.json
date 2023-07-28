@@ -17,7 +17,7 @@
                 // "--help",
                 "--config", "e:\\gopod\\config.toml",
                 // "--config", "e:\\gopod-sim\\sim.toml",
-                "--feed=cppchat",
+                // "--feed=cppchat",
                 // "--proxy", "http://localhost:8888",
                 "--backup-db",
 
