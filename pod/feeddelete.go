@@ -15,7 +15,7 @@ func (f *Feed) RunDelete() error {
 	// verify input
 	var desc = fmt.Sprintf("Deleting feed '%v'; please confirm", f.Shortname)
 	if yn, err := inputoption.RunYesNoSelection(desc, inputoption.NO); err != nil {
-		f.log.Error("error in input selection; exiting: ", err)
+		f.log.Errorf("error in input selection; exiting: %v", err)
 		return err
 	} else {
 		switch yn {
@@ -31,7 +31,7 @@ func (f *Feed) RunDelete() error {
 
 	// run delete
 	if err := f.delete(); err != nil {
-		f.log.Error("failure to delete feed: ", err)
+		f.log.Errorf("failure to delete feed: %v", err)
 		return err
 	}
 

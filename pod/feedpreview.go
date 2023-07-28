@@ -37,7 +37,7 @@ func (f *Feed) Preview() error {
 
 	// download/load feed xml
 	if body, err := fprev.loadNewXml(); err != nil {
-		f.log.Error("error in loading xml; ", err)
+		f.log.Errorf("error in loading xml: %v", err)
 		return err
 	} else {
 		if config.UseMostRecentXml == false {
@@ -45,7 +45,7 @@ func (f *Feed) Preview() error {
 		}
 
 		if _, itemPairs, err = podutils.ParseXml(body, fprev); err != nil {
-			f.log.Error("error in parsing xml: ", err)
+			f.log.Errorf("error in parsing xml: %v", err)
 			return err
 		}
 	}
@@ -81,7 +81,7 @@ func (f *Feed) Preview() error {
 			f.log.Error(err)
 			return err
 		} else if previewItem, err := createNewItemEntry(f.FeedToml, hash, xmldata, itemCount+1, collFunc); err != nil {
-			f.log.Error("error creating item: ", err)
+			f.log.Errorf("error creating item: %v", err)
 			return err
 		} else {
 			// add the filename to collision list

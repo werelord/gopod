@@ -94,10 +94,10 @@ func InitLogging(workingdir string, timestamp time.Time) error {
 	errSymlink := filepath.Join(workingdir, "gopod.error.latest.log")
 
 	if err := podutils.CreateSymlink(allLevelsFile, allSymlink); err != nil {
-		log.Warn("failed to create symlink file (all levels): ", err)
+		log.Warnf("failed to create symlink file (all levels): %v", err)
 
 	} else if err2 := podutils.CreateSymlink(errorLevelsFile, errSymlink); err != nil {
-		log.Warn("failed to create symlink file (error levels): ", err2)
+		log.Warnf("failed to create symlink file (error levels): %v", err2)
 	}
 
 	return nil
@@ -153,10 +153,10 @@ func RotateLogFiles(numKeep int) error {
 	}
 	// rotate logfiles
 	if err := podutils.RotateFiles(logdir, "gopod.all.*.log", uint(numKeep)); err != nil {
-		log.Warn("failed to rotate logs: ", err)
+		log.Warnf("failed to rotate logs: %v", err)
 	}
 	if err := podutils.RotateFiles(logdir, "gopod.error.*.log", uint(numKeep)); err != nil {
-		log.Warn("failed to rotate logs: ", err)
+		log.Warnf("failed to rotate logs: %v", err)
 	}
 
 	return nil

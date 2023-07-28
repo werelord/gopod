@@ -115,7 +115,7 @@ func ParseXml(xmldata []byte, fp FeedProcess) (feedData *XChannelData, newItems 
 
 	doc := etree.NewDocument()
 	if err = doc.ReadFromBytes(xmldata); err != nil {
-		log.Error("failed to read xml document", err)
+		log.Errorf("failed to read xml document: %v", err)
 		return
 	}
 
@@ -320,7 +320,7 @@ func parseItemEntry(elem *etree.Element) (item XItemData, err error) {
 				if l, e := strconv.Atoi(lenStr.Value); e == nil {
 					item.Enclosure.Length = uint(l) // shouldn't be any overflow, or negatives, hopefully
 				} else {
-					log.Error("error in parsing enclosure length:", e)
+					log.Errorf("error in parsing enclosure length: %v", e)
 				}
 			}
 			if typestr := child.SelectAttr("type"); typestr != nil {

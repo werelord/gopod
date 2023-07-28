@@ -276,7 +276,7 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 					var dbEntry FeedDBEntry
 					dbEntry.ID = fq.ID
 					if res := gmock.mockdb.DB.Preload("XmlFeedData").Find(&dbEntry); res.Error != nil {
-						t.Error("error in checking: ", err)
+						t.Errorf("error in checking: %v", err)
 					}
 					exp = dbEntry
 				}

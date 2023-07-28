@@ -91,14 +91,14 @@ func (f *Feed) initFeed() error {
 	// attempt create the dirs
 	var xmlFilePath = filepath.Join(config.WorkspaceDir, f.Shortname, ".xml")
 	if err := podutils.MkdirAll(xmlFilePath); err != nil {
-		f.log.Error("error making xml directory: ", err)
+		f.log.Errorf("error making xml directory: %v", err)
 		return err
 	}
 	f.xmlfile = filepath.Join(xmlFilePath, f.Shortname+"."+config.TimestampStr+".xml")
 
 	f.mp3Path = filepath.Join(config.WorkspaceDir, f.Shortname)
 	if err := podutils.MkdirAll(f.mp3Path); err != nil {
-		f.log.Error("error making mp3 directory: ", err)
+		f.log.Errorf("error making mp3 directory: %v", err)
 		return err
 	}
 
@@ -133,7 +133,7 @@ func (f *Feed) LoadDBFeed(opt loadOptions) error {
 	}
 
 	if err := db.loadFeed(&f.FeedDBEntry, opt); err != nil {
-		f.log.Error("failed loading feed: ", err)
+		f.log.Errorf("failed loading feed: %v", err)
 		return err
 	}
 	// xml is loaded (if applicable) from above query, no reason to call explicitly
@@ -164,7 +164,7 @@ func (f *Feed) loadDBFeedXml() error {
 	}
 
 	if xml, err := db.loadDBFeedXml(f.XmlId); err != nil {
-		f.log.Error("failed loading feed xml: ", err)
+		f.log.Errorf("failed loading feed xml: %v", err)
 		return err
 	} else {
 		f.XmlFeedData = xml
@@ -197,7 +197,7 @@ func (f *Feed) loadDBFeedItems(numItems int, opt loadOptions) ([]*Item, error) {
 	// otherwise limit to numLatest
 	entryList, err = db.loadFeedItems(f.ID, numItems, opt)
 	if err != nil {
-		f.log.Error("Failed to get item data from db: ", err)
+		f.log.Errorf("Failed to get item data from db: %v", err)
 		return nil, err
 	} else if len(entryList) == 0 {
 		f.log.Warn("unable to get db entries; list is empty (new feed?)")
@@ -209,7 +209,7 @@ func (f *Feed) loadDBFeedItems(numItems int, opt loadOptions) ([]*Item, error) {
 
 		var item *Item
 		if item, err = loadFromDBEntry(f.FeedToml, entry); err != nil {
-			f.log.Error("failed to load item data: ", err)
+			f.log.Errorf("failed to load item data: %v", err)
 			// if this fails, something is wrong
 			return itemList, err
 		}

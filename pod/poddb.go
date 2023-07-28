@@ -359,7 +359,7 @@ func (pdb PodDB) deleteFeed(feed *FeedDBEntry) error {
 
 	// delete feed xml
 	if feed.XmlId == 0 {
-		log.Warnf("feed xml is zero; xml entry might not exist")
+		log.Warn("feed xml is zero; xml entry might not exist")
 	} else {
 		var xmlentry = podutils.Tern(feed.XmlFeedData == nil, &FeedXmlDBEntry{}, feed.XmlFeedData)
 		if res := db.Delete(xmlentry, feed.XmlId); res.Error != nil {

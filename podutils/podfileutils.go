@@ -160,10 +160,10 @@ func FindMostRecent(path, pattern string) (string, error) {
 	for _, file := range filelist {
 		if file.IsDir() == false {
 			if fi, err := file.Info(); err != nil {
-				log.Error("info returned error: ", err)
+				log.Errorf("info returned error: %v", err)
 				return "", err
 			} else if match, err := filepath.Match(pattern, fi.Name()); err != nil {
-				log.Error("match returned error: ", err)
+				log.Errorf("match returned error: %v", err)
 				return "", err
 			} else if match == true {
 				// check timestamp
@@ -183,18 +183,18 @@ func FindMostRecent(path, pattern string) (string, error) {
 // --------------------------------------------------------------------------
 func CreateSymlink(source, symDest string) error {
 	if exists, err := FileExists(symDest); err != nil {
-		log.Error("Failed checking symlink already exists: ", err)
+		log.Errorf("Failed checking symlink already exists: %v", err)
 		return err
 	} else if exists {
 		// remove the symlink before recreating it..
 		if err := osimpl.Remove(symDest); err != nil {
-			log.Warn("failed to remove latest symlink: ", err)
+			log.Warnf("failed to remove latest symlink: %v", err)
 			return err
 		}
 	}
 
 	if err := osimpl.Symlink(source, symDest); err != nil {
-		log.Warn("failed to create symlink: ", err)
+		log.Warnf("failed to create symlink: %v", err)
 		return err
 	}
 	return nil
