@@ -18,30 +18,34 @@ import (
 const numLogsToKeep = 5
 
 var (
-	relPath string
-	logdir  string
+	logdir string
 )
 
 // --------------------------------------------------------------------------
-func InitLogging(workingdir string, timestamp time.Time) error {
+func InitLogging(workingdir string, timestamp time.Time, level string) error {
 	// todo: somehow differentiate between debug/release programmatically
 
-	relPath = getRelPathCaller()
+	var (
+		relpath  = getRelPathCaller()
+		loglevel = mapLogLevel(level)
 
-	var chOpt = charmlog.Options{
-		Level:           charmlog.DebugLevel,
-		ReportTimestamp: true,
-		ReportCaller:    true,
-		CallerFormatter: genCallFormatter(false),
-		TimeFormat:      "2006-01-02 15:04:05.000",
-	}
-	var chErr = charmlog.Options{
-		Level:           charmlog.WarnLevel,
-		ReportTimestamp: true,
-		ReportCaller:    true,
-		CallerFormatter: genCallFormatter(true),
-		TimeFormat:      "2006-01-02 15:04:05.000",
-	}
+		reportCaller = (loglevel == charmlog.DebugLevel)	// only show path if we're debug
+
+		allOpt = charmlog.Options{
+			Level:           loglevel,
+			ReportTimestamp: true,
+			ReportCaller:    reportCaller,
+			CallerFormatter: genCallFormatter(relpath, false),
+			TimeFormat:      "2006-01-02 15:04:05.000",
+		}
+		errOpt = charmlog.Options{
+			Level:           charmlog.WarnLevel, // always warn or above
+			ReportTimestamp: true,
+			ReportCaller:    reportCaller,
+			CallerFormatter: genCallFormatter(relpath, true),
+			TimeFormat:      "2006-01-02 15:04:05.000",
+		}
+	)
 
 	// global styles for console
 	charmlog.TimestampStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#1a75ff")).Italic(true)
@@ -49,7 +53,7 @@ func InitLogging(workingdir string, timestamp time.Time) error {
 	charmlog.KeyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#66ffff")).Italic(true)
 	charmlog.ValueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#66ff66")).Italic(true)
 
-	log.SetConsoleWithOptions(os.Stderr, chOpt)
+	log.SetConsoleWithOptions(os.Stderr, allOpt)
 
 	logdir = filepath.Join(workingdir, ".logs")
 	// make sure dir exists
@@ -68,8 +72,8 @@ func InitLogging(workingdir string, timestamp time.Time) error {
 	} else if errFile, err := os.Create(errorLevelsFile); err != nil {
 		return err
 	} else {
-		log.AddWithOptions(allFile, chOpt)
-		log.AddWithOptions(errFile, chErr)
+		log.AddWithOptions(allFile, allOpt)
+		log.AddWithOptions(errFile, errOpt)
 	}
 
 	// log.Debug("foo")
@@ -88,6 +92,8 @@ func InitLogging(workingdir string, timestamp time.Time) error {
 	// foo.Errorf("Error %v", errors.New("test err"))
 	// foo.Print("print me foo")
 
+	// log.Print("done")
+
 	log.Infof("logging initialized on '%v'; creating symlinks to latest", filepath.Base(allLevelsFile))
 	// create symlinks in workingdir, pointing to files in logdir
 	allSymlink := filepath.Join(workingdir, "gopod.all.latest.log")
@@ -103,7 +109,7 @@ func InitLogging(workingdir string, timestamp time.Time) error {
 	return nil
 }
 
-func genCallFormatter(incFunc bool) charmlog.CallerFormatter {
+func genCallFormatter(relpath string, incFunc bool) charmlog.CallerFormatter {
 
 	var fn = func(file string, line int, fn string) string {
 		// function; strip qualified path; first dot after first slash
@@ -111,7 +117,7 @@ func genCallFormatter(incFunc bool) charmlog.CallerFormatter {
 			ret string
 		)
 		// return relative path to file
-		if relPath, err := filepath.Rel(relPath, file); err == nil {
+		if relPath, err := filepath.Rel(relpath, file); err == nil {
 			file = relPath
 		}
 		ret = fmt.Sprintf("%s:%d", file, line)
@@ -160,4 +166,20 @@ func RotateLogFiles(numKeep int) error {
 	}
 
 	return nil
+}
+
+func mapLogLevel(lev string) charmlog.Level {
+	switch {
+	case strings.EqualFold(lev, "debug"):
+		return charmlog.DebugLevel
+	case strings.EqualFold(lev, "info"):
+		return charmlog.InfoLevel
+	case strings.EqualFold(lev, "warn"):
+		return charmlog.WarnLevel
+	case strings.EqualFold(lev, "error"):
+		return charmlog.ErrorLevel
+	default:
+		return charmlog.InfoLevel
+	}
+
 }

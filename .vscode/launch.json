@@ -20,6 +20,7 @@
                 // "--feed=cppchat",
                 // "--proxy", "http://localhost:8888",
                 "--backup-db",
+                "--log=debug",
 
                 // update commands
                 "update",

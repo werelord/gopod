@@ -58,7 +58,7 @@ func main() {
 		return
 	}
 
-	if err := logger.InitLogging(filepath.Dir(cmdline.ConfigFile), runTimestamp); err != nil {
+	if err := logger.InitLogging(filepath.Dir(cmdline.ConfigFile), runTimestamp, cmdline.LogLevelStr); err != nil {
 		fmt.Println("failed to initialize logging: ", err)
 		return
 	}

@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"gopod/podutils"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"gopod/podutils"
 
 	"github.com/DavidGamba/go-getoptions"
 )
@@ -63,8 +64,9 @@ type CommandLineOptions struct {
 
 // global options
 type GlobalOpt struct {
-	BackupDb bool
-	Debug    bool
+	LogLevelStr string
+	BackupDb    bool
+	Debug       bool
 }
 
 // update specific
@@ -172,6 +174,9 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 	opt.BoolVar(&c.BackupDb, "backup-db", false,
 		opt.Description("Backup database before opening"),
 		opt.Alias("bak"))
+	opt.StringVar(&c.LogLevelStr, "log", "info",
+		opt.Description("level for log outputs (console and log files)."),
+	)
 	opt.BoolVar(&c.Debug, "debug", false,
 		opt.Description("Debug"),
 		opt.Alias("dbg"))

@@ -32,35 +32,51 @@ var def = multilog{console: charmlog.Default(), logList: make([]*charmlog.Logger
 func SetConsoleWithOptions(w io.Writer, opt charmlog.Options) { def.SetConsoleWithOptions(w, opt) }
 func AddWithOptions(w io.Writer, opt charmlog.Options)        { def.AddWithOptions(w, opt) }
 func Debug(msg any, keyvals ...any) {
-	def.console.Helper()
-	def.console.Debug(msg, keyvals...)
+	if def.console.GetLevel() <= charmlog.DebugLevel {
+		def.console.Helper()
+		def.console.Debug(msg, keyvals...)
+	}
 	for _, log := range def.logList {
-		log.Helper()
-		log.Debug(msg, keyvals...)
+		if log.GetLevel() <= charmlog.DebugLevel {
+			log.Helper()
+			log.Debug(msg, keyvals...)
+		}
 	}
 }
 func Info(msg any, keyvals ...any) {
-	def.console.Helper()
-	def.console.Info(msg, keyvals...)
+	if def.console.GetLevel() <= charmlog.InfoLevel {
+		def.console.Helper()
+		def.console.Info(msg, keyvals...)
+	}
 	for _, log := range def.logList {
-		log.Helper()
-		log.Info(msg, keyvals...)
+		if log.GetLevel() <= charmlog.InfoLevel {
+			log.Helper()
+			log.Info(msg, keyvals...)
+		}
 	}
 }
 func Warn(msg any, keyvals ...any) {
-	def.console.Helper()
-	def.console.Warn(msg, keyvals...)
+	if def.console.GetLevel() <= charmlog.WarnLevel {
+		def.console.Helper()
+		def.console.Warn(msg, keyvals...)
+	}
 	for _, log := range def.logList {
-		log.Helper()
-		log.Warn(msg, keyvals...)
+		if log.GetLevel() <= charmlog.WarnLevel {
+			log.Helper()
+			log.Warn(msg, keyvals...)
+		}
 	}
 }
 func Error(msg any, keyvals ...any) {
-	def.console.Helper()
-	def.console.Error(msg, keyvals...)
+	if def.console.GetLevel() <= charmlog.ErrorLevel {
+		def.console.Helper()
+		def.console.Error(msg, keyvals...)
+	}
 	for _, log := range def.logList {
-		log.Helper()
-		log.Error(msg, keyvals...)
+		if log.GetLevel() <= charmlog.ErrorLevel {
+			log.Helper()
+			log.Error(msg, keyvals...)
+		}
 	}
 }
 func Print(msg any, keyvals ...any) {
@@ -72,35 +88,51 @@ func Print(msg any, keyvals ...any) {
 	}
 }
 func Debugf(format string, args ...any) {
-	def.console.Helper()
-	def.console.Debugf(format, args...)
+	if def.console.GetLevel() <= charmlog.DebugLevel {
+		def.console.Helper()
+		def.console.Debugf(format, args...)
+	}
 	for _, log := range def.logList {
-		log.Helper()
-		log.Debugf(format, args...)
+		if log.GetLevel() <= charmlog.DebugLevel {
+			log.Helper()
+			log.Debugf(format, args...)
+		}
 	}
 }
 func Infof(format string, args ...any) {
-	def.console.Helper()
-	def.console.Infof(format, args...)
+	if def.console.GetLevel() <= charmlog.InfoLevel {
+		def.console.Helper()
+		def.console.Infof(format, args...)
+	}
 	for _, log := range def.logList {
-		log.Helper()
-		log.Infof(format, args...)
+		if log.GetLevel() <= charmlog.InfoLevel {
+			log.Helper()
+			log.Infof(format, args...)
+		}
 	}
 }
 func Warnf(format string, args ...any) {
-	def.console.Helper()
-	def.console.Warnf(format, args...)
+	if def.console.GetLevel() <= charmlog.WarnLevel {
+		def.console.Helper()
+		def.console.Warnf(format, args...)
+	}
 	for _, log := range def.logList {
-		log.Helper()
-		log.Warnf(format, args...)
+		if log.GetLevel() <= charmlog.WarnLevel {
+			log.Helper()
+			log.Warnf(format, args...)
+		}
 	}
 }
 func Errorf(format string, args ...any) {
-	def.console.Helper()
-	def.console.Errorf(format, args...)
+	if def.console.GetLevel() <= charmlog.ErrorLevel {
+		def.console.Helper()
+		def.console.Errorf(format, args...)
+	}
 	for _, log := range def.logList {
-		log.Helper()
-		log.Errorf(format, args...)
+		if log.GetLevel() <= charmlog.ErrorLevel {
+			log.Helper()
+			log.Errorf(format, args...)
+		}
 	}
 }
 func Printf(format string, args ...any) {
@@ -117,38 +149,54 @@ func (m *multilog) SetConsoleWithOptions(w io.Writer, opt charmlog.Options) {
 	m.console = charmlog.NewWithOptions(w, opt)
 }
 func (m *multilog) AddWithOptions(w io.Writer, opt charmlog.Options) {
-	m.logList = append(def.logList, charmlog.NewWithOptions(w, opt))
+	m.logList = append(m.logList, charmlog.NewWithOptions(w, opt))
 }
 func (m multilog) Debug(msg any, keyvals ...any) {
-	m.console.Helper()
-	m.console.Debug(msg, keyvals...)
+	if m.console.GetLevel() <= charmlog.DebugLevel {
+		m.console.Helper()
+		m.console.Debug(msg, keyvals...)
+	}
 	for _, log := range m.logList {
-		log.Helper()
-		log.Debug(msg, keyvals...)
+		if log.GetLevel() <= charmlog.DebugLevel {
+			log.Helper()
+			log.Debug(msg, keyvals...)
+		}
 	}
 }
 func (m multilog) Info(msg any, keyvals ...any) {
-	m.console.Helper()
-	m.console.Info(msg, keyvals...)
+	if m.console.GetLevel() <= charmlog.InfoLevel {
+		m.console.Helper()
+		m.console.Info(msg, keyvals...)
+	}
 	for _, log := range m.logList {
-		log.Helper()
-		log.Info(msg, keyvals...)
+		if log.GetLevel() <= charmlog.InfoLevel {
+			log.Helper()
+			log.Info(msg, keyvals...)
+		}
 	}
 }
 func (m multilog) Warn(msg any, keyvals ...any) {
-	m.console.Helper()
-	m.console.Warn(msg, keyvals...)
+	if m.console.GetLevel() <= charmlog.WarnLevel {
+		m.console.Helper()
+		m.console.Warn(msg, keyvals...)
+	}
 	for _, log := range m.logList {
-		log.Helper()
-		log.Warn(msg, keyvals...)
+		if log.GetLevel() <= charmlog.WarnLevel {
+			log.Helper()
+			log.Warn(msg, keyvals...)
+		}
 	}
 }
 func (m multilog) Error(msg any, keyvals ...any) {
-	m.console.Helper()
-	m.console.Error(msg, keyvals...)
+	if m.console.GetLevel() <= charmlog.ErrorLevel {
+		m.console.Helper()
+		m.console.Error(msg, keyvals...)
+	}
 	for _, log := range m.logList {
-		log.Helper()
-		log.Error(msg, keyvals...)
+		if log.GetLevel() <= charmlog.ErrorLevel {
+			log.Helper()
+			log.Error(msg, keyvals...)
+		}
 	}
 }
 func (m multilog) Print(msg any, keyvals ...any) {
@@ -160,35 +208,51 @@ func (m multilog) Print(msg any, keyvals ...any) {
 	}
 }
 func (m multilog) Debugf(format string, args ...any) {
-	m.console.Helper()
-	m.console.Debugf(format, args...)
+	if m.console.GetLevel() <= charmlog.DebugLevel {
+		m.console.Helper()
+		m.console.Debugf(format, args...)
+	}
 	for _, log := range m.logList {
-		log.Helper()
-		log.Debugf(format, args...)
+		if log.GetLevel() <= charmlog.DebugLevel {
+			log.Helper()
+			log.Debugf(format, args...)
+		}
 	}
 }
 func (m multilog) Infof(format string, args ...any) {
-	m.console.Helper()
-	m.console.Infof(format, args...)
+	if m.console.GetLevel() <= charmlog.InfoLevel {
+		m.console.Helper()
+		m.console.Infof(format, args...)
+	}
 	for _, log := range m.logList {
-		log.Helper()
-		log.Infof(format, args...)
+		if log.GetLevel() <= charmlog.InfoLevel {
+			log.Helper()
+			log.Infof(format, args...)
+		}
 	}
 }
 func (m multilog) Warnf(format string, args ...any) {
-	m.console.Helper()
-	m.console.Warnf(format, args...)
+	if m.console.GetLevel() <= charmlog.WarnLevel {
+		m.console.Helper()
+		m.console.Warnf(format, args...)
+	}
 	for _, log := range m.logList {
-		log.Helper()
-		log.Warnf(format, args...)
+		if log.GetLevel() <= charmlog.WarnLevel {
+			log.Helper()
+			log.Warnf(format, args...)
+		}
 	}
 }
 func (m multilog) Errorf(format string, args ...any) {
-	m.console.Helper()
-	m.console.Errorf(format, args...)
+	if m.console.GetLevel() <= charmlog.ErrorLevel {
+		m.console.Helper()
+		m.console.Errorf(format, args...)
+	}
 	for _, log := range m.logList {
-		log.Helper()
-		log.Errorf(format, args...)
+		if log.GetLevel() <= charmlog.ErrorLevel {
+			log.Helper()
+			log.Errorf(format, args...)
+		}
 	}
 }
 func (m multilog) Printf(format string, args ...any) {
