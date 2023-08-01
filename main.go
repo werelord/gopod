@@ -12,10 +12,10 @@ import (
 
 	"gopod/commandline"
 	"gopod/logger"
+	log "gopod/multilogger"
 	"gopod/pod"
 	"gopod/podconfig"
 	"gopod/podutils"
-	log "gopod/multilogger"
 
 	"github.com/DavidGamba/go-getoptions"
 )
@@ -39,8 +39,6 @@ func init() {
 // --------------------------------------------------------------------------
 func main() {
 
-	fmt.Printf("gopod %v\n", Version)
-
 	var (
 		cmdline  *commandline.CommandLine
 		poddb    *pod.PodDB
@@ -62,9 +60,10 @@ func main() {
 		fmt.Println("failed to initialize logging: ", err)
 		return
 	}
+	log.Printf("gopod %v", Version)
 
 	// logging initialized, lets output commandline struct
-	log.Debugf("cmdline: %+v", cmdline)
+	log.Debugf("cmdline: %v", cmdline)
 
 	if config, tomlList, err = podconfig.LoadToml(cmdline.ConfigFile, runTimestamp); err != nil {
 		log.Errorf("failed to read toml file: %v", err)

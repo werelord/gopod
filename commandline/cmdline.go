@@ -94,6 +94,30 @@ type ExportOpt struct {
 	ExportPath     string
 }
 
+func (c CommandLine) String() string {
+	ret := fmt.Sprintf("{config:%s command:%s", c.ConfigFile, c.Command)
+	if c.FeedShortname != "" {
+		ret += fmt.Sprintf(" feed:%s", c.FeedShortname)
+	}
+	if c.Proxy != "" {
+		ret += fmt.Sprintf(" proxy:%s", c.Proxy)
+	}
+	// global options
+	if c.LogLevelStr != "info" {
+		ret += fmt.Sprintf(" log:%s", c.LogLevelStr)
+	}
+	if c.BackupDb {
+		ret += " backupDB:true"
+	}
+	if c.Debug {
+		ret += " debug:true"
+	}
+
+	// todo: command specific
+	ret += "}"
+	return ret
+}
+
 // --------------------------------------------------------------------------
 func InitCommandLine(args []string) (*CommandLine, error) {
 
