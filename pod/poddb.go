@@ -4,16 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	
-	"gopod/podutils"
+
 	log "gopod/multilogger"
-	
+	"gopod/podutils"
+
 	//"gorm.io/driver/sqlite"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
-
 )
 
 type (
@@ -54,11 +53,13 @@ func NewDB(path string) (*PodDB, error) {
 
 	var poddb = PodDB{path: path, config: defaultConfig}
 
-	if exists, err := podutils.FileExists(path); err != nil {
-		return nil, err
-	} else if exists == false {
-		if err := poddb.createNewDb(path); err != nil {
+	if path != ":memory:" {
+		if exists, err := podutils.FileExists(path); err != nil {
 			return nil, err
+		} else if exists == false {
+			if err := poddb.createNewDb(path); err != nil {
+				return nil, err
+			}
 		}
 	}
 
