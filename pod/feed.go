@@ -263,7 +263,7 @@ func (f *Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error
 
 	fl := f.log.With("id", f.ID)
 	if f.XmlFeedData != nil {
-		fl = fl.With("xmlid", f.XmlFeedData)
+		fl = fl.With("xmlid", f.XmlFeedData.ID)
 	}
 	fl.Debug("feed saved")
 

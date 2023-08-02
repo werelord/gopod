@@ -15,13 +15,12 @@ import (
 
 	"golang.org/x/exp/slices"
 
+	log "gopod/multilogger"
 	"gopod/podconfig"
 	"gopod/podutils"
-	log "gopod/multilogger"
 
 	"github.com/google/uuid"
 	"github.com/schollz/progressbar/v3"
-
 )
 
 type Item struct {
@@ -352,8 +351,21 @@ func parseUrl(urlstr, urlparse string) (string, error) {
 			trim := strings.SplitAfterN(u.Path, parse, 2)
 			if len(trim) == 2 {
 				found = true
-				u.Host = parse
-				u.Path = trim[1]
+
+				// url parsing is either <domain>/<path>, or a http encoded url (with scheme)
+				// make sure scheme is included in reparsing, to ensure domain/path are separated correctly
+				var newUrlStr = parse + trim[1]
+				if strings.Contains(newUrlStr, "http") == false {
+					newUrlStr = u.Scheme + "://" + newUrlStr
+				}
+				if newUrl, err := url.Parse(newUrlStr); err != nil {
+					return "", fmt.Errorf("failed url parsing: %w", err)
+				} else {
+					u.Scheme = newUrl.Scheme
+					u.Host = newUrl.Host
+					u.Path = newUrl.Path
+				}
+
 				break
 			}
 		}
