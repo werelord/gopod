@@ -60,7 +60,7 @@ func main() {
 		fmt.Println("failed to initialize logging: ", err)
 		return
 	}
-	log.Printf("gopod %v", Version)
+	log.Infof("gopod %v", Version)
 
 	// logging initialized, lets output commandline struct
 	log.Debugf("cmdline: %v", cmdline)

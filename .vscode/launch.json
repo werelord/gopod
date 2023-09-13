@@ -17,18 +17,18 @@
                 // "--help",
                 "--config", "e:\\gopod\\config.toml",
                 // "--config", "e:\\gopod-sim\\sim.toml",
-                // "--feed=cppchat",
+                // "--feed=sw_unsc",
                 // "--proxy", "http://localhost:8888",
                 "--backup-db",
                 "--log=debug",
 
                 // update commands
                 "update",
-                "--simulate",
+                // "--simulate",
                 // "--force",
-                "--use-recent",
+                // "--use-recent",
                 // "--set-downloaded",
-                // "--download-after=2023-01-23",
+                // "--download-after=2023-07-31",
 
                 // check commands
                 // "checkdownloads",
