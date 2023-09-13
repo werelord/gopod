@@ -12,12 +12,12 @@ import (
 
 	"gopod/commandline"
 	"gopod/logger"
+	log "gopod/multilogger"
 	"gopod/pod"
 	"gopod/podconfig"
 	"gopod/podutils"
 
 	"github.com/DavidGamba/go-getoptions"
-	log "github.com/sirupsen/logrus"
 )
 
 // --------------------------------------------------------------------------
@@ -26,7 +26,7 @@ var (
 )
 
 const (
-	Version = "v0.1.5-beta"
+	Version = "v0.1.6-beta"
 )
 
 // --------------------------------------------------------------------------
@@ -38,8 +38,6 @@ func init() {
 
 // --------------------------------------------------------------------------
 func main() {
-
-	fmt.Printf("gopod %v\n", Version)
 
 	var (
 		cmdline  *commandline.CommandLine
@@ -58,13 +56,14 @@ func main() {
 		return
 	}
 
-	if err := logger.InitLogging(filepath.Dir(cmdline.ConfigFile), "gopod", runTimestamp); err != nil {
+	if err := logger.InitLogging(filepath.Dir(cmdline.ConfigFile), runTimestamp, cmdline.LogLevelStr); err != nil {
 		fmt.Println("failed to initialize logging: ", err)
 		return
 	}
+	log.Infof("gopod %v", Version)
 
 	// logging initialized, lets output commandline struct
-	log.Debugf("cmdline: %+v", cmdline)
+	log.Debugf("cmdline: %v", cmdline)
 
 	if config, tomlList, err = podconfig.LoadToml(cmdline.ConfigFile, runTimestamp); err != nil {
 		log.Errorf("failed to read toml file: %v", err)
@@ -78,7 +77,7 @@ func main() {
 
 	// todo: official poddb migration methods
 	if poddb, err = setupDB(config); err != nil {
-		log.Error("Failed setting up db: ", err)
+		log.Errorf("Failed setting up db: %v", err)
 		return
 	}
 	pod.Init(config, poddb)
@@ -157,7 +156,7 @@ func setProxy(urlstr string) {
 	if len(urlstr) > 0 {
 		// setting default transport proxy.. don't care about the error on parse,
 		if proxyUrl, err := url.ParseRequestURI(urlstr); err != nil {
-			log.Error("Failed to parse proxy url: ", err)
+			log.Errorf("Failed to parse proxy url: %v", err)
 		} else if proxyUrl != nil {
 			http.DefaultTransport = &http.Transport{Proxy: http.ProxyURL(proxyUrl)}
 		}
@@ -208,7 +207,7 @@ func genFeedList(shortname string, tomlList []podconfig.FeedToml) ([]*pod.Feed, 
 func genFeed(shortname string, tomlList []podconfig.FeedToml) (*pod.Feed, error) {
 	// extra check
 	if shortname == "" {
-		return nil, fmt.Errorf("shortname cannot be blank")
+		return nil, errors.New("shortname cannot be blank")
 	}
 	for _, toml := range tomlList {
 		// shortname is optional; if it is, it's based on name
@@ -251,7 +250,7 @@ func runUpdate(shortname string, tomlList []podconfig.FeedToml) {
 
 	// output errors
 	if len(res.Errors) > 0 {
-		log.Errorf("Errors in updating feeds:\n")
+		log.Error("Errors in updating feeds:\n")
 		for _, err := range res.Errors {
 			log.Errorf("\t%v\n", err)
 		}
@@ -287,12 +286,9 @@ func runDelete(shortname string, tomlList []podconfig.FeedToml) {
 		return
 	} else {
 		// todo: logging of what's deleted
-		log.WithField("feed", f.Shortname).Infof("running delete")
+		log.With("feed", f.Shortname).Info("running delete")
 		if err := f.RunDelete(); err != nil {
-			log.WithFields(log.Fields{
-				"feed":  f.Shortname,
-				"error": err,
-			}).Error("failed running delete")
+			log.With("feed", f.Shortname, "error", err).Error("failed running delete")
 		}
 	}
 }
@@ -306,12 +302,9 @@ func runPreview(shortname string, tomlList []podconfig.FeedToml) {
 		log.Error(err)
 		return
 	} else {
-		log.WithField("feed", f.Shortname).Info("running preview")
+		log.With("feed", f.Shortname).Info("running preview")
 		if err := f.Preview(); err != nil {
-			log.WithFields(log.Fields{
-				"feed":  f.Shortname,
-				"error": err,
-			}).Error("failed running preview")
+			log.With("feed", f.Shortname, "error", err).Error("failed running preview")
 		}
 	}
 }

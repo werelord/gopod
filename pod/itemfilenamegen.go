@@ -3,16 +3,16 @@ package pod
 import (
 	"errors"
 	"fmt"
-	"gopod/podconfig"
-	"gopod/podutils"
 	"net/url"
 	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
-
-	log "github.com/sirupsen/logrus"
+	
+	"gopod/podconfig"
+	"gopod/podutils"
+	log "gopod/multilogger"
 )
 
 var cleanFilename = podutils.CleanFilename
@@ -55,7 +55,7 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml, collFunc func(string) bo
 		filename = strings.Replace(filename, "#date#", defReplacement, 1)
 		filename = i.replaceTitle(filename)
 		if filename, err = i.replaceTitleRegex(filename, cfg.Regex); err != nil {
-			log.Error("failed parsing title:", err)
+			log.Errorf("failed parsing title: %v", err)
 			return "", "", err
 		}
 		filename = strings.Replace(filename, "#extension#", path.Ext(i.Url), 1)
@@ -78,7 +78,7 @@ func (i *Item) generateFilename(cfg podconfig.FeedToml, collFunc func(string) bo
 		// return extra in case its needed
 		extra = i.FilenameXta
 	} else if filename, extra, err = i.checkFilenameCollisions(filename, collFunc); err != nil {
-		log.Error("error in checking filename collision: ", err)
+		log.Errorf("error in checking filename collision: %v", err)
 		return "", "", err
 	}
 
@@ -96,8 +96,8 @@ func (i Item) replaceLinkFinalPath(str, failureStr string) string {
 			finalLink := path.Base(u.Path)
 			str = strings.Replace(str, "#linkfinalpath#", finalLink, 1)
 		} else {
-			log.Error("failed to parse link path: ", err)
-			log.Warn("Replacing with failure option: ", failureStr)
+			log.Errorf("failed to parse link path: %v", err)
+			log.Warnf("Replacing with failure option: %v", failureStr)
 			str = strings.Replace(str, "#linkfinalpath#", failureStr, 1)
 		}
 	}
@@ -178,10 +178,10 @@ func (i Item) replaceTitleRegex(dststr, regex string) (string, error) {
 	matchSlice := r.FindStringSubmatch(i.XmlData.Title)
 
 	if len(matchSlice) < r.NumSubexp() {
-		log.WithFields(log.Fields{
-			"xmlTitle": i.XmlData.Title,
-			"regex":    regex,
-		}).Warn("regex doesn't match; replacing with blank strings")
+		log.With(
+			"xmlTitle", i.XmlData.Title,
+			"regex", regex,
+		).Warn("regex doesn't match; replacing with blank strings")
 		// return "", errors.New("return slice of regex doesn't match slices needed")
 	}
 

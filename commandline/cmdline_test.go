@@ -20,6 +20,7 @@ func TestInitCommandLine(t *testing.T) {
 		"--backup-db",
 		"--debug",
 		"--proxy=barfoo",
+		"--log=debug",
 
 		// update specific options
 		"--simulate",
@@ -41,7 +42,7 @@ func TestInitCommandLine(t *testing.T) {
 	}
 
 	var (
-		globalTrue = GlobalOpt{BackupDb: true, Debug: true}
+		globalTrue = GlobalOpt{BackupDb: true, Debug: true, LogLevelStr: "debug"}
 		updateTrue = UpdateOpt{Simulate: true, ForceUpdate: true, UseMostRecentXml: true,
 			MarkDownloaded: true, DownloadAfter: "2023-04-01"}
 		checkdlTrue   = CheckDownloadOpt{DoArchive: true, DoRename: true, SaveCollision: true, DoCollision: true}
@@ -81,10 +82,11 @@ func TestInitCommandLine(t *testing.T) {
 		// will make this test fail to compile
 		{"global false",
 			args{args: []string{"update", "--config", "barfoo.toml"}},
-			exp{cmdline: CommandLine{barFooConfig, Update, "", "", CommandLineOptions{}}},
+			exp{cmdline: CommandLine{barFooConfig, Update, "", "",
+				CommandLineOptions{GlobalOpt: GlobalOpt{LogLevelStr: "info"}}}},
 		},
 		{"global true",
-			args{args: []string{"update", "--config", "barfoo.toml", "--feed=foo", "--backup-db", "--debug", "--proxy=barfoo"}},
+			args{args: []string{"update", "--config", "barfoo.toml", "--feed=foo", "--backup-db", "--debug", "--proxy=barfoo", "--log=debug"}},
 			exp{cmdline: CommandLine{barFooConfig, Update, "foo", "barfoo",
 				CommandLineOptions{GlobalOpt: globalTrue}},
 			},

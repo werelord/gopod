@@ -13,13 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/exp/slices"
+
+	log "gopod/multilogger"
 	"gopod/podconfig"
 	"gopod/podutils"
 
 	"github.com/google/uuid"
 	"github.com/schollz/progressbar/v3"
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/exp/slices"
 )
 
 type Item struct {
@@ -33,7 +34,7 @@ type Item struct {
 type itemInternal struct {
 	parentShortname string // for logging purposes
 
-	log *log.Entry
+	log log.Logger
 }
 
 type ItemDBEntry struct {
@@ -105,7 +106,7 @@ func createNewItemEntry(
 
 	// parse url
 	if cUrl, err := parseUrl(item.XmlData.Enclosure.Url, feedcfg.UrlParse); err != nil {
-		log.Error("failed parsing url: ", err)
+		log.Errorf("failed parsing url: %v", err)
 		return nil, err
 	} else {
 		item.Url = cUrl
@@ -113,7 +114,7 @@ func createNewItemEntry(
 
 	// generate filename
 	if filename, extra, err := item.generateFilename(feedcfg, collFunc); err != nil {
-		log.Error("failed to generate filename:", err)
+		log.Errorf("failed to generate filename: %v", err)
 		// to make sure we can continue, shortname.uuid.mp3
 		item.Filename = feedcfg.Shortname + "." + strings.ReplaceAll(uuid.NewString(), "-", "") + ".mp3"
 	} else {
@@ -123,7 +124,7 @@ func createNewItemEntry(
 		log.Debugf("using generated filename: %v (%v)", item.Filename, item.XmlData.Title)
 	}
 
-	item.log = log.WithField("item", item.Filename)
+	item.log = log.With("item", item.Filename)
 
 	// everything should be set
 	return &item, nil
@@ -147,7 +148,7 @@ func loadFromDBEntry(parentCfg podconfig.FeedToml, entry *ItemDBEntry) (*Item, e
 			ItemDBEntry: *entry,
 			itemInternal: itemInternal{
 				parentShortname: parentCfg.Shortname,
-				log:             log.WithField("item", entry.Filename),
+				log:             log.With("item", entry.Filename),
 			},
 		}
 	)
@@ -197,11 +198,11 @@ func (i Item) isSameXmlEntry(new *podutils.XItemData, cfg podconfig.FeedToml) (b
 	// not so fucking simple.. simplecast fucks with filenames all the time; if url contains the string
 	// in dupFilenameBypass ignore the base filename and go only on enclosure length
 	if i.XmlData.Enclosure.Length == new.Enclosure.Length {
-		var logtemp = i.log.WithFields(log.Fields{
-			"old url":           i.XmlData.Enclosure.Url,
-			"new url":           new.Enclosure.Url,
-			"dupFilenameBypass": cfg.DupFilenameBypass,
-		})
+		var logtemp = i.log.With(
+			"old url", i.XmlData.Enclosure.Url,
+			"new url", new.Enclosure.Url,
+			"dupFilenameBypass", cfg.DupFilenameBypass,
+		)
 
 		if (cfg.DupFilenameBypass != "") && strings.Contains(new.Enclosure.Url, cfg.DupFilenameBypass) {
 			logtemp.Debug("same lengths and dupFilenameBypass found; marking as identical")
@@ -269,14 +270,14 @@ func (i *Item) updateFromEntry(
 
 	// parse url
 	if cUrl, err := parseUrl(xml.Enclosure.Url, feedcfg.UrlParse); err != nil {
-		log.Error("failed parsing url: ", err)
+		log.Errorf("failed parsing url: %v", err)
 		return err
 	} else {
-		log.WithFields(log.Fields{
-			"oldUrl":    i.Url,
-			"newUrl":    cUrl,
-			"shortname": i.parentShortname,
-		}).Debug("new urls from hash")
+		log.With(
+			"oldUrl", i.Url,
+			"newUrl", cUrl,
+			"shortname", i.parentShortname,
+		).Debug("new urls from hash")
 
 		if i.Url == cUrl {
 			return fmt.Errorf("urls are the same; this shouldn't happen")
@@ -290,7 +291,7 @@ func (i *Item) updateFromEntry(
 
 		// generate filename
 		if filename, extra, err := i.generateFilename(feedcfg, collFunc); err != nil {
-			log.Error("failed to generate filename:", err)
+			log.Errorf("failed to generate filename: %v", err)
 			// to make sure we can continue, shortname.uuid.mp3
 			i.Filename = feedcfg.Shortname + "." + strings.ReplaceAll(uuid.NewString(), "-", "") + ".mp3"
 		} else {
@@ -303,7 +304,7 @@ func (i *Item) updateFromEntry(
 		log.Debug("same item detected, not resetting downloaded or updating filename")
 	}
 
-	i.log = log.WithField("item", i.Filename)
+	i.log = log.With("item", i.Filename)
 
 	// everything should be set
 	return nil
@@ -350,15 +351,28 @@ func parseUrl(urlstr, urlparse string) (string, error) {
 			trim := strings.SplitAfterN(u.Path, parse, 2)
 			if len(trim) == 2 {
 				found = true
-				u.Host = parse
-				u.Path = trim[1]
+
+				// url parsing is either <domain>/<path>, or a http encoded url (with scheme)
+				// make sure scheme is included in reparsing, to ensure domain/path are separated correctly
+				var newUrlStr = parse + trim[1]
+				if strings.Contains(newUrlStr, "http") == false {
+					newUrlStr = u.Scheme + "://" + newUrlStr
+				}
+				if newUrl, err := url.Parse(newUrlStr); err != nil {
+					return "", fmt.Errorf("failed url parsing: %w", err)
+				} else {
+					u.Scheme = newUrl.Scheme
+					u.Host = newUrl.Host
+					u.Path = newUrl.Path
+				}
+
 				break
 			}
 		}
 		if found == false {
 			// see if parseList contains current host; if it doesn't THEN log the warning
 			if slices.Contains(parseList, u.Host) == false {
-				log.WithFields(log.Fields{"url": u.String(), "UrlParse": urlparse}).Warn("failed parsing url; split failed")
+				log.With("url", u.String(), "UrlParse", urlparse).Warn("failed parsing url; split failed")
 			}
 		}
 
@@ -436,7 +450,7 @@ func (i *Item) Download(mp3path string) (int64, error) {
 
 	file, err := podutils.CreateTemp(filepath.Dir(destfile), filepath.Base(destfile)+"_temp*")
 	if err != nil {
-		i.log.Error("Failed creating temp file: ", err)
+		i.log.Errorf("Failed creating temp file: %v", err)
 		return bytesWrote, err
 	}
 	defer file.Close()
@@ -454,7 +468,7 @@ func (i *Item) Download(mp3path string) (int64, error) {
 	}
 
 	if bw, err := podutils.DownloadBuffered(i.Url, multiWriter, onResp); err != nil {
-		i.log.Error("Failed downloading pod:", err)
+		i.log.Errorf("Failed downloading pod: %v", err)
 		return bw, err
 	} else {
 		i.log.Debugf("file written {%v} bytes: %v", filepath.Base(file.Name()), podutils.FormatBytes(uint64(bw)))
@@ -467,7 +481,7 @@ func (i *Item) Download(mp3path string) (int64, error) {
 					i.CDFilename = matches[1]
 				}
 			} else {
-				i.log.Warn("parsing content disposition had regex error: ", err)
+				i.log.Warnf("parsing content disposition had regex error: %v", err)
 			}
 		}
 	}
@@ -482,7 +496,7 @@ func (i *Item) Download(mp3path string) (int64, error) {
 
 	// set downloaded, and make sure timestamps match
 	if err := podutils.Chtimes(destfile, time.Now(), i.PubTimeStamp); err != nil {
-		i.log.Error("failed to change modified time: ", err)
+		i.log.Errorf("failed to change modified time: %v", err)
 		// don't skip due to timestamp issue
 	}
 	i.Downloaded = true

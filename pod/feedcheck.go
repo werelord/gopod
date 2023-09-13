@@ -36,7 +36,7 @@ func (f *Feed) CheckDownloads() error {
 
 	// make sure db is loaded; don't need xml for this
 	if err = f.LoadDBFeed(loadOptions{}); err != nil {
-		f.log.Error("failed to load feed data from db: ", err)
+		f.log.Errorf("failed to load feed data from db: %v", err)
 		if errors.Is(err, &ErrorFeedDeleted{}) {
 			// future: for now, this works.. eventually put this message in main based on error
 			f.log.Warn("Feed deleted; make sure to remove from config file")
@@ -45,7 +45,7 @@ func (f *Feed) CheckDownloads() error {
 	} else {
 		// load all items (will be sorted desc); we do want item xml
 		if fcs.itemList, err = f.loadDBFeedItems(AllItems, loadOptions{includeXml: true, direction: cASC}); err != nil {
-			f.log.Error("failed to load item entries: ", err)
+			f.log.Errorf("failed to load item entries: %v", err)
 			return err
 		}
 	}
@@ -54,32 +54,32 @@ func (f *Feed) CheckDownloads() error {
 	fcs.feed = f
 
 	if err := fcs.checkHashes(); err != nil {
-		f.log.Error("error in checking hashes: ", err)
+		f.log.Errorf("error in checking hashes: %v", err)
 		return err
 	}
 	if err := fcs.checkGuids(); err != nil {
-		f.log.Error("error in checking guids: ", err)
+		f.log.Errorf("error in checking guids: %v", err)
 		return err
 	}
 	if err := fcs.checkCollisions(); err != nil {
 		if errors.Is(err, ActionTakenError{}) {
 			return nil
 		}
-		f.log.Error("error in checking collisions: ", err)
+		f.log.Errorf("error in checking collisions: %v", err)
 		return err
 	}
 	if err := fcs.checkArchiveStatus(); err != nil {
 		if errors.Is(err, ActionTakenError{}) {
 			return nil
 		}
-		f.log.Error("error in checking archive: ", err)
+		f.log.Errorf("error in checking archive: %v", err)
 		return err
 	}
 	if err := fcs.checkGenFilename(); err != nil {
 		if errors.Is(err, ActionTakenError{}) {
 			return nil
 		}
-		f.log.Error("error in checking filename generation: ", err)
+		f.log.Errorf("error in checking filename generation: %v", err)
 		return err
 	}
 
@@ -270,7 +270,7 @@ func (fcs *fileCheckStatus) checkGenFilename() error {
 			)
 			// collision already handled, and filename extra should already be set.. just return
 			if genFilename, _, err = item.generateFilename(fcs.feed.FeedToml, nil); err != nil {
-				log.Error("error generating filename: ", err)
+				log.Errorf("error generating filename: %v", err)
 				continue
 			}
 			if genFilename != item.Filename {
@@ -316,7 +316,7 @@ func (fcs *fileCheckStatus) fileExists(item *Item) bool {
 		var filePathStr = filepath.Join(fcs.feed.mp3Path, item.Filename)
 		var fileExists, err = podutils.FileExists(filePathStr)
 		if err != nil {
-			fcs.feed.log.Error("Error checking file exists: ", err)
+			fcs.feed.log.Errorf("Error checking file exists: %v", err)
 		}
 		fcs.fileExistsMap[item.Filename] = fileExists
 		return fileExists

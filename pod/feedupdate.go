@@ -3,18 +3,19 @@ package pod
 import (
 	"errors"
 	"fmt"
-	"gopod/podutils"
 	"io/fs"
 	"path/filepath"
 	"time"
 
+	log "gopod/multilogger"
+	"gopod/podutils"
+
 	"github.com/araddon/dateparse"
-	log "github.com/sirupsen/logrus"
 )
 
 // common to all
 type DownloadResults struct {
-	currentLogger        *log.Entry
+	currentLogger        log.Logger
 	Results              map[string][]string
 	TotalDownloaded      uint
 	TotalDownloadedBytes uint64
@@ -24,7 +25,7 @@ type DownloadResults struct {
 func (dr *DownloadResults) addError(errs ...error) {
 	for _, err := range errs {
 		if dr.currentLogger != nil {
-			log.Error(err)
+			// log.Error(err)
 		} else {
 			dr.currentLogger.Error(err)
 		}
@@ -81,13 +82,13 @@ func (f *Feed) update(results *DownloadResults) {
 		return
 	}
 
-	f.log.Debug("Feed loaded from db for update: ", f.Shortname)
+	f.log.Debugf("Feed loaded from db for update: %v", f.Shortname)
 
 	// download/load feed xml
 	if err := fUpdate.loadNewFeed(); err != nil {
 
 		if errors.Is(err, podutils.ParseCanceledError{}) {
-			f.log.Info("parse cancelled: ", err)
+			f.log.Infof("parse cancelled: %v", err)
 			return // this is not an error, just a shortcut to stop processing
 		} else {
 			results.addError(fmt.Errorf("failed to process feed: %w", err))
@@ -202,7 +203,7 @@ func (fup *feedUpdate) loadNewFeed() error {
 	)
 
 	if body, err = fup.loadNewXml(); err != nil {
-		log.Error("error in loading xml: ", err)
+		log.Errorf("error in loading xml: %v", err)
 		return err
 	} else if fup.newXmlData, itemPairList, err = podutils.ParseXml(body, fup); err != nil {
 
@@ -288,10 +289,10 @@ func (fup *feedUpdate) checkExistingHash(hash string, xmldata *podutils.XItemDat
 
 		// replace the existing xml data; make sure the previous is loaded for replacing the existing
 		if err := itemEntry.loadItemXml(db); err != nil {
-			log.Error("failed loading item xml: ", err)
+			log.Errorf("failed loading item xml: %v", err)
 			return true, err
 		} else if err := itemEntry.updateXmlData(hash, xmldata); err != nil {
-			log.Error("failed updating xml data: ", err)
+			log.Errorf("failed updating xml data: %v", err)
 			return true, err
 		}
 		// don't need to add it to itemmap, as it already is set
@@ -316,14 +317,14 @@ func (fup *feedUpdate) checkExistingGuid(hash string, xmldata *podutils.XItemDat
 	if itemEntry, exists := fup.guidCollList[xmldata.Guid]; exists {
 		handled = true
 		// guid collision, with no hash collision.. means the url has changed..
-		flog.WithFields(log.Fields{
-			"previousguid": itemEntry.Guid,
-			"newguid":      xmldata.Guid,
-			"oldhash":      itemEntry.Hash,
-			"newhash":      hash,
-			"oldUrl":       itemEntry.Url,
-			"newUrl":       xmldata.Enclosure.Url,
-		}).Infof("guid collision detected with no hash collision; likely new url for same item")
+		flog.With(
+			"previousguid", itemEntry.Guid,
+			"newguid", xmldata.Guid,
+			"oldhash", itemEntry.Hash,
+			"newhash", hash,
+			"oldUrl", itemEntry.Url,
+			"newUrl", xmldata.Enclosure.Url,
+		).Infof("guid collision detected with no hash collision; likely new url for same item")
 
 		// hash will change.. filename might change if url is in filenameparse
 		// filename might change based on filenameparse.. xml definitely changed (diff url)
@@ -331,10 +332,10 @@ func (fup *feedUpdate) checkExistingGuid(hash string, xmldata *podutils.XItemDat
 
 		// make sure the previous is loaded for replacing the existing
 		if err := itemEntry.loadItemXml(db); err != nil {
-			flog.Error("failed loading item xml: ", err)
+			flog.Errorf("failed loading item xml: %v", err)
 			return true, err
 		} else if err := itemEntry.updateFromEntry(fup.feed.FeedToml, hash, xmldata, fup.collisionFunc); err != nil {
-			flog.Error("failed updating existing item entry; skipping: ", err)
+			flog.Errorf("failed updating existing item entry; skipping: %v", err)
 			return true, err
 		} else {
 			// add it to various lists; may do a replacement
@@ -360,7 +361,7 @@ func (fup *feedUpdate) createNewEntry(hash string, xmldata *podutils.XItemData) 
 	)
 
 	if itemEntry, err := createNewItemEntry(f.FeedToml, hash, xmldata, f.EpisodeCount+1, fup.collisionFunc); err != nil {
-		log.Error("failed creating new item entry; skipping: ", err)
+		log.Errorf("failed creating new item entry; skipping: %v", err)
 		return true, err
 	} else {
 		handled = true
@@ -393,29 +394,29 @@ func (fup feedUpdate) loadNewXml() ([]byte, error) {
 			if errors.Is(err, fs.ErrNotExist) {
 				log.Warn("most recent file not found, doing a download")
 			} else {
-				log.Error("error finding most recent xml: ", err)
+				log.Errorf("error finding most recent xml: %v", err)
 				return nil, err
 			}
 		}
 	}
 
 	if recentfile != "" {
-		log.Debug("loading xml file: ", recentfile)
+		log.Debugf("loading xml file: %v", recentfile)
 		if body, err = podutils.LoadFile(recentfile); err != nil {
-			log.Error("error loading xml file: ", err)
+			log.Errorf("error loading xml file: %v", err)
 			return nil, err
 		}
 
 	} else {
 		// download from url, unbuffered
 		if body, err = podutils.Download(fup.feed.Url); err != nil {
-			log.Error("failed to download: ", err)
+			log.Errorf("failed to download: %v", err)
 			return nil, err
 		}
 	}
 
 	if len(body) == 0 {
-		err = fmt.Errorf("body length is zero")
+		err = errors.New("body length is zero")
 		log.Error(err)
 		return nil, err
 	}
@@ -426,7 +427,7 @@ func (fup feedUpdate) loadNewXml() ([]byte, error) {
 func (fup feedUpdate) saveAndRotateXml(body []byte, shouldRotate bool) {
 	// for external reference
 	if err := podutils.SaveToFile(body, fup.feed.xmlfile); err != nil {
-		fup.feed.log.Error("failed saving xml file: ", err)
+		fup.feed.log.Errorf("failed saving xml file: %v", err)
 		// not exiting; not a fatal error as the parsing happens on the byte string
 	} else if shouldRotate && config.XmlFilesRetained > 0 {
 		fup.feed.log.Debug("rotating xml files..")
@@ -518,7 +519,7 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 	if config.DownloadAfter != "" {
 		if date, err := dateparse.ParseAny(config.DownloadAfter); err != nil {
 			werr := fmt.Errorf("downloadAfter not recognized: %w", err)
-			f.log.WithField("downloadAfter", config.DownloadAfter).Error(werr)
+			f.log.With("downloadAfter", config.DownloadAfter).Error(werr)
 			results.addError(werr)
 			return false
 
@@ -585,7 +586,7 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 			f.log.Info("skipping downloading file due to sim flag")
 			// fake the bytes downloaded
 			if item.XmlData.Enclosure.Length == 0 {
-				f.log.Warnf("simulate flag, and download length in xml is 0")
+				f.log.Warn("simulate flag, and download length in xml is 0")
 			} else {
 				bytes = uint64(item.XmlData.Enclosure.Length)
 			}
@@ -606,7 +607,7 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 		results.TotalDownloadedBytes += bytes
 		results.Results[fup.feed.Shortname] = append(results.Results[fup.feed.Shortname], item.Filename)
 
-		f.log.Info("finished downloading file: ", podfile)
+		f.log.Infof("finished downloading file: %v", podfile)
 	}
 
 	f.log.Info("all new downloads completed")

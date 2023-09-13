@@ -2,22 +2,18 @@ package logger
 
 import (
 	"fmt"
-	"gopod/podutils"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-)
+	"github.com/charmbracelet/lipgloss"
+	charmlog "github.com/charmbracelet/log"
 
-// --------------------------------------------------------------------------
-type LogrusFileHook struct {
-	file      *os.File
-	formatter *log.TextFormatter
-	levels    []log.Level
-}
+	log "gopod/multilogger"
+	"gopod/podutils"
+)
 
 const numLogsToKeep = 5
 
@@ -26,54 +22,38 @@ var (
 )
 
 // --------------------------------------------------------------------------
-func NewLogrusFileHook(file string, levels []log.Level, relpath string) (*LogrusFileHook, error) {
-
-	plainFormatter := &log.TextFormatter{DisableColors: true, CallerPrettyfier: generatePrettyfier(relpath)}
-	// gc will close the file handle; fuck the finalizer
-	logFile, err := os.OpenFile(file, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0666)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "unable to write file on filehook %v", err)
-		return nil, err
-	}
-	return &LogrusFileHook{logFile, plainFormatter, levels}, err
-}
-
-// --------------------------------------------------------------------------
-// Fire event for LogrusFileHook
-func (hook *LogrusFileHook) Fire(entry *log.Entry) error {
-
-	plainformat, err := hook.formatter.Format(entry)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "unable to write file on filehook(entry.String)%v", err)
-		return err
-	}
-	line := string(plainformat)
-	_, err = hook.file.WriteString(line)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "unable to write file on filehook(entry.String)%v", err)
-		return err
-	}
-
-	return nil
-}
-
-// --------------------------------------------------------------------------
-// Levels entry
-func (hook *LogrusFileHook) Levels() []log.Level {
-	return hook.levels
-}
-
-// --------------------------------------------------------------------------
-func InitLogging(workingdir string, shortname string, timestamp time.Time) error {
+func InitLogging(workingdir string, timestamp time.Time, level string) error {
 	// todo: somehow differentiate between debug/release programmatically
 
-	var relPath = getRelPathCaller()
+	var (
+		relpath  = getRelPathCaller()
+		loglevel = mapLogLevel(level)
 
-	log.SetLevel(log.TraceLevel)
-	log.SetFormatter(&log.TextFormatter{ForceColors: true, FullTimestamp: true, CallerPrettyfier: generatePrettyfier(relPath)})
-	log.SetLevel(log.TraceLevel)
-	log.SetOutput(os.Stdout)
-	log.SetReportCaller(true)
+		reportCaller = (loglevel == charmlog.DebugLevel)	// only show path if we're debug
+
+		allOpt = charmlog.Options{
+			Level:           loglevel,
+			ReportTimestamp: true,
+			ReportCaller:    reportCaller,
+			CallerFormatter: genCallFormatter(relpath, false),
+			TimeFormat:      "2006-01-02 15:04:05.000",
+		}
+		errOpt = charmlog.Options{
+			Level:           charmlog.WarnLevel, // always warn or above
+			ReportTimestamp: true,
+			ReportCaller:    reportCaller,
+			CallerFormatter: genCallFormatter(relpath, true),
+			TimeFormat:      "2006-01-02 15:04:05.000",
+		}
+	)
+
+	// global styles for console
+	charmlog.TimestampStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#1a75ff")).Italic(true)
+	charmlog.CallerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#808080"))
+	charmlog.KeyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#66ffff")).Italic(true)
+	charmlog.ValueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#66ff66")).Italic(true)
+
+	log.SetConsoleWithOptions(os.Stderr, allOpt)
 
 	logdir = filepath.Join(workingdir, ".logs")
 	// make sure dir exists
@@ -82,37 +62,77 @@ func InitLogging(workingdir string, shortname string, timestamp time.Time) error
 		return err
 	}
 
-	allLevelsFile := filepath.Join(logdir, fmt.Sprintf("%v.all.%v.%v", shortname,
-		timestamp.Format(podutils.TimeFormatStr), "log"))
-	errorLevelsFile := filepath.Join(logdir, fmt.Sprintf("%v.error.%v.%v", shortname,
-		timestamp.Format(podutils.TimeFormatStr), "log"))
+	var timestampStr = timestamp.Format(podutils.TimeFormatStr)
 
-	if err := addFileHook(allLevelsFile, log.AllLevels, relPath); err != nil {
-		fmt.Print("failed creating logfile hook (all levels): ", err)
+	allLevelsFile := filepath.Join(logdir, fmt.Sprintf("gopod.all.%v.log", timestampStr))
+	errorLevelsFile := filepath.Join(logdir, fmt.Sprintf("gopod.error.%v.log", timestampStr))
+
+	if allFile, err := os.Create(allLevelsFile); err != nil {
 		return err
-
+	} else if errFile, err := os.Create(errorLevelsFile); err != nil {
+		return err
 	} else {
-		// set error/warn file hooks
-		errLevels := []log.Level{log.PanicLevel, log.FatalLevel, log.ErrorLevel, log.WarnLevel}
-		if err := addFileHook(errorLevelsFile, errLevels, relPath); err != nil {
-			log.Error("failed creating logfile hook (error levels): ", err)
-			// don't fail on this one
-		}
+		log.AddWithOptions(allFile, allOpt)
+		log.AddWithOptions(errFile, errOpt)
 	}
+
+	// log.Debug("foo")
+	// log.Info("bar")
+	// log.Warnf("foo %v", "warn")
+	// log.Errorf("Error %v", errors.New("test err"))
+	// log.Print("print me foo")
+
+	// var foo = log.With("foo", 13, "bar", 42)
+	// foo.Debugf("bar ''%v''", 42)
+	// foo.Info("motherfucker this should be info")
+
+	// foo.Debug("foo")
+	// foo.Info("bar")
+	// foo.Warnf("foo %v", "warn")
+	// foo.Errorf("Error %v", errors.New("test err"))
+	// foo.Print("print me foo")
+
+	// log.Print("done")
 
 	log.Infof("logging initialized on '%v'; creating symlinks to latest", filepath.Base(allLevelsFile))
 	// create symlinks in workingdir, pointing to files in logdir
-	allSymlink := filepath.Join(workingdir, fmt.Sprintf("%v.all.latest.log", shortname))
-	errSymlink := filepath.Join(workingdir, fmt.Sprintf("%v.error.latest.log", shortname))
+	allSymlink := filepath.Join(workingdir, "gopod.all.latest.log")
+	errSymlink := filepath.Join(workingdir, "gopod.error.latest.log")
 
 	if err := podutils.CreateSymlink(allLevelsFile, allSymlink); err != nil {
-		log.Warn("failed to create symlink file (all levels): ", err)
+		log.Warnf("failed to create symlink file (all levels): %v", err)
 
 	} else if err2 := podutils.CreateSymlink(errorLevelsFile, errSymlink); err != nil {
-		log.Warn("failed to create symlink file (error levels): ", err2)
+		log.Warnf("failed to create symlink file (error levels): %v", err2)
 	}
 
 	return nil
+}
+
+func genCallFormatter(relpath string, incFunc bool) charmlog.CallerFormatter {
+
+	var fn = func(file string, line int, fn string) string {
+		// function; strip qualified path; first dot after first slash
+		var (
+			ret string
+		)
+		// return relative path to file
+		if relPath, err := filepath.Rel(relpath, file); err == nil {
+			file = relPath
+		}
+		ret = fmt.Sprintf("%s:%d", file, line)
+		if incFunc == false {
+			return ret
+		}
+
+		// including function here
+		if idx := strings.Index(fn, "/"); idx > -1 {
+			fn = fn[idx+1:]
+		}
+		return fmt.Sprintf("%s (%s)", ret, fn)
+	}
+
+	return fn
 }
 
 // --------------------------------------------------------------------------
@@ -129,56 +149,37 @@ func getRelPathCaller() string {
 }
 
 // --------------------------------------------------------------------------
-func generatePrettyfier(relPath string) func(*runtime.Frame) (string, string) {
-	return func(frame *runtime.Frame) (functionName string, filename string) {
-		if frame != nil {
-
-			// strip qualified path; first dot after first slash
-			var function = frame.Function
-			if idx := strings.Index(function, "/"); idx > -1 {
-				if idy := strings.Index(function[idx:], "."); idy > -1 {
-					function = function[idx+idy+1:]
-				}
-			}
-
-			// return relative path to file
-			var file = frame.File
-			if relPath, err := filepath.Rel(relPath, frame.File); err == nil {
-				file = relPath
-			}
-			return fmt.Sprintf("%v()", function), fmt.Sprintf(" %s:%d", file, frame.Line)
-		}
-		return
-	}
-}
-
-// --------------------------------------------------------------------------
-func addFileHook(filename string, levels []log.Level, relPath string) error {
-	if filehook, err := NewLogrusFileHook(filename, levels, relPath); err != nil {
-		return err
-
-	} else {
-		// stupid GC shit..
-		log.AddHook(filehook)
-		return nil
-	}
-}
-
 func RotateLogFiles(numKeep int) error {
 
 	if numKeep < 0 {
-		log.WithField("numkeep", numKeep).Debug("number of logs to keep is negative, not rotating")
+		log.With("numkeep", numKeep).Debug("number of logs to keep is negative, not rotating")
 	} else if numKeep == 0 {
 		// undefined or set to 0
 		numKeep = numLogsToKeep
 	}
 	// rotate logfiles
 	if err := podutils.RotateFiles(logdir, "gopod.all.*.log", uint(numKeep)); err != nil {
-		log.Warn("failed to rotate logs: ", err)
+		log.Warnf("failed to rotate logs: %v", err)
 	}
 	if err := podutils.RotateFiles(logdir, "gopod.error.*.log", uint(numKeep)); err != nil {
-		log.Warn("failed to rotate logs: ", err)
+		log.Warnf("failed to rotate logs: %v", err)
 	}
 
 	return nil
+}
+
+func mapLogLevel(lev string) charmlog.Level {
+	switch {
+	case strings.EqualFold(lev, "debug"):
+		return charmlog.DebugLevel
+	case strings.EqualFold(lev, "info"):
+		return charmlog.InfoLevel
+	case strings.EqualFold(lev, "warn"):
+		return charmlog.WarnLevel
+	case strings.EqualFold(lev, "error"):
+		return charmlog.ErrorLevel
+	default:
+		return charmlog.InfoLevel
+	}
+
 }

@@ -3,16 +3,16 @@ package pod
 import (
 	"errors"
 	"fmt"
-	"gopod/podutils"
 	"path/filepath"
+
+	log "gopod/multilogger"
+	"gopod/podutils"
 
 	//"gorm.io/driver/sqlite"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
-
-	log "github.com/sirupsen/logrus"
 )
 
 type (
@@ -53,11 +53,13 @@ func NewDB(path string) (*PodDB, error) {
 
 	var poddb = PodDB{path: path, config: defaultConfig}
 
-	if exists, err := podutils.FileExists(path); err != nil {
-		return nil, err
-	} else if exists == false {
-		if err := poddb.createNewDb(path); err != nil {
+	if path != ":memory:" {
+		if exists, err := podutils.FileExists(path); err != nil {
 			return nil, err
+		} else if exists == false {
+			if err := poddb.createNewDb(path); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -358,7 +360,7 @@ func (pdb PodDB) deleteFeed(feed *FeedDBEntry) error {
 
 	// delete feed xml
 	if feed.XmlId == 0 {
-		log.Warnf("feed xml is zero; xml entry might not exist")
+		log.Warn("feed xml is zero; xml entry might not exist")
 	} else {
 		var xmlentry = podutils.Tern(feed.XmlFeedData == nil, &FeedXmlDBEntry{}, feed.XmlFeedData)
 		if res := db.Delete(xmlentry, feed.XmlId); res.Error != nil {

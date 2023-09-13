@@ -120,6 +120,9 @@ func Test_parseUrl(t *testing.T) {
 		{"comma delimited, miss",
 			args{encUrl: "http://track.me/foo/bar.foo.com/meh.mp3?foo=bar", urlparse: "foo.bar.com,arm.leg.com"},
 			exp{resUrl: "http://track.me/foo/bar.foo.com/meh.mp3"}},
+		{"url encoded",
+			args{encUrl: `https://track.me/foo/bar/https%3A%2F%2Factual.domain.net%2Fstaging%2Fmeh.mp3`, urlparse: "https://"},
+			exp{resUrl: "https://actual.domain.net/staging/meh.mp3"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"gopod/podutils"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"gopod/podutils"
 
 	"github.com/DavidGamba/go-getoptions"
 )
@@ -63,8 +64,9 @@ type CommandLineOptions struct {
 
 // global options
 type GlobalOpt struct {
-	BackupDb bool
-	Debug    bool
+	LogLevelStr string
+	BackupDb    bool
+	Debug       bool
 }
 
 // update specific
@@ -90,6 +92,30 @@ type ExportOpt struct {
 	ExportFormat   ExportType
 	formatStr      string
 	ExportPath     string
+}
+
+func (c CommandLine) String() string {
+	ret := fmt.Sprintf("{config:%s command:%s", c.ConfigFile, c.Command)
+	if c.FeedShortname != "" {
+		ret += fmt.Sprintf(" feed:%s", c.FeedShortname)
+	}
+	if c.Proxy != "" {
+		ret += fmt.Sprintf(" proxy:%s", c.Proxy)
+	}
+	// global options
+	if c.LogLevelStr != "info" {
+		ret += fmt.Sprintf(" log:%s", c.LogLevelStr)
+	}
+	if c.BackupDb {
+		ret += " backupDB:true"
+	}
+	if c.Debug {
+		ret += " debug:true"
+	}
+
+	// todo: command specific
+	ret += "}"
+	return ret
 }
 
 // --------------------------------------------------------------------------
@@ -172,6 +198,9 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 	opt.BoolVar(&c.BackupDb, "backup-db", false,
 		opt.Description("Backup database before opening"),
 		opt.Alias("bak"))
+	opt.StringVar(&c.LogLevelStr, "log", "info",
+		opt.Description("level for log outputs (console and log files)."),
+	)
 	opt.BoolVar(&c.Debug, "debug", false,
 		opt.Description("Debug"),
 		opt.Alias("dbg"))

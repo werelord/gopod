@@ -1,4 +1,5 @@
 package pod
+
 /*
 // future: basic structure for migration tools
 import (
@@ -6,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/glebarez/sqlite"
-	log "github.com/sirupsen/logrus"
+	log "gopod/multilogger"
 	"gorm.io/gorm"
 )
 

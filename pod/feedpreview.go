@@ -37,7 +37,7 @@ func (f *Feed) Preview() error {
 
 	// download/load feed xml
 	if body, err := fprev.loadNewXml(); err != nil {
-		f.log.Error("error in loading xml; ", err)
+		f.log.Errorf("error in loading xml: %v", err)
 		return err
 	} else {
 		if config.UseMostRecentXml == false {
@@ -45,7 +45,7 @@ func (f *Feed) Preview() error {
 		}
 
 		if _, itemPairs, err = podutils.ParseXml(body, fprev); err != nil {
-			f.log.Error("error in parsing xml: ", err)
+			f.log.Errorf("error in parsing xml: %v", err)
 			return err
 		}
 	}
@@ -56,8 +56,8 @@ func (f *Feed) Preview() error {
 			_, exists := fileCollList[filename]
 			return exists
 		}
-		itemCount    int
-		filenameList = make([]string, 0, len(itemPairs))
+		itemCount int
+		itemList  = make([]*Item, 0, len(itemPairs))
 	)
 
 	if (f.EpisodeCount == 0) && f.CountStart != 0 {
@@ -81,23 +81,27 @@ func (f *Feed) Preview() error {
 			f.log.Error(err)
 			return err
 		} else if previewItem, err := createNewItemEntry(f.FeedToml, hash, xmldata, itemCount+1, collFunc); err != nil {
-			f.log.Error("error creating item: ", err)
+			f.log.Errorf("error creating item: %v", err)
 			return err
 		} else {
 			// add the filename to collision list
 			fileCollList[previewItem.Filename] = previewItem
-			filenameList = append(filenameList, previewItem.Filename)
+
+			// f.log.Debugf("item: '%v'", previewItem)
+			// f.log.Debugf("\nOldurl: '%v'\nnewUrl: '%v'\n", previewItem.XmlData.Enclosure.Url, previewItem.Url)
+
+			itemList = append(itemList, previewItem)
 			itemCount++
 		}
 	}
 
 	var fileout string
 
-	for idx, fname := range filenameList {
+	for idx, item := range itemList {
 		// output to screen, and also file
-		fmt.Printf("%3d: %v\n", idx+1, fname)
+		fmt.Printf("%3d: %v (%v)\n", idx+1, item.Filename, item.Url)
 
-		fileout += fmt.Sprintf("%v\n", fname)
+		fileout += fmt.Sprintf("%v\n", item.Filename)
 	}
 
 	var previewFile = filepath.Join(config.WorkspaceDir, fmt.Sprintf("%v.preview.txt", f.Shortname))

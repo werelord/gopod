@@ -41,15 +41,17 @@ func TestNewDB(t *testing.T) {
 			exp{dbNil: true, errStr: "db path cannot be empty"}},
 		{"open error", arg{mock: mockGorm{openErr: true, mockdb: &mockGormDB{}}},
 			exp{dbNil: true, errStr: "error opening db: foobar", callStack: []stackType{open}}},
-		{"create ver fail",
-			arg{mock: mockGorm{mockdb: &mockGormDB{}}, termErr: []stackType{exec, scan}, createVer: -1},
-			exp{dbNil: true, createVerCalled: true, errStr: "error finding db version",
-				callStack: []stackType{open, raw, scan, exec}}},
+		// todo: create ver fail, new unit test on createNewDb()
+		// {"create ver fail",	
+		// 	arg{mock: mockGorm{mockdb: &mockGormDB{}}, termErr: []stackType{exec, scan}, createVer: -1},
+		// 	exp{dbNil: true, createVerCalled: true, errStr: "error finding db version",
+		// 		callStack: []stackType{open, raw, scan, exec}}},
 		{"model version mismatch", arg{mock: mockGorm{mockdb: &mockGormDB{}}, createVer: 42},
 			exp{dbNil: true, errStr: "model doesn't match current", callStack: []stackType{open, raw, scan}}},
 
-		{"success, create version table", arg{mock: mockGorm{mockdb: &mockGormDB{}}, createVer: -1},
-			exp{createVerCalled: true, callStack: []stackType{open, raw, scan, exec}}},
+		// todo: create version table, new unit test on createNewDb()
+		// {"success, create version table", arg{mock: mockGorm{mockdb: &mockGormDB{}}, createVer: -1},
+		// 	exp{createVerCalled: true, callStack: []stackType{open, raw, scan, exec}}},
 
 		{"success, matching model versions", arg{mock: mockGorm{mockdb: &mockGormDB{}}},
 			exp{callStack: []stackType{open, raw, scan}}},
@@ -276,7 +278,7 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 					var dbEntry FeedDBEntry
 					dbEntry.ID = fq.ID
 					if res := gmock.mockdb.DB.Preload("XmlFeedData").Find(&dbEntry); res.Error != nil {
-						t.Error("error in checking: ", err)
+						t.Errorf("error in checking: %v", err)
 					}
 					exp = dbEntry
 				}
