@@ -3,11 +3,11 @@ package pod
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/glebarez/sqlite"
 	"github.com/go-test/deep"
-	"golang.org/x/exp/slices"
 	"gorm.io/gorm"
 )
 

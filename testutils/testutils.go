@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/go-test/deep"
-	"golang.org/x/exp/slices"
 )
 
 // inspired by https://github.com/benbjohnson/testing

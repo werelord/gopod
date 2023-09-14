@@ -6,11 +6,11 @@ import (
 	"gopod/podutils"
 	"gopod/testutils"
 	"math/rand"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/go-test/deep"
-	"golang.org/x/exp/slices"
 
 	//"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -42,7 +42,7 @@ func TestNewDB(t *testing.T) {
 		{"open error", arg{mock: mockGorm{openErr: true, mockdb: &mockGormDB{}}},
 			exp{dbNil: true, errStr: "error opening db: foobar", callStack: []stackType{open}}},
 		// todo: create ver fail, new unit test on createNewDb()
-		// {"create ver fail",	
+		// {"create ver fail",
 		// 	arg{mock: mockGorm{mockdb: &mockGormDB{}}, termErr: []stackType{exec, scan}, createVer: -1},
 		// 	exp{dbNil: true, createVerCalled: true, errStr: "error finding db version",
 		// 		callStack: []stackType{open, raw, scan, exec}}},

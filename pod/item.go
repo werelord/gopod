@@ -10,10 +10,9 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
-
-	"golang.org/x/exp/slices"
 
 	log "gopod/multilogger"
 	"gopod/podconfig"

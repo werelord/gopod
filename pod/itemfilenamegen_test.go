@@ -5,10 +5,9 @@ import (
 	"gopod/podconfig"
 	"gopod/podutils"
 	"gopod/testutils"
+	"slices"
 	"testing"
 	"time"
-
-	"golang.org/x/exp/slices"
 )
 
 func TestItem_generateFilename(t *testing.T) {
