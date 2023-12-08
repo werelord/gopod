@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gopod/podutils"
 	"path/filepath"
+	"slices"
 	"time"
 )
 
@@ -69,6 +70,10 @@ func (f *Feed) Preview() error {
 
 	// list comes out newest (top of xml feed) to oldest.. reverse that,
 	// go oldest to newest, to maintain item count
+	// unless std chrono; then just reverse the reversal.. bah
+	if (f.StdChrono) {
+		slices.Reverse(itemPairs)
+	}
 	for i := len(itemPairs) - 1; i >= 0; i-- {
 
 		var (

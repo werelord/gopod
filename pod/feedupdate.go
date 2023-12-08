@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"slices"
 	"time"
 
 	log "gopod/multilogger"
@@ -234,6 +235,11 @@ func (fup *feedUpdate) loadNewFeed() error {
 		return nil
 	}
 
+	// if this is std chrono, reverse it to match typical reverse chrono to keep item count correct
+	if fup.feed.StdChrono {
+		slices.Reverse(itemPairList)
+	}
+
 	// list comes out newest (top of xml feed) to oldest.. reverse that,
 	// go oldest to newest, to maintain item count
 	for i := len(itemPairList) - 1; i >= 0; i-- {
@@ -451,7 +457,9 @@ func (fup *feedUpdate) SkipParsingItem(hash string) (skip bool, cancelRemaining 
 	// assume itemlist has been populated with enough entries (if not all)
 	_, skip = fup.hashCollList[hash]
 
-	if (config.MaxDupChecks >= 0) && (skip == true) {
+	// usually feeds are reverse chronological, we can skip if we start seeing dupes
+	// in the case where the feed is standard chrono, we can't do that
+	if (fup.feed.StdChrono == false) && (config.MaxDupChecks >= 0) && (skip == true) {
 		fup.numDups++
 		cancelRemaining = (fup.numDups >= uint(config.MaxDupChecks))
 	}
