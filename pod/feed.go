@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	log "gopod/multilogger"
 	"gopod/podconfig"
@@ -39,12 +40,22 @@ type FeedDBEntry struct {
 	EpisodeCount int
 	XmlId        uint
 	XmlFeedData  *FeedXmlDBEntry `gorm:"foreignKey:XmlId"`
-	ItemList     []*ItemDBEntry  `gorm:"foreignKey:FeedId"`
+	ImageId      uint
+	ImageData    *ImageDBEntry  `gorm:"foreignKey:ImageId"`
+	ItemList     []*ItemDBEntry `gorm:"foreignKey:FeedId"`
 }
 
 type FeedXmlDBEntry struct {
 	PodDBModel
 	podutils.XChannelData `gorm:"embedded"`
+}
+
+type ImageDBEntry struct {
+	PodDBModel
+	Filename     string
+	LastModified time.Time
+	Url          string
+	Hash         string
 }
 
 var (

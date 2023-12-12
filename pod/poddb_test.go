@@ -47,7 +47,7 @@ func TestNewDB(t *testing.T) {
 		// 	exp{dbNil: true, createVerCalled: true, errStr: "error finding db version",
 		// 		callStack: []stackType{open, raw, scan, exec}}},
 		{"model version mismatch", arg{mock: mockGorm{mockdb: &mockGormDB{}}, createVer: 42},
-			exp{dbNil: true, errStr: "model doesn't match current", callStack: []stackType{open, raw, scan}}},
+			exp{dbNil: true, errStr: "old version not less than current", callStack: []stackType{open, raw, scan}}},
 
 		// todo: create version table, new unit test on createNewDb()
 		// {"success, create version table", arg{mock: mockGorm{mockdb: &mockGormDB{}}, createVer: -1},
@@ -404,7 +404,7 @@ func TestPodDB_loadFeedItems(t *testing.T) {
 	}
 
 	var rmXml = func(e ItemDBEntry) *ItemDBEntry {
-		return &ItemDBEntry{e.PodDBModel, e.Hash, e.FeedId, e.ItemData, e.XmlId, nil}
+		return &ItemDBEntry{e.PodDBModel, e.Hash, e.FeedId, e.ItemData, e.XmlId, nil, e.ImageId, nil}
 	}
 
 	type args struct {

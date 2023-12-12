@@ -31,7 +31,7 @@ const ( // because constants should be capitalized, but I don't want to export t
 	AllItems = -1
 
 	// current model for database
-	currentModel = 1
+	currentModel = 2
 )
 
 type PodDB struct {
@@ -53,6 +53,7 @@ func NewDB(path string) (*PodDB, error) {
 
 	var poddb = PodDB{path: path, config: defaultConfig}
 
+	// in-memory db only used for unit tests.. don't do these checks in those cases
 	if path != ":memory:" {
 		if exists, err := podutils.FileExists(path); err != nil {
 			return nil, err
@@ -74,8 +75,12 @@ func NewDB(path string) (*PodDB, error) {
 			return nil, fmt.Errorf("error checking model version: %w", res.Error)
 
 		} else if result.ID != currentModel {
-			// future: custom error for calling migration methods
-			return nil, fmt.Errorf("model doesn't match current; migrate needs to happen")
+			log.Warnf("database model '%v' doesn't match current model '%v'; attempting upgrade", result.ID, currentModel)
+			// future: if more work needs to be done converting the db, should return custom error and handle
+			// upgrade/migration in separate launch command.. but for now
+			if err := migrateDB(db, result.ID); err != nil {
+				return nil, fmt.Errorf("error migrating database: %w", err)
+			}
 		}
 	}
 
@@ -103,7 +108,8 @@ func (pdb PodDB) createNewDb(path string) error {
 		}
 
 		// in the case of a new db, need to set up tables and such..
-		if err := db.AutoMigrate(&FeedDBEntry{}, &FeedXmlDBEntry{}, &ItemDBEntry{}, &ItemXmlDBEntry{}); err != nil {
+		if err := db.AutoMigrate(&FeedDBEntry{}, &FeedXmlDBEntry{}, &ItemDBEntry{},
+			&ItemXmlDBEntry{}, &ImageDBEntry{}); err != nil {
 			return err
 		}
 	}

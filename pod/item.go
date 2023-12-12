@@ -44,6 +44,8 @@ type ItemDBEntry struct {
 	ItemData `gorm:"embedded"`
 	XmlId    uint
 	XmlData  *ItemXmlDBEntry `gorm:"foreignKey:XmlId"`
+	ImageId uint
+	ImageData *ImageDBEntry `gorm:"foreignKey:ImageId"`
 }
 
 type ItemData struct {
