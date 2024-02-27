@@ -108,8 +108,7 @@ func (pdb PodDB) createNewDb(path string) error {
 		}
 
 		// in the case of a new db, need to set up tables and such..
-		if err := db.AutoMigrate(&FeedDBEntry{}, &FeedXmlDBEntry{}, &ItemDBEntry{},
-			&ItemXmlDBEntry{}, &ImageDBEntry{}); err != nil {
+		if err := db.AutoMigrate(&FeedDBEntry{}, &FeedXmlDBEntry{}, &ItemDBEntry{}, &ItemXmlDBEntry{}, &ImageDBEntry{}); err != nil {
 			return err
 		}
 	}
@@ -164,8 +163,9 @@ func (pdb PodDB) loadFeed(feedEntry *FeedDBEntry, opt loadOptions) error {
 		return fmt.Errorf("error opening db: %w", err)
 	}
 
-	// right now, only hash or ID
-	var tx = db.Where(&FeedDBEntry{PodDBModel: PodDBModel{ID: feedEntry.ID}, Hash: feedEntry.Hash})
+	// right now, only hash or ID.. always include image data
+	var tx = db.Where(&FeedDBEntry{PodDBModel: PodDBModel{ID: feedEntry.ID}, Hash: feedEntry.Hash}).
+		Preload("ImageData").Preload("ImageList")
 	if opt.includeDeleted {
 		tx = tx.Unscoped()
 	}
@@ -461,5 +461,23 @@ func (pdb PodDB) deleteItems(list []*ItemDBEntry) error {
 	// but if that changes, will need to grab the DeletedAt value from the value passed in to Delete
 	// and propegate that to all items listed above
 
+	return nil
+}
+
+func (f *FeedDBEntry) AfterFind(tx *gorm.DB) error {
+	log.With("feed", f.DBShortname).Debug("After Find")
+	f.imageMap = make(map[string]*ImageDBEntry, len(f.ImageList))
+	for _, im := range f.ImageList {
+		f.imageMap[im.Url] = im
+	}
+	return nil
+}
+
+func (f *FeedDBEntry) BeforeSave(tx *gorm.DB) error {
+	log.With("feed", f.DBShortname).Debug("Before Save")
+	f.ImageList = make([]*ImageDBEntry, len(f.imageMap))
+	for _, im := range f.imageMap {
+		f.ImageList = append(f.ImageList, im)
+	}
 	return nil
 }

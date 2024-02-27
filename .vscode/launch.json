@@ -15,20 +15,20 @@
             "args": [
                 // global args
                 // "--help",
-                "--config", "e:\\gopod\\config.toml",
-                // "--config", "e:\\gopod-sim\\sim.toml",
-                // "--feed=sw_unsc",
+                // "--config", "e:\\gopod\\config.toml",
+                "--config", "e:\\gopod-sim\\config.toml",
+                "--feed=twit",
                 // "--proxy", "http://localhost:8888",
                 "--backup-db",
                 "--log=debug",
 
                 // update commands
                 "update",
-                // "--simulate",
+                "--simulate",
                 // "--force",
-                // "--use-recent",
+                "--use-recent",
                 // "--set-downloaded",
-                // "--download-after=2023-07-31",
+                // "--download-after=2023-10-17",
 
                 // check commands
                 // "checkdownloads",

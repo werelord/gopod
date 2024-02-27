@@ -9,10 +9,10 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	
+
+	log "gopod/multilogger"
 	"gopod/podconfig"
 	"gopod/podutils"
-	log "gopod/multilogger"
 )
 
 var cleanFilename = podutils.CleanFilename
@@ -108,6 +108,7 @@ func (i Item) replaceLinkFinalPath(str, failureStr string) string {
 func (i Item) replaceEpisode(str, defaultRep string, cfg podconfig.FeedToml) string {
 	if strings.Contains(str, "#episode#") {
 		// default length of 3, unless otherwise defined
+		// future: check itunes:episodeType (full or otherwise) before using the episode string..
 		var padLen = podutils.Tern(cfg.EpisodePad > 0, cfg.EpisodePad, 3)
 		epStr := i.XmlData.EpisodeStr
 

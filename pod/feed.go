@@ -40,9 +40,11 @@ type FeedDBEntry struct {
 	EpisodeCount int
 	XmlId        uint
 	XmlFeedData  *FeedXmlDBEntry `gorm:"foreignKey:XmlId"`
+	ItemList     []*ItemDBEntry  `gorm:"foreignKey:FeedId"`
 	ImageId      uint
-	ImageData    *ImageDBEntry  `gorm:"foreignKey:ImageId"`
-	ItemList     []*ItemDBEntry `gorm:"foreignKey:FeedId"`
+	ImageData    *ImageDBEntry   `gorm:"foreignKey:ImageId"`
+	ImageList    []*ImageDBEntry `gorm:"foreignKey:FeedId"`
+	imageMap     map[string]*ImageDBEntry
 }
 
 type FeedXmlDBEntry struct {
@@ -52,10 +54,11 @@ type FeedXmlDBEntry struct {
 
 type ImageDBEntry struct {
 	PodDBModel
+	FeedId       uint
 	Filename     string
 	LastModified time.Time
 	Url          string
-	Hash         string
+	// Hash         string
 }
 
 var (
@@ -147,8 +150,8 @@ func (f *Feed) LoadDBFeed(opt loadOptions) error {
 		f.log.Errorf("failed loading feed: %v", err)
 		return err
 	}
-	// xml is loaded (if applicable) from above query, no reason to call explicitly
 
+	// xml is loaded (if applicable) from above query, no reason to call explicitly
 	{
 		lg := f.log.With("id", f.ID)
 		if opt.includeXml && f.XmlFeedData != nil {
@@ -256,6 +259,7 @@ func (f *Feed) saveDBFeed(newxml *podutils.XChannelData, newitems []*Item) error
 			f.log.Debug("xml id is 0, and feed data is nil; new feed xml detected")
 			f.XmlFeedData = &FeedXmlDBEntry{}
 		}
+		// straight replace, keeping same id if not new
 		f.XmlFeedData.XChannelData = *newxml
 	}
 

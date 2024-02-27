@@ -230,23 +230,67 @@ func (fup *feedUpdate) loadNewFeed() error {
 		f.log.Warn("(change url in config.toml to reflect this change)")
 	}
 
-	if len(itemPairList) == 0 {
-		f.log.Info("no items found to process")
+	// // download feed image
+	if err := fup.processFeedImage(); err != nil {
+		// don't fail becaudse image fail..
+		f.log.Warnf("error processing image, continuing with feed processing: '%v'", err)
+	}
+	if err := fup.processNewItems(itemPairList); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// --------------------------------------------------------------------------
+func (fup *feedUpdate) processFeedImage() error {
+	var (
+		// feed = fup.feed
+		// log  = feed.log
+	)
+	if fup.newXmlData == nil {
+		return errors.New("xml is nil; unable to process feed image")
+	}
+
+	// if feed.ImageId == 0 && feed.ImageData == nil {
+	// 	// new download entry
+	// 	log.Debug("current ImageData is empty; downloading feed image")
+
+	// } else {
+
+	// 	// if last modified is the same skip
+	// 	// if dates don't match download
+	// }
+
+	// if imagedata is nil, download
+
+	// download;
+
+	return errors.New("not yet implemented")
+}
+
+// --------------------------------------------------------------------------
+func (fup *feedUpdate) processNewItems(newItems []podutils.ItemPair) error {
+
+	if len(newItems) == 0 {
+		fup.feed.log.Info("no items found to process")
 		return nil
 	}
 
 	// if this is std chrono, reverse it to match typical reverse chrono to keep item count correct
 	if fup.feed.StdChrono {
-		slices.Reverse(itemPairList)
+		slices.Reverse(newItems)
 	}
+
+	var retErr error = nil
 
 	// list comes out newest (top of xml feed) to oldest.. reverse that,
 	// go oldest to newest, to maintain item count
-	for i := len(itemPairList) - 1; i >= 0; i-- {
+	for i := len(newItems) - 1; i >= 0; i-- {
 
 		var (
-			hash    = itemPairList[i].Hash
-			xmldata = itemPairList[i].ItemData
+			hash    = newItems[i].Hash
+			xmldata = newItems[i].ItemData
 		)
 
 		// errors on these do not cancel processing; the item is just not added to new item list for
@@ -255,25 +299,27 @@ func (fup *feedUpdate) loadNewFeed() error {
 
 		if handled, err := fup.checkExistingHash(hash, xmldata); (handled == true) || (err != nil) {
 			if err != nil {
-				f.log.Error(err)
+				fup.feed.log.Error(err)
+				errors.Join(retErr, err)
 			}
 			continue
 
 		} else if handled, err := fup.checkExistingGuid(hash, xmldata); (handled == true) || (err != nil) {
 			if err != nil {
-				f.log.Error(err)
+				fup.feed.log.Error(err)
+				errors.Join(retErr, err)
 			}
 			continue
 
 		} else if handled, err = fup.createNewEntry(hash, xmldata); (handled == true) || (err != nil) {
 			if err != nil {
-				f.log.Error(err)
+				fup.feed.log.Error(err)
+				errors.Join(retErr, err)
 			}
 			continue
 		}
 	}
-
-	return nil
+	return retErr
 }
 
 // --------------------------------------------------------------------------
@@ -621,3 +667,11 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 	f.log.Info("all new downloads completed")
 	return success
 }
+
+// func (fup *feedUpdate) downloadImage() *ImageDBEntry {
+// 	var (
+// 		img ImageDBEntry
+// 	)
+
+// 	return &img
+// }

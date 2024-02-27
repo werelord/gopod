@@ -3,6 +3,7 @@ package podutils
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,6 +20,40 @@ type Downloader struct {
 	Client       *http.Client
 	lastResponse time.Time
 	genReqFunc   GenRequestFunc
+}
+
+const (
+	// Vivaldi 5.3.2679.68 (Stable channel) (32-bit)
+	// userAgentCurrent = `Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.149 Safari/537.36`
+	// Vivaldi	6.5.3206.48 (Stable channel) (64-bit)
+	// userAgentCurrent = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36`
+	// Vivaldi 6.5.3206.63 (Stable channel) (64-bit) 
+	userAgentCurrent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+
+// performs a HEAD request, only getting headers with no body retrieval
+func Head(url string, onResp OnResponseFunc) error {
+	var dl = Downloader{Client: &http.Client{}}
+	return dl.Head(url, onResp)
+}
+
+func (dl *Downloader) Head(url string, onResp OnResponseFunc) error {
+
+	if onResp == nil {
+		return errors.New("calling HEAD with no OnResponseFunc handler is pointless")
+	}
+	if dl.Client == nil {
+		// just use a default client
+		dl.Client = &http.Client{}
+	}
+
+	if resp, err := dl.Client.Head(url); err != nil {
+		return err
+	} else {
+		// perform callback
+		onResp(resp)
+		return nil
+	}
 }
 
 // Download performs unbuffered fetches; for use for relatively short expected responses
@@ -121,9 +156,7 @@ func createRequest(url string) (req *http.Request, err error) {
 		// req.Header.Add("Accept", `text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8`)
 		req.Header.Add("Accept", "*/*")
 		req.Header.Add("Referer", "")
-
-		// user agent taken from Vivaldi 5.3.2679.68 (Stable channel) (32-bit)
-		req.Header.Add("User-Agent", `Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.149 Safari/537.36`)
+		req.Header.Add("User-Agent", userAgentCurrent)
 	}
 	return
 }
