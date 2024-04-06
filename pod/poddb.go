@@ -165,7 +165,7 @@ func (pdb PodDB) loadFeed(feedEntry *FeedDBEntry, opt loadOptions) error {
 
 	// right now, only hash or ID.. always include image data
 	var tx = db.Where(&FeedDBEntry{PodDBModel: PodDBModel{ID: feedEntry.ID}, Hash: feedEntry.Hash}).
-		Preload("ImageData").Preload("ImageList")
+		Preload("ImageList")
 	if opt.includeDeleted {
 		tx = tx.Unscoped()
 	}
@@ -298,6 +298,7 @@ func (pdb PodDB) saveFeed(feed *FeedDBEntry) error {
 
 	// save existing
 	var res = db.
+		// Debug().
 		Session(&gorm.Session{FullSaveAssociations: true}).
 		Save(feed)
 
@@ -464,6 +465,7 @@ func (pdb PodDB) deleteItems(list []*ItemDBEntry) error {
 	return nil
 }
 
+// --------------------------------------------------------------------------
 func (f *FeedDBEntry) AfterFind(tx *gorm.DB) error {
 	log.With("feed", f.DBShortname).Debug("After Find")
 	f.imageMap = make(map[string]*ImageDBEntry, len(f.ImageList))
@@ -473,9 +475,10 @@ func (f *FeedDBEntry) AfterFind(tx *gorm.DB) error {
 	return nil
 }
 
+// --------------------------------------------------------------------------
 func (f *FeedDBEntry) BeforeSave(tx *gorm.DB) error {
-	log.With("feed", f.DBShortname).Debug("Before Save")
-	f.ImageList = make([]*ImageDBEntry, len(f.imageMap))
+	// log.With("feed", f.DBShortname).Debug("Before Save")
+	f.ImageList = make([]*ImageDBEntry, 0, len(f.imageMap))
 	for _, im := range f.imageMap {
 		f.ImageList = append(f.ImageList, im)
 	}

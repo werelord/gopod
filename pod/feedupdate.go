@@ -97,6 +97,12 @@ func (f *Feed) update(results *DownloadResults) {
 		}
 	}
 
+	// process feed image changes
+	if err := fUpdate.processFeedImage(); err != nil {
+		// don't fail becaudse image fail..
+		f.log.Warnf("error processing image, continuing with feed processing: '%v'", err)
+	}
+
 	// before download save feed & items.. downloads will update saved feeds
 	if err := f.saveDBFeed(fUpdate.newXmlData, fUpdate.newItems); err != nil {
 		results.addError(fmt.Errorf("saving db failed: %v", err))
@@ -230,43 +236,11 @@ func (fup *feedUpdate) loadNewFeed() error {
 		f.log.Warn("(change url in config.toml to reflect this change)")
 	}
 
-	// // download feed image
-	if err := fup.processFeedImage(); err != nil {
-		// don't fail becaudse image fail..
-		f.log.Warnf("error processing image, continuing with feed processing: '%v'", err)
-	}
 	if err := fup.processNewItems(itemPairList); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-// --------------------------------------------------------------------------
-func (fup *feedUpdate) processFeedImage() error {
-	var (
-		// feed = fup.feed
-		// log  = feed.log
-	)
-	if fup.newXmlData == nil {
-		return errors.New("xml is nil; unable to process feed image")
-	}
-
-	// if feed.ImageId == 0 && feed.ImageData == nil {
-	// 	// new download entry
-	// 	log.Debug("current ImageData is empty; downloading feed image")
-
-	// } else {
-
-	// 	// if last modified is the same skip
-	// 	// if dates don't match download
-	// }
-
-	// if imagedata is nil, download
-
-	// download;
-
-	return errors.New("not yet implemented")
 }
 
 // --------------------------------------------------------------------------
@@ -561,6 +535,41 @@ func (fup feedUpdate) CalcItemHash(guid string, url string) (string, error) {
 }
 
 // --------------------------------------------------------------------------
+func (fup *feedUpdate) processFeedImage() error {
+
+	// need to determine which url to use; /image/url or /itunes:image/href
+
+	if fup.newXmlData == nil {
+		return errors.New("xml data is nil")
+	}
+	var (
+		imgUrl = fup.newXmlData.Image.Url
+		itunesUrl = fup.newXmlData.ItunesImageUrl
+		log = fup.feed.log
+	)
+
+	// slight warning if image.url != itunes:image href
+	if imgUrl != "" && itunesUrl != "" && (imgUrl != itunesUrl) {
+		log.With("imgUrl", imgUrl, "itunes:imgUrl", itunesUrl).Warn("image values are not equal.. figure out what to do")
+	}
+
+	if imgUrl== "" {
+		imgUrl= fup.newXmlData.ItunesImageUrl
+	}
+
+	if imgUrl== "" {
+		return errors.New("image url is blank")
+	} else if imgEntry, err := fup.feed.getImage(imgUrl, fup.feed.genImageFilename()); err != nil {
+		return err
+	} else if err := fup.feed.setFeedImage(imgEntry); err != nil {
+		return err
+	} else {
+		fup.feed.log.With("url", imgEntry.Url).Debug("image set")
+		return nil
+	}
+}
+
+// --------------------------------------------------------------------------
 func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 
 	var (
@@ -667,11 +676,3 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 	f.log.Info("all new downloads completed")
 	return success
 }
-
-// func (fup *feedUpdate) downloadImage() *ImageDBEntry {
-// 	var (
-// 		img ImageDBEntry
-// 	)
-
-// 	return &img
-// }
