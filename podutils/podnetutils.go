@@ -10,6 +10,8 @@ import (
 	"time"
 
 	log "gopod/multilogger"
+
+	"github.com/araddon/dateparse"
 )
 
 type OnResponseFunc func(resp *http.Response)
@@ -30,6 +32,37 @@ const (
 	// Vivaldi 6.5.3206.63 (Stable channel) (64-bit) 
 	userAgentCurrent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
+
+func GetLastModified (url string) (time.Time, error) {
+	var dl = Downloader{Client: &http.Client{}}
+	return dl.GetLastModified(url)
+}
+
+func (dl *Downloader) GetLastModified(url string) (time.Time, error) {
+
+	var (
+		lastmodified = time.Now()
+
+		// generic function for getting last modified on request
+		onResp = func(resp *http.Response) {
+			if lastModStr := resp.Header.Get("last-modified"); lastModStr == "" {
+				log.Warn("last modified date is empty")
+			} else if lm, err := dateparse.ParseAny(lastModStr); err != nil {
+				log.Warn("error parsing last modified", "err", err, "lastmodified", lastModStr)
+			} else {
+				lastmodified = lm
+				log.Debugf("last modified: '%v'", lm.Format(TimeFormatStr))
+			}
+		}
+	)
+
+	// peek new location to get last modified
+	if err := dl.Head(url, onResp); err != nil {
+		log.Warnf("head request returned error: %v", err)
+		return time.Now(), err
+	}
+	return lastmodified, nil
+}
 
 // performs a HEAD request, only getting headers with no body retrieval
 func Head(url string, onResp OnResponseFunc) error {
