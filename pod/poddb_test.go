@@ -192,7 +192,7 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 		hashQuery, idQuery FeedDBEntry
 	)
 
-	if err := gmock.mockdb.DB.AutoMigrate(&FeedDBEntry{}, &FeedXmlDBEntry{}); err != nil {
+	if err := gmock.mockdb.DB.AutoMigrate(&FeedDBEntry{}, &FeedXmlDBEntry{}, &ImageDBEntry{}); err != nil {
 		t.Fatalf("error in automigrate: %v", err)
 	} else if res := gmock.mockdb.DB.Create([]*FeedDBEntry{&entryOne, &entryTwo}); res.Error != nil {
 		t.Fatalf("error in insert: %v", res.Error)
@@ -208,8 +208,8 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 	entryTwoNoXml.XmlFeedData = nil
 
 	var (
-		defCS        = []stackType{open, where, firstorcreate}
-		defCSWithXml = []stackType{open, where, preload, firstorcreate}
+		defCS        = []stackType{open, where, preload, firstorcreate}
+		defCSWithXml = []stackType{open, where, preload, preload, firstorcreate}
 	)
 
 	type args struct {
@@ -277,7 +277,7 @@ func TestPodDB_loadDBFeed(t *testing.T) {
 					// pull the entry from the db, compare
 					var dbEntry FeedDBEntry
 					dbEntry.ID = fq.ID
-					if res := gmock.mockdb.DB.Preload("XmlFeedData").Find(&dbEntry); res.Error != nil {
+					if res := gmock.mockdb.DB.Preload("ImageList").Preload("XmlFeedData").Find(&dbEntry); res.Error != nil {
 						t.Errorf("error in checking: %v", err)
 					}
 					exp = dbEntry
@@ -404,7 +404,7 @@ func TestPodDB_loadFeedItems(t *testing.T) {
 	}
 
 	var rmXml = func(e ItemDBEntry) *ItemDBEntry {
-		return &ItemDBEntry{e.PodDBModel, e.Hash, e.FeedId, e.ItemData, e.XmlId, nil, e.ImageId, nil}
+		return &ItemDBEntry{e.PodDBModel, e.Hash, e.FeedId, e.ItemData, e.XmlId, nil, ""}
 	}
 
 	type args struct {
