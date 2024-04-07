@@ -543,9 +543,9 @@ func (fup *feedUpdate) processFeedImage() error {
 		return errors.New("xml data is nil")
 	}
 	var (
-		imgUrl = fup.newXmlData.Image.Url
+		imgUrl    = fup.newXmlData.Image.Url
 		itunesUrl = fup.newXmlData.ItunesImageUrl
-		log = fup.feed.log
+		log       = fup.feed.log
 	)
 
 	// slight warning if image.url != itunes:image href
@@ -553,18 +553,40 @@ func (fup *feedUpdate) processFeedImage() error {
 		log.With("imgUrl", imgUrl, "itunes:imgUrl", itunesUrl).Warn("image values are not equal.. figure out what to do")
 	}
 
-	if imgUrl== "" {
-		imgUrl= fup.newXmlData.ItunesImageUrl
+	if imgUrl == "" {
+		imgUrl = fup.newXmlData.ItunesImageUrl
 	}
 
-	if imgUrl== "" {
+	if imgUrl == "" {
 		return errors.New("image url is blank")
 	} else if imgEntry, err := fup.feed.getImage(imgUrl, fup.feed.genImageFilename()); err != nil {
 		return err
 	} else if err := fup.feed.setFeedImage(imgEntry); err != nil {
 		return err
 	} else {
-		fup.feed.log.With("url", imgEntry.Url).Debug("image set")
+		fup.feed.log.Debug("image set", "url", imgEntry.Url)
+		return nil
+	}
+}
+
+// --------------------------------------------------------------------------
+func (fup *feedUpdate) processItemImage(item *Item) error {
+
+	var (
+		f   = fup.feed
+		log = fup.feed.log
+	)
+	if item.XmlData.Imageurl == "" {
+		log.Debug("item image url is blank, nothing to download")
+		return nil
+	} else if imgEntry, err := f.getImage(item.XmlData.Imageurl, item.genImageFilename()); err != nil {
+		return err
+	} else if err := fup.feed.addImage(imgEntry); err != nil {
+		return err
+	} else {
+		item.ImageKey = imgEntry.Url
+		fup.feed.log.Debug("image set", "url", imgEntry.Url)
+
 		return nil
 	}
 }
@@ -573,7 +595,8 @@ func (fup *feedUpdate) processFeedImage() error {
 func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 
 	var (
-		f = fup.feed
+		f   = fup.feed
+		log = f.log
 		// by default; any errors will set this to false
 		success       = true
 		downloadAfter time.Time
@@ -582,19 +605,19 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 	if config.DownloadAfter != "" {
 		if date, err := dateparse.ParseAny(config.DownloadAfter); err != nil {
 			werr := fmt.Errorf("downloadAfter not recognized: %w", err)
-			f.log.With("downloadAfter", config.DownloadAfter).Error(werr)
+			log.With("downloadAfter", config.DownloadAfter).Error(werr)
 			results.addError(werr)
 			return false
 
 		} else if date.IsZero() {
-			f.log.Warn("download after date is zero")
+			log.Warn("download after date is zero")
 		} else {
 			downloadAfter = date
 		}
 	}
 
 	for _, item := range fup.newItems {
-		f.log.Debugf("processing new item: {%v : %v : %v}", item.Filename, item.Hash, item.Url)
+		log.Debugf("processing new item: {%v : %v : %v}", item.Filename, item.Hash, item.Url)
 
 		podfile := filepath.Join(f.mp3Path, item.Filename)
 		var fileExists bool
@@ -602,7 +625,7 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 		// check download after flag; if set, only download items after given date..
 		// anything before given date just mark as downloaded and archived
 		if (downloadAfter.IsZero() == false) && (item.PubTimeStamp.Before(downloadAfter)) {
-			f.log.Debugf("pubtimestamp before downloadAfter; skipping and marking as downloaded")
+			log.Debugf("pubtimestamp before downloadAfter; skipping and marking as downloaded")
 			item.Downloaded = true
 			item.Archived = true
 			f.saveDBFeedItems(item)
@@ -617,28 +640,28 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 		}
 
 		if item.Downloaded == true {
-			f.log.Debugf("item downloaded '%v', archived: '%v', fileExists: '%v'", item.Downloaded, item.Archived, fileExists)
+			log.Debugf("item downloaded '%v', archived: '%v', fileExists: '%v'", item.Downloaded, item.Archived, fileExists)
 			if fileExists == false {
 				if item.Archived == true {
-					f.log.Info("skipping download due to archived flag")
+					log.Info("skipping download due to archived flag")
 					continue
 				} else {
-					f.log.Warn("downloading item; archive flag not set")
+					log.Warn("downloading item; archive flag not set")
 				}
 			} else {
-				f.log.Debug("skipping download; file already downloaded.. ")
+				log.Debug("skipping download; file already downloaded.. ")
 				continue
 			}
 		} else if fileExists == true {
 			if config.MarkDownloaded {
-				f.log.Info("file exists, and set downloaded flag set.. marking as downloaded")
+				log.Info("file exists, and set downloaded flag set.. marking as downloaded")
 
 				item.Downloaded = true
 				f.saveDBFeedItems(item)
 
 			} else {
-				f.log.Warnf("item downloaded '%v', archived: '%v', fileExists: '%v'", item.Downloaded, item.Archived, fileExists)
-				f.log.Warn("file already exists.. possible filename collision? skipping download")
+				log.Warnf("item downloaded '%v', archived: '%v', fileExists: '%v'", item.Downloaded, item.Archived, fileExists)
+				log.Warn("file already exists.. possible filename collision? skipping download")
 			}
 			continue
 		}
@@ -646,10 +669,10 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 		var bytes uint64
 
 		if config.Simulate {
-			f.log.Info("skipping downloading file due to sim flag")
+			log.Info("skipping downloading file due to sim flag")
 			// fake the bytes downloaded
 			if item.XmlData.Enclosure.Length == 0 {
-				f.log.Warn("simulate flag, and download length in xml is 0")
+				log.Warn("simulate flag, and download length in xml is 0")
 			} else {
 				bytes = uint64(item.XmlData.Enclosure.Length)
 			}
@@ -660,6 +683,12 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 				success = false
 				continue
 			} else {
+				// get and save the pod image
+				if err := fup.processItemImage(item); err != nil {
+					log.Warn("error processing item image", "itemfilename", item.Filename, "image url", item.XmlData.Imageurl)
+					// continuing; not erroring on image download
+				}
+
 				f.saveDBFeedItems(item)
 				bytes = uint64(b)
 			}
@@ -670,9 +699,9 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 		results.TotalDownloadedBytes += bytes
 		results.Results[fup.feed.Shortname] = append(results.Results[fup.feed.Shortname], item.Filename)
 
-		f.log.Infof("finished downloading file: %v", podfile)
+		log.Infof("finished downloading file: %v", podfile)
 	}
 
-	f.log.Info("all new downloads completed")
+	log.Info("all new downloads completed")
 	return success
 }

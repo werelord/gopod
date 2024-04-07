@@ -398,7 +398,7 @@ func (f Feed) deleteFeedItems(list []*Item) error {
 
 // --------------------------------------------------------------------------
 func (f Feed) genImageFilename() string {
-	return fmt.Sprintf("%v.%v%v", f.Shortname, lastModStr, extStr)
+	return fmt.Sprintf("%v__%v%v", f.Shortname, lastModStr, extStr)
 }
 
 // --------------------------------------------------------------------------
@@ -412,11 +412,11 @@ func (f *Feed) setFeedImage(imgData *ImageDBEntry) error {
 
 	// set the current, and add it to the map
 	f.ImageKey = imgData.Url
-	return f.addFeedImage(imgData)
+	return f.addImage(imgData)
 }
 
 // --------------------------------------------------------------------------
-func (f *Feed) addFeedImage(imgData *ImageDBEntry) error {
+func (f *Feed) addImage(imgData *ImageDBEntry) error {
 	if imgData == nil {
 		return errors.New("image cannot be nil")
 	} else if imgData.FeedId > 0 && imgData.FeedId != f.ID {
@@ -449,38 +449,32 @@ func (f *Feed) getImage(urlStr string, imgFilename string) (*ImageDBEntry, error
 		imgUrl = u.String()
 	}
 
-	if f.ImageKey == "" {
-		// new download entry
-		log.Debug("current ImageData is empty; downloading feed image")
+	// check url against current list
+	if img, exists := f.imageMap[imgUrl]; exists == false {
+		log.Debug("new url found", "url", imgUrl)
 		return f.downloadImage(imgUrl, imgFilename)
 
 	} else {
-		// check url against current list
-		if img, exists := f.imageMap[imgUrl]; exists == false {
-			log.Debug("new url found", "url", imgUrl)
-			return f.downloadImage(imgUrl, imgFilename)
-
+		if headLastMod, err := f.getLastModified(imgUrl); err != nil {
+			return nil, err
 		} else {
-			if headLastMod, err := f.getLastModified(imgUrl); err != nil {
-				return nil, err
-			} else {
-				if headLastMod.After(img.LastModified) {
-					log.Debug("head request after current, downloading new image",
-						"head LM", headLastMod.Format(podutils.TimeFormatStr),
-						"previous LM", img.LastModified.Format(podutils.TimeFormatStr))
-					return f.downloadImage(imgUrl, imgFilename)
-				} else if headLastMod.Equal(img.LastModified) {
-					log.Debug("head request equals current, returning current")
-					return img, nil
-				} else { // before
-					log.Warn("head request after current, downloading image",
-						"head LM", headLastMod.Format(podutils.TimeFormatStr),
-						"previous LM", img.LastModified.Format(podutils.TimeFormatStr))
-					return f.downloadImage(imgUrl, imgFilename)
-				}
+			if headLastMod.After(img.LastModified) {
+				log.Debug("head request after current, downloading new image",
+					"head LM", headLastMod.Format(podutils.TimeFormatStr),
+					"previous LM", img.LastModified.Format(podutils.TimeFormatStr))
+				return f.downloadImage(imgUrl, imgFilename)
+			} else if headLastMod.Equal(img.LastModified) {
+				log.Debug("head request equals current, returning current")
+				return img, nil
+			} else { // before
+				log.Warn("head request after current, downloading image",
+					"head LM", headLastMod.Format(podutils.TimeFormatStr),
+					"previous LM", img.LastModified.Format(podutils.TimeFormatStr))
+				return f.downloadImage(imgUrl, imgFilename)
 			}
 		}
 	}
+
 }
 
 // --------------------------------------------------------------------------
@@ -551,6 +545,11 @@ func (f *Feed) downloadImage(imgUrl string, imgFilename string) (*ImageDBEntry, 
 
 	// move the file
 	if err := podutils.Rename(file.Name(), filepath.Join(f.imgPath, newImg.Filename)); err != nil {
+		log.Error("error renaming file", "err", err)
+		return nil, err
+	} else if err := podutils.Chtimes(
+		filepath.Join(f.imgPath, newImg.Filename), newImg.LastModified, newImg.LastModified); err != nil {
+		log.Error("error changing last modified", "err", err)
 		return nil, err
 	}
 	log.Debug("image file downloaded successfully", "file", newImg.Filename)
