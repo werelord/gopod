@@ -601,6 +601,7 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 		// by default; any errors will set this to false
 		success       = true
 		downloadAfter time.Time
+		completed     = make([]*Item, 0, len(fup.newItems))
 	)
 
 	if config.DownloadAfter != "" {
@@ -629,7 +630,7 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 			log.Debugf("pubtimestamp before downloadAfter; skipping and marking as downloaded")
 			item.Downloaded = true
 			item.Archived = true
-			f.saveDBFeedItems(item)
+			completed = append(completed, item)
 			continue
 		}
 
@@ -658,7 +659,7 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 				log.Info("file exists, and set downloaded flag set.. marking as downloaded")
 
 				item.Downloaded = true
-				f.saveDBFeedItems(item)
+				completed = append(completed, item)
 
 			} else {
 				log.Warnf("item downloaded '%v', archived: '%v', fileExists: '%v'", item.Downloaded, item.Archived, fileExists)
@@ -690,7 +691,7 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 					// continuing; not erroring on image download
 				}
 
-				f.saveDBFeedItems(item)
+				completed = append(completed, item)
 				bytes = uint64(b)
 			}
 		}
@@ -702,6 +703,9 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 
 		log.Infof("finished downloading file: %v", podfile)
 	}
+
+	// save items and images
+	f.saveDBFeed(nil, completed)
 
 	log.Info("all new downloads completed")
 	return success
