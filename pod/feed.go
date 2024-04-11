@@ -36,7 +36,7 @@ type feedInternal struct {
 	mp3Path string
 	imgPath string
 
-	lastModCache map[string]time.Time
+	lastModCache map[string]LastMod
 	log          log.Logger
 }
 
@@ -60,11 +60,16 @@ type FeedXmlDBEntry struct {
 	podutils.XChannelData `gorm:"embedded"`
 }
 
+type LastMod struct {
+	Timestamp time.Time
+	ETag      string
+}
+
 type ImageDBEntry struct {
 	PodDBModel
 	FeedId       uint
 	Filename     string
-	LastModified time.Time
+	LastModified LastMod `gorm:"embedded;embeddedPrefix:LastModified_"`
 	Url          string
 	// Hash         string
 }
@@ -136,7 +141,7 @@ func (f *Feed) initFeed() error {
 	}
 
 	// make sure last modifed cache is created
-	f.lastModCache = make(map[string]time.Time, 0)
+	f.lastModCache = make(map[string]LastMod, 0)
 	return nil
 }
 
@@ -457,41 +462,54 @@ func (f *Feed) getImage(urlStr string, imgFilename string) (*ImageDBEntry, error
 	} else {
 		if headLastMod, err := f.getLastModified(imgUrl); err != nil {
 			return nil, err
-		} else {
-			if headLastMod.After(img.LastModified) {
-				log.Debug("head request after current, downloading new image",
-					"head LM", headLastMod.Format(podutils.TimeFormatStr),
-					"previous LM", img.LastModified.Format(podutils.TimeFormatStr))
+		} else if headLastMod.ETag != "" { // solely compare on etag
+			if headLastMod.ETag == img.LastModified.ETag {
+				log.Debug("etags match, returning current")
+				return img, nil
+			} else {
+				log.Debug("etags do not match, downloading new image",
+					"head etag", headLastMod.ETag,
+					"previous etag", img.LastModified.ETag)
 				return f.downloadImage(imgUrl, imgFilename)
-			} else if headLastMod.Equal(img.LastModified) {
+			}
+		} else { // compare on lastmodified dates
+
+			if img.LastModified.Timestamp.IsZero() || headLastMod.Timestamp.IsZero() {
+				log.Warn("last modified timestamp for current and latest is zero; downloading (etag is also empty)")
+				return f.downloadImage(imgUrl, imgFilename)
+			} else if headLastMod.Timestamp.After(img.LastModified.Timestamp) {
+				log.Debug("head request after current, downloading new image",
+					"head LM", headLastMod.Timestamp.Format(podutils.TimeFormatStr),
+					"previous LM", img.LastModified.Timestamp.Format(podutils.TimeFormatStr))
+				return f.downloadImage(imgUrl, imgFilename)
+			} else if headLastMod.Timestamp.Equal(img.LastModified.Timestamp) {
 				log.Debug("head request equals current, returning current")
 				return img, nil
 			} else { // before
 				log.Warn("head request after current, downloading image",
-					"head LM", headLastMod.Format(podutils.TimeFormatStr),
-					"previous LM", img.LastModified.Format(podutils.TimeFormatStr))
+					"head LM", headLastMod.Timestamp.Format(podutils.TimeFormatStr),
+					"previous LM", img.LastModified.Timestamp.Format(podutils.TimeFormatStr))
 				return f.downloadImage(imgUrl, imgFilename)
 			}
 		}
 	}
-
 }
 
 // --------------------------------------------------------------------------
-// gets the last modifed timestamp of uri
+// gets the last modifed timestamp / ETag of uri
 // uses cached value held in feed if found
 // saves result in lastModCache if head is requested
-func (f *Feed) getLastModified(url string) (time.Time, error) {
-
+func (f *Feed) getLastModified(url string) (LastMod, error) {
 	if lastmodcache, exists := f.lastModCache[url]; exists {
 		// lastmodified comes from previous
 		return lastmodcache, nil
 	} else {
 		// peek new location to get last modified
-		if lastmod, err := podutils.GetLastModified(url); err != nil {
+		if lastmod, etag, err := podutils.GetLastModified(url); err != nil {
 			f.log.Warnf("head request returned error: %v", err)
-			return time.Now(), err
+			return LastMod{time.Time{}, ""}, err
 		} else {
+			var lastmod = LastMod{lastmod, etag}
 			f.lastModCache[url] = lastmod
 			return lastmod, nil
 		}
@@ -505,21 +523,19 @@ func (f *Feed) downloadImage(imgUrl string, imgFilename string) (*ImageDBEntry, 
 	var (
 		log    = f.log
 		newImg = ImageDBEntry{
-			Url: imgUrl,
+			Url:          imgUrl,
+			LastModified: LastMod{time.Time{}, ""},
 		}
-		ext          = path.Ext(imgUrl)
-		tempImg      = fmt.Sprintf("imgTemp*%v", ext)
-		lastmodified = time.Now()
+		ext        = path.Ext(imgUrl)
+		tempImg    = fmt.Sprintf("imgTemp*%v", ext)
+		lastmodstr = ""
+		etag       = ""
+
 		// generic function for getting last modified on request
 		onResp = func(resp *http.Response) {
-			if lastModStr := resp.Header.Get("last-modified"); lastModStr == "" {
-				log.Warn("last modified date is empty")
-			} else if lm, err := dateparse.ParseAny(lastModStr); err != nil {
-				log.Warn("error parsing last modified", "err", err, "lastmodified", lastModStr)
-			} else {
-				lastmodified = lm
-				log.Debugf("last modified: '%v'", lm.Format(podutils.TimeFormatStr))
-			}
+			// either lastmodified or ETag should be set
+			lastmodstr = resp.Header.Get("last-modified")
+			etag = resp.Header.Get("ETag")
 		}
 	)
 
@@ -538,19 +554,54 @@ func (f *Feed) downloadImage(imgUrl string, imgFilename string) (*ImageDBEntry, 
 	}
 	file.Close() // explicit close
 
-	// generate data structure
-	newImg.Filename = strings.Replace(imgFilename, lastModStr, lastmodified.Format(podutils.TimeFormatStr), 1)
+	// parse last modified / etag
+	if lastmodstr != "" {
+		if lm, err := dateparse.ParseAny(lastmodstr); err != nil {
+			log.Errorf("parsing last modified timstamp err: %v", err, "timestamp", lastmodstr)
+		} else {
+			newImg.LastModified.Timestamp = lm
+		}
+	}
+	if etag != "" {
+		if etag[0] == '"' {
+			etag = etag[1:]
+		}
+		if etag[len(etag)-1] == '"' {
+			etag = etag[:len(etag)-1]
+		}
+		newImg.LastModified.ETag = etag
+	}
+
+	// generate filename (also sanity check); default to timestamp if exists
+	var lms string
+	if newImg.LastModified.Timestamp.IsZero() == false {
+		lms = newImg.LastModified.Timestamp.Format(podutils.TimeFormatStr)
+	} else if newImg.LastModified.ETag != "" {
+		// limit filename length
+		lms = newImg.LastModified.ETag[0:8]
+	} else {
+		log.Warn("lastmodified timestamp and ETag is empty")
+		log.Warn("setting filename to zero timestamp")
+		lms = time.Time{}.Format(podutils.TimeFormatStr)
+	}
+	newImg.Filename = strings.Replace(imgFilename, lastModStr, lms, 1)
 	newImg.Filename = strings.Replace(newImg.Filename, extStr, ext, 1)
-	newImg.LastModified = lastmodified
+	newImg.Filename = podutils.CleanFilename(newImg.Filename, "_")
 
 	// move the file
 	if err := podutils.Rename(file.Name(), filepath.Join(f.imgPath, newImg.Filename)); err != nil {
 		log.Error("error renaming file", "err", err)
 		return nil, err
-	} else if err := podutils.Chtimes(
-		filepath.Join(f.imgPath, newImg.Filename), newImg.LastModified, newImg.LastModified); err != nil {
-		log.Error("error changing last modified", "err", err)
-		return nil, err
+	} else {
+		var ts = time.Now()
+		if newImg.LastModified.Timestamp.IsZero() == false {
+			ts = newImg.LastModified.Timestamp
+		}
+
+		if err := podutils.Chtimes(filepath.Join(f.imgPath, newImg.Filename), ts, ts); err != nil {
+			log.Error("error changing last modified", "err", err)
+			// return nil, err
+		}
 	}
 	log.Debug("image file downloaded successfully", "file", newImg.Filename)
 

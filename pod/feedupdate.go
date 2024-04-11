@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path"
 	"path/filepath"
 	"slices"
 	"time"
@@ -617,7 +618,7 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 	}
 
 	for _, item := range fup.newItems {
-		log.Debugf("processing new item: {%v : %v : %v}", item.Filename, item.Hash, item.Url)
+		log.Debugf("processing new item: {%v : %v : %v}", item.Filename, item.Hash, path.Base(item.Url))
 
 		podfile := filepath.Join(f.mp3Path, item.Filename)
 		var fileExists bool
