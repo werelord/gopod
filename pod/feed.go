@@ -460,7 +460,11 @@ func (f *Feed) getImage(urlStr string, imgFilename string) (*ImageDBEntry, error
 		return f.downloadImage(imgUrl, imgFilename)
 
 	} else {
-		if headLastMod, err := f.getLastModified(imgUrl); err != nil {
+		if strings.EqualFold(f.ImageCompare, "filename") { // compare via filename only
+			log.Debug("image compare set to filename, and urls match.. returning given image")
+			return img, nil
+
+		} else if headLastMod, err := f.getLastModified(imgUrl); err != nil {
 			return nil, err
 		} else if headLastMod.ETag != "" { // solely compare on etag
 			if headLastMod.ETag == img.LastModified.ETag {

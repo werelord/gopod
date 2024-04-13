@@ -13,8 +13,6 @@ import (
 	"github.com/DavidGamba/go-getoptions"
 )
 
-type CommandType int
-
 type ExportType int
 
 const (
@@ -25,6 +23,8 @@ const (
 func (e ExportType) String() string {
 	return [...]string{"json", "sqlite"}[e]
 }
+
+type CommandType int
 
 const ( // commands
 	Unknown CommandType = iota

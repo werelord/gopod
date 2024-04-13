@@ -37,6 +37,7 @@ type FeedToml struct {
 	CountStart        int     `toml:"countStart,omitempty"`
 	DupFilenameBypass string  `toml:"dupFilenameBypass,omitempty"`
 	StdChrono         bool    `toml:"stdChrono"`
+	ImageCompare      string  `toml:"imageCompare"`
 }
 
 // --------------------------------------------------------------------------
