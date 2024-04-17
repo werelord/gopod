@@ -467,10 +467,15 @@ func (pdb PodDB) deleteItems(list []*ItemDBEntry) error {
 
 // --------------------------------------------------------------------------
 func (f *FeedDBEntry) AfterFind(tx *gorm.DB) error {
-	log.With("feed", f.DBShortname).Debug("After Find")
+	// log.With("feed", f.DBShortname).Debug("After Find")
 	f.imageMap = make(map[string]*ImageDBEntry, len(f.ImageList))
+	f.etagMap = make(map[string]*ImageDBEntry, len(f.ImageList))
 	for _, im := range f.ImageList {
 		f.imageMap[im.Url] = im
+		// only for find; checking etag on different urls
+		if im.LastModified.ETag != "" {
+			f.etagMap[im.LastModified.ETag] = im
+		}
 	}
 	return nil
 }

@@ -81,16 +81,16 @@ func main() {
 		return
 	}
 	pod.Init(config, poddb)
-
-	//------------------------------------- DEBUG -------------------------------------
-	if config.Debug {
-		runTest(*config, tomlList, poddb)
-	}
-	//------------------------------------- DEBUG -------------------------------------
-
+	
 	if len(cmdline.Proxy) > 0 {
 		setProxy(cmdline.Proxy)
 	}
+
+	//------------------------------------- DEBUG -------------------------------------
+	if config.Debug {
+		runTest(*config, cmdline.FeedShortname, tomlList)
+	}
+	//------------------------------------- DEBUG -------------------------------------
 
 	var cmdFunc commandFunc
 	if cmdFunc = parseCommand(cmdline.Command); cmdFunc == nil {
@@ -109,16 +109,22 @@ func main() {
 }
 
 // --------------------------------------------------------------------------
-func runTest(config podconfig.Config, tomlList []podconfig.FeedToml, db *pod.PodDB) {
-	if config.Debug && false {
+func runTest(config podconfig.Config, shortname string, tomlList []podconfig.FeedToml) {
+	if config.Debug && true {
 
-		if pod, err := genFeed("pt", tomlList); err != nil {
-			log.Errorf("well shit: %v", err)
+		if feedList, err := genFeedList(shortname, tomlList); err != nil {
+			log.Error(err)
+			return
+		} else if len(feedList) == 0 {
+			log.Error("no feeds found to check downloads (check config or passed-in shortname)")
+			return
 		} else {
-			log.Debugf("runtest %v", pod.Shortname)
-			// pod.RunTest()
+			for _, f := range feedList {
+				if err := f.RunTest(); err != nil {
+					log.Errorf("Error in checking downloads for feed '%v': %v", f.Shortname, err)
+				}
+			}
 		}
-
 		os.Exit(0)
 	}
 }

@@ -73,11 +73,11 @@ func (dl *Downloader) GetLastModified(url string) (lastmodified time.Time, etag 
 	}
 
 	// checks
-	if (lastmodified.IsZero()) && (etag == "") {
-		err = errors.New("both last modified timestamp and etag is emtpy")
-		log.Error(err)
+	// if (lastmodified.IsZero()) && (etag == "") {
+	// 	err = errors.New("both last modified timestamp and etag is emtpy")
+	// 	log.Error(err)
 
-	}
+	// }
 	return lastmodified, etag, err
 }
 
@@ -97,8 +97,15 @@ func (dl *Downloader) Head(url string, onResp OnResponseFunc) error {
 		dl.Client = &http.Client{}
 	}
 
-	if resp, err := dl.Client.Head(url); err != nil {
+	if headreq, err := createHeadRequest(url); err != nil {
+		// log.Errorf("failed creating request: %v", err)
 		return err
+	} else if resp, err := dl.Client.Do(headreq); err != nil {
+		return err
+
+	} else if err := checkResponseCode(resp); err != nil {
+		return err
+
 	} else {
 		// perform callback
 		onResp(resp)
@@ -154,7 +161,7 @@ func (dl *Downloader) dload(url string, outWriter io.Writer, onResp OnResponseFu
 		dl.Client = &http.Client{}
 	}
 	if dl.genReqFunc == nil {
-		dl.genReqFunc = createRequest
+		dl.genReqFunc = createGetRequest
 	}
 
 	if req, err = dl.genReqFunc(url); err != nil {
@@ -173,10 +180,7 @@ func (dl *Downloader) dload(url string, outWriter io.Writer, onResp OnResponseFu
 		dl.lastResponse = time.Now()
 	}()
 
-	log.Debugf("response status: %v", resp.Status)
-	// assuming http handler automatically follows redirects; we're only checking for 200-ish status codes
-	if (resp.StatusCode < http.StatusOK) || (resp.StatusCode >= http.StatusMultipleChoices) {
-		err = fmt.Errorf("failed to download; response status code: %v", resp.Status)
+	if err = checkResponseCode(resp); err != nil {
 		return
 	}
 
@@ -199,14 +203,33 @@ func (dl *Downloader) dload(url string, outWriter io.Writer, onResp OnResponseFu
 	return
 }
 
-// --------------------------------------------------------------------------
-func createRequest(url string) (req *http.Request, err error) {
+func createHeadRequest(url string) (req *http.Request, err error) {
+	return createRequest("HEAD", url)
+}
 
-	if req, err = http.NewRequest("GET", url, nil); err == nil {
+func createGetRequest(url string) (req *http.Request, err error) {
+	return createRequest("GET", url)
+}
+
+// --------------------------------------------------------------------------
+func createRequest(method string, url string) (req *http.Request, err error) {
+
+	if req, err = http.NewRequest(method, url, nil); err == nil {
 		// req.Header.Add("Accept", `text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8`)
 		req.Header.Add("Accept", "*/*")
 		req.Header.Add("Referer", "")
 		req.Header.Add("User-Agent", userAgentCurrent)
 	}
 	return
+}
+
+// --------------------------------------------------------------------------
+func checkResponseCode(resp *http.Response) error {
+	log.Debugf("response status: %v", resp.Status)
+	// assuming http handler automatically follows redirects; we're only checking for 200-ish status codes
+	if (resp.StatusCode < http.StatusOK) || (resp.StatusCode >= http.StatusMultipleChoices) {
+		var err = fmt.Errorf("failed to download; response status code: %v", resp.Status)
+		return err
+	}
+	return nil
 }

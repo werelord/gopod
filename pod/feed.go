@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -52,6 +53,7 @@ type FeedDBEntry struct {
 
 	ImageList []*ImageDBEntry `gorm:"foreignKey:FeedId"`
 	imageMap  map[string]*ImageDBEntry
+	etagMap   map[string]*ImageDBEntry
 	ImageKey  string
 }
 
@@ -430,6 +432,9 @@ func (f *Feed) addImage(imgData *ImageDBEntry) error {
 	}
 
 	f.imageMap[imgData.Url] = imgData
+	if imgData.LastModified.ETag != "" {
+		f.etagMap[imgData.LastModified.ETag] = imgData
+	}
 
 	return nil
 
@@ -456,8 +461,17 @@ func (f *Feed) getImage(urlStr string, imgFilename string) (*ImageDBEntry, error
 
 	// check url against current list
 	if img, exists := f.imageMap[imgUrl]; exists == false {
-		log.Debug("new url found", "url", imgUrl)
-		return f.downloadImage(imgUrl, imgFilename)
+
+		// still check head request, in case different url but same etag
+		if headEtag, err := f.getLastModified(imgUrl); err != nil {
+			return nil, err
+		} else if img, exists := f.etagMap[headEtag.ETag]; (headEtag.ETag == "") || (exists == false) {
+			log.Debug("new url found, etag doesn't exist or is blank")
+			return f.downloadImage(imgUrl, imgFilename)
+		} else {
+			log.Debug("new url found, but etag is the same; returning match")
+			return img, nil
+		}
 
 	} else {
 		if strings.EqualFold(f.ImageCompare, "filename") { // compare via filename only
@@ -466,6 +480,7 @@ func (f *Feed) getImage(urlStr string, imgFilename string) (*ImageDBEntry, error
 
 		} else if headLastMod, err := f.getLastModified(imgUrl); err != nil {
 			return nil, err
+
 		} else if headLastMod.ETag != "" { // solely compare on etag
 			if headLastMod.ETag == img.LastModified.ETag {
 				log.Debug("etags match, returning current")
@@ -476,8 +491,8 @@ func (f *Feed) getImage(urlStr string, imgFilename string) (*ImageDBEntry, error
 					"previous etag", img.LastModified.ETag)
 				return f.downloadImage(imgUrl, imgFilename)
 			}
-		} else { // compare on lastmodified dates
 
+		} else { // compare on lastmodified dates
 			if img.LastModified.Timestamp.IsZero() || headLastMod.Timestamp.IsZero() {
 				log.Warn("last modified timestamp for current and latest is zero; downloading (etag is also empty)")
 				return f.downloadImage(imgUrl, imgFilename)
@@ -550,11 +565,16 @@ func (f *Feed) downloadImage(imgUrl string, imgFilename string) (*ImageDBEntry, 
 	}
 	defer file.Close()
 
-	if bw, err := podutils.DownloadBuffered(imgUrl, file, onResp); err != nil {
-		log.Errorf("failed downloading image: %v", err)
+	if _, err := podutils.DownloadBuffered(imgUrl, file, onResp); err != nil {
+		log.Error("failed downloading image", "err", err, "url", imgUrl)
+		// delete the temp file
+		file.Close()
+		if e := os.Remove(file.Name()); e != nil {
+			errors.Join(err, e)
+		}
 		return nil, err
-	} else {
-		log.Debug("file written", "filename", file.Name(), "bytes", podutils.FormatBytes(uint64(bw)))
+		// } else {
+		// 	log.Debug("file written", "filename", file.Name(), "bytes", podutils.FormatBytes(uint64(bw)))
 	}
 	file.Close() // explicit close
 
