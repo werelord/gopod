@@ -538,6 +538,11 @@ func (fup feedUpdate) CalcItemHash(guid string, url string) (string, error) {
 // --------------------------------------------------------------------------
 func (fup *feedUpdate) processFeedImage() error {
 
+	if config.Simulate {
+		log.Debug("skipping processing feed image due to simulate flag")
+		return nil
+	}
+
 	// need to determine which url to use; /image/url or /itunes:image/href
 
 	if fup.newXmlData == nil {
@@ -674,7 +679,7 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 			log.Info("skipping downloading file due to sim flag")
 			// fake the bytes downloaded
 			if item.XmlData.Enclosure.Length == 0 {
-				log.Warn("simulate flag, and download length in xml is 0")
+				// log.Warn("simulate flag, and download length in xml is 0")
 			} else {
 				bytes = uint64(item.XmlData.Enclosure.Length)
 			}
