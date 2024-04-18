@@ -110,7 +110,7 @@ func main() {
 
 // --------------------------------------------------------------------------
 func runTest(config podconfig.Config, shortname string, tomlList []podconfig.FeedToml) {
-	if config.Debug && true {
+	if config.Debug && false {
 
 		if feedList, err := genFeedList(shortname, tomlList); err != nil {
 			log.Error(err)
