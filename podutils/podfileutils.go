@@ -14,7 +14,7 @@ import (
 	log "gopod/multilogger"
 )
 
-const filenamMaxLength = 240
+const filenameMaxLength = 240
 
 // --------------------------------------------------------------------------
 func SaveToFile(buf []byte, filename string) error {
@@ -59,7 +59,7 @@ func CleanFilename(filename string, rep string) string {
 	// only error this generates is if the replacement is a reserved character
 	fname, _ := filenamify.FilenamifyV2(filename, func(options *filenamify.Options) {
 		options.Replacement = rep
-		options.MaxLength = filenamMaxLength
+		options.MaxLength = filenameMaxLength
 	})
 	return fname
 }

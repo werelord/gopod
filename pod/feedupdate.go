@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path"
 	"path/filepath"
+	"slices"
 	"time"
 
 	log "gopod/multilogger"
@@ -94,6 +96,12 @@ func (f *Feed) update(results *DownloadResults) {
 			results.addError(fmt.Errorf("failed to process feed: %w", err))
 			return
 		}
+	}
+
+	// process feed image changes
+	if err := fUpdate.processFeedImage(); err != nil {
+		// don't fail becaudse image fail..
+		f.log.Warnf("error processing image, continuing with feed processing: '%v'", err)
 	}
 
 	// before download save feed & items.. downloads will update saved feeds
@@ -229,18 +237,35 @@ func (fup *feedUpdate) loadNewFeed() error {
 		f.log.Warn("(change url in config.toml to reflect this change)")
 	}
 
-	if len(itemPairList) == 0 {
-		f.log.Info("no items found to process")
+	if err := fup.processNewItems(itemPairList); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// --------------------------------------------------------------------------
+func (fup *feedUpdate) processNewItems(newItems []podutils.ItemPair) error {
+
+	if len(newItems) == 0 {
+		fup.feed.log.Info("no items found to process")
 		return nil
 	}
 
+	// if this is std chrono, reverse it to match typical reverse chrono to keep item count correct
+	if fup.feed.StdChrono {
+		slices.Reverse(newItems)
+	}
+
+	var retErr error = nil
+
 	// list comes out newest (top of xml feed) to oldest.. reverse that,
 	// go oldest to newest, to maintain item count
-	for i := len(itemPairList) - 1; i >= 0; i-- {
+	for i := len(newItems) - 1; i >= 0; i-- {
 
 		var (
-			hash    = itemPairList[i].Hash
-			xmldata = itemPairList[i].ItemData
+			hash    = newItems[i].Hash
+			xmldata = newItems[i].ItemData
 		)
 
 		// errors on these do not cancel processing; the item is just not added to new item list for
@@ -249,25 +274,27 @@ func (fup *feedUpdate) loadNewFeed() error {
 
 		if handled, err := fup.checkExistingHash(hash, xmldata); (handled == true) || (err != nil) {
 			if err != nil {
-				f.log.Error(err)
+				fup.feed.log.Error(err)
+				errors.Join(retErr, err)
 			}
 			continue
 
 		} else if handled, err := fup.checkExistingGuid(hash, xmldata); (handled == true) || (err != nil) {
 			if err != nil {
-				f.log.Error(err)
+				fup.feed.log.Error(err)
+				errors.Join(retErr, err)
 			}
 			continue
 
 		} else if handled, err = fup.createNewEntry(hash, xmldata); (handled == true) || (err != nil) {
 			if err != nil {
-				f.log.Error(err)
+				fup.feed.log.Error(err)
+				errors.Join(retErr, err)
 			}
 			continue
 		}
 	}
-
-	return nil
+	return retErr
 }
 
 // --------------------------------------------------------------------------
@@ -451,7 +478,9 @@ func (fup *feedUpdate) SkipParsingItem(hash string) (skip bool, cancelRemaining 
 	// assume itemlist has been populated with enough entries (if not all)
 	_, skip = fup.hashCollList[hash]
 
-	if (config.MaxDupChecks >= 0) && (skip == true) {
+	// usually feeds are reverse chronological, we can skip if we start seeing dupes
+	// in the case where the feed is standard chrono, we can't do that
+	if (fup.feed.StdChrono == false) && (config.MaxDupChecks >= 0) && (skip == true) {
 		fup.numDups++
 		cancelRemaining = (fup.numDups >= uint(config.MaxDupChecks))
 	}
@@ -507,31 +536,95 @@ func (fup feedUpdate) CalcItemHash(guid string, url string) (string, error) {
 }
 
 // --------------------------------------------------------------------------
+func (fup *feedUpdate) processFeedImage() error {
+
+	if config.Simulate {
+		log.Debug("skipping processing feed image due to simulate flag")
+		return nil
+	}
+
+	// need to determine which url to use; /image/url or /itunes:image/href
+
+	if fup.newXmlData == nil {
+		return errors.New("xml data is nil")
+	}
+	var (
+		imgUrl    = fup.newXmlData.Image.Url
+		itunesUrl = fup.newXmlData.ItunesImageUrl
+		log       = fup.feed.log
+	)
+
+	// slight warning if image.url != itunes:image href
+	if imgUrl != "" && itunesUrl != "" && (imgUrl != itunesUrl) {
+		log.With("imgUrl", imgUrl, "itunes:imgUrl", itunesUrl).Warn("image values are not equal.. figure out what to do")
+	}
+
+	if imgUrl == "" {
+		imgUrl = fup.newXmlData.ItunesImageUrl
+	}
+
+	if imgUrl == "" {
+		return errors.New("image url is blank")
+	} else if imgEntry, err := fup.feed.getImage(imgUrl, fup.feed.genImageFilename()); err != nil {
+		return err
+	} else if err := fup.feed.setFeedImage(imgEntry); err != nil {
+		return err
+	} else {
+		fup.feed.log.Debug("image set", "url", imgEntry.Url)
+		return nil
+	}
+}
+
+// --------------------------------------------------------------------------
+func (fup *feedUpdate) processItemImage(item *Item) error {
+
+	var (
+		f   = fup.feed
+		log = fup.feed.log
+	)
+	if item.XmlData.Imageurl == "" {
+		log.Debug("item image url is blank, nothing to download")
+		return nil
+	} else if imgEntry, err := f.getImage(item.XmlData.Imageurl, item.genImageFilename()); err != nil {
+		return err
+	} else if err := fup.feed.addImage(imgEntry); err != nil {
+		return err
+	} else {
+		item.ImageKey = imgEntry.Url
+		fup.feed.log.Debug("image set", "url", imgEntry.Url)
+
+		return nil
+	}
+}
+
+// --------------------------------------------------------------------------
 func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 
 	var (
-		f = fup.feed
+		f   = fup.feed
+		log = f.log
 		// by default; any errors will set this to false
 		success       = true
 		downloadAfter time.Time
+		completed     = make([]*Item, 0, len(fup.newItems))
 	)
 
 	if config.DownloadAfter != "" {
 		if date, err := dateparse.ParseAny(config.DownloadAfter); err != nil {
 			werr := fmt.Errorf("downloadAfter not recognized: %w", err)
-			f.log.With("downloadAfter", config.DownloadAfter).Error(werr)
+			log.With("downloadAfter", config.DownloadAfter).Error(werr)
 			results.addError(werr)
 			return false
 
 		} else if date.IsZero() {
-			f.log.Warn("download after date is zero")
+			log.Warn("download after date is zero")
 		} else {
 			downloadAfter = date
 		}
 	}
 
 	for _, item := range fup.newItems {
-		f.log.Debugf("processing new item: {%v : %v : %v}", item.Filename, item.Hash, item.Url)
+		log.Debugf("processing new item: {%v : %v : %v}", item.Filename, item.Hash, path.Base(item.Url))
 
 		podfile := filepath.Join(f.mp3Path, item.Filename)
 		var fileExists bool
@@ -539,10 +632,10 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 		// check download after flag; if set, only download items after given date..
 		// anything before given date just mark as downloaded and archived
 		if (downloadAfter.IsZero() == false) && (item.PubTimeStamp.Before(downloadAfter)) {
-			f.log.Debugf("pubtimestamp before downloadAfter; skipping and marking as downloaded")
+			log.Debugf("pubtimestamp before downloadAfter; skipping and marking as downloaded")
 			item.Downloaded = true
 			item.Archived = true
-			f.saveDBFeedItems(item)
+			completed = append(completed, item)
 			continue
 		}
 
@@ -554,28 +647,28 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 		}
 
 		if item.Downloaded == true {
-			f.log.Debugf("item downloaded '%v', archived: '%v', fileExists: '%v'", item.Downloaded, item.Archived, fileExists)
+			log.Debugf("item downloaded '%v', archived: '%v', fileExists: '%v'", item.Downloaded, item.Archived, fileExists)
 			if fileExists == false {
 				if item.Archived == true {
-					f.log.Info("skipping download due to archived flag")
+					log.Info("skipping download due to archived flag")
 					continue
 				} else {
-					f.log.Warn("downloading item; archive flag not set")
+					log.Warn("downloading item; archive flag not set")
 				}
 			} else {
-				f.log.Debug("skipping download; file already downloaded.. ")
+				log.Debug("skipping download; file already downloaded.. ")
 				continue
 			}
 		} else if fileExists == true {
 			if config.MarkDownloaded {
-				f.log.Info("file exists, and set downloaded flag set.. marking as downloaded")
+				log.Info("file exists, and set downloaded flag set.. marking as downloaded")
 
 				item.Downloaded = true
-				f.saveDBFeedItems(item)
+				completed = append(completed, item)
 
 			} else {
-				f.log.Warnf("item downloaded '%v', archived: '%v', fileExists: '%v'", item.Downloaded, item.Archived, fileExists)
-				f.log.Warn("file already exists.. possible filename collision? skipping download")
+				log.Warnf("item downloaded '%v', archived: '%v', fileExists: '%v'", item.Downloaded, item.Archived, fileExists)
+				log.Warn("file already exists.. possible filename collision? skipping download")
 			}
 			continue
 		}
@@ -583,10 +676,10 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 		var bytes uint64
 
 		if config.Simulate {
-			f.log.Info("skipping downloading file due to sim flag")
+			log.Info("skipping downloading file due to sim flag")
 			// fake the bytes downloaded
 			if item.XmlData.Enclosure.Length == 0 {
-				f.log.Warn("simulate flag, and download length in xml is 0")
+				// log.Warn("simulate flag, and download length in xml is 0")
 			} else {
 				bytes = uint64(item.XmlData.Enclosure.Length)
 			}
@@ -597,7 +690,13 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 				success = false
 				continue
 			} else {
-				f.saveDBFeedItems(item)
+				// get and save the pod image
+				if err := fup.processItemImage(item); err != nil {
+					log.Warn("error processing item image", "itemfilename", item.Filename, "image url", item.XmlData.Imageurl)
+					// continuing; not erroring on image download
+				}
+
+				completed = append(completed, item)
 				bytes = uint64(b)
 			}
 		}
@@ -607,9 +706,12 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 		results.TotalDownloadedBytes += bytes
 		results.Results[fup.feed.Shortname] = append(results.Results[fup.feed.Shortname], item.Filename)
 
-		f.log.Infof("finished downloading file: %v", podfile)
+		log.Infof("finished downloading file: %v", podfile)
 	}
 
-	f.log.Info("all new downloads completed")
+	// save items and images
+	f.saveDBFeed(nil, completed)
+
+	log.Info("all new downloads completed")
 	return success
 }

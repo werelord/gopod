@@ -31,7 +31,7 @@ const ( // because constants should be capitalized, but I don't want to export t
 	AllItems = -1
 
 	// current model for database
-	currentModel = 1
+	currentModel = 2
 )
 
 type PodDB struct {
@@ -53,6 +53,7 @@ func NewDB(path string) (*PodDB, error) {
 
 	var poddb = PodDB{path: path, config: defaultConfig}
 
+	// in-memory db only used for unit tests.. don't do these checks in those cases
 	if path != ":memory:" {
 		if exists, err := podutils.FileExists(path); err != nil {
 			return nil, err
@@ -74,8 +75,12 @@ func NewDB(path string) (*PodDB, error) {
 			return nil, fmt.Errorf("error checking model version: %w", res.Error)
 
 		} else if result.ID != currentModel {
-			// future: custom error for calling migration methods
-			return nil, fmt.Errorf("model doesn't match current; migrate needs to happen")
+			log.Warnf("database model '%v' doesn't match current model '%v'; attempting upgrade", result.ID, currentModel)
+			// future: if more work needs to be done converting the db, should return custom error and handle
+			// upgrade/migration in separate launch command.. but for now
+			if err := migrateDB(db, result.ID); err != nil {
+				return nil, fmt.Errorf("error migrating database: %w", err)
+			}
 		}
 	}
 
@@ -103,7 +108,7 @@ func (pdb PodDB) createNewDb(path string) error {
 		}
 
 		// in the case of a new db, need to set up tables and such..
-		if err := db.AutoMigrate(&FeedDBEntry{}, &FeedXmlDBEntry{}, &ItemDBEntry{}, &ItemXmlDBEntry{}); err != nil {
+		if err := db.AutoMigrate(&FeedDBEntry{}, &FeedXmlDBEntry{}, &ItemDBEntry{}, &ItemXmlDBEntry{}, &ImageDBEntry{}); err != nil {
 			return err
 		}
 	}
@@ -158,8 +163,9 @@ func (pdb PodDB) loadFeed(feedEntry *FeedDBEntry, opt loadOptions) error {
 		return fmt.Errorf("error opening db: %w", err)
 	}
 
-	// right now, only hash or ID
-	var tx = db.Where(&FeedDBEntry{PodDBModel: PodDBModel{ID: feedEntry.ID}, Hash: feedEntry.Hash})
+	// right now, only hash or ID.. always include image data
+	var tx = db.Where(&FeedDBEntry{PodDBModel: PodDBModel{ID: feedEntry.ID}, Hash: feedEntry.Hash}).
+		Preload("ImageList")
 	if opt.includeDeleted {
 		tx = tx.Unscoped()
 	}
@@ -292,6 +298,7 @@ func (pdb PodDB) saveFeed(feed *FeedDBEntry) error {
 
 	// save existing
 	var res = db.
+		// Debug().
 		Session(&gorm.Session{FullSaveAssociations: true}).
 		Save(feed)
 
@@ -455,5 +462,30 @@ func (pdb PodDB) deleteItems(list []*ItemDBEntry) error {
 	// but if that changes, will need to grab the DeletedAt value from the value passed in to Delete
 	// and propegate that to all items listed above
 
+	return nil
+}
+
+// --------------------------------------------------------------------------
+func (f *FeedDBEntry) AfterFind(tx *gorm.DB) error {
+	// log.With("feed", f.DBShortname).Debug("After Find")
+	f.imageMap = make(map[string]*ImageDBEntry, len(f.ImageList))
+	f.etagMap = make(map[string]*ImageDBEntry, len(f.ImageList))
+	for _, im := range f.ImageList {
+		f.imageMap[im.Url] = im
+		// only for find; checking etag on different urls
+		if im.LastModified.ETag != "" {
+			f.etagMap[im.LastModified.ETag] = im
+		}
+	}
+	return nil
+}
+
+// --------------------------------------------------------------------------
+func (f *FeedDBEntry) BeforeSave(tx *gorm.DB) error {
+	// log.With("feed", f.DBShortname).Debug("Before Save")
+	f.ImageList = make([]*ImageDBEntry, 0, len(f.imageMap))
+	for _, im := range f.imageMap {
+		f.ImageList = append(f.ImageList, im)
+	}
 	return nil
 }

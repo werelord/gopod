@@ -205,7 +205,7 @@ func Test_createRequest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req, err := createRequest(tt.url)
+			req, err := createGetRequest(tt.url)
 
 			testutils.AssertErr(t, tt.wantErr, err)
 			if tt.wantErr {

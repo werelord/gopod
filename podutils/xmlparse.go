@@ -317,7 +317,9 @@ func parseItemEntry(elem *etree.Element) (item XItemData, err error) {
 			item.EpisodeStr = child.Text()
 		case strings.EqualFold(child.FullTag(), "enclosure"):
 			if lenStr := child.SelectAttr("length"); lenStr != nil {
-				if l, e := strconv.Atoi(lenStr.Value); e == nil {
+				if lenStr.Value == "" {
+					log.Warn("length attribute is empty")
+				} else if l, e := strconv.Atoi(lenStr.Value); e == nil {
 					item.Enclosure.Length = uint(l) // shouldn't be any overflow, or negatives, hopefully
 				} else {
 					log.Errorf("error in parsing enclosure length: %v", e)

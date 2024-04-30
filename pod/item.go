@@ -44,6 +44,7 @@ type ItemDBEntry struct {
 	ItemData `gorm:"embedded"`
 	XmlId    uint
 	XmlData  *ItemXmlDBEntry `gorm:"foreignKey:XmlId"`
+	ImageKey string
 }
 
 type ItemData struct {
@@ -501,4 +502,10 @@ func (i *Item) Download(mp3path string) (int64, error) {
 	i.Downloaded = true
 
 	return bytesWrote, nil
+}
+
+// --------------------------------------------------------------------------
+func (i Item) genImageFilename() string {
+	var base = strings.TrimSuffix(i.Filename, filepath.Ext(i.Filename))
+	return fmt.Sprintf("%v__%v%v", base, lastModStr, extStr)
 }
