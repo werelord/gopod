@@ -144,6 +144,11 @@ func (f *Feed) initFeed() error {
 
 	// make sure last modifed cache is created
 	f.lastModCache = make(map[string]LastMod, 0)
+
+	// even tho these are created in the db call, if its a new feed they won't exists yet
+	f.imageMap = make(map[string]*ImageDBEntry, 0)
+	f.etagMap = make(map[string]*ImageDBEntry, 0)
+
 	return nil
 }
 
