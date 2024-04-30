@@ -26,7 +26,7 @@ var (
 )
 
 const (
-	Version = "v0.1.6-beta"
+	Version = "v0.1.7-beta"
 )
 
 // --------------------------------------------------------------------------
@@ -81,7 +81,7 @@ func main() {
 		return
 	}
 	pod.Init(config, poddb)
-	
+
 	if len(cmdline.Proxy) > 0 {
 		setProxy(cmdline.Proxy)
 	}
