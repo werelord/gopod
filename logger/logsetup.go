@@ -29,7 +29,7 @@ func InitLogging(workingdir string, timestamp time.Time, level string) error {
 		relpath  = getRelPathCaller()
 		loglevel = mapLogLevel(level)
 
-		reportCaller = (loglevel == charmlog.DebugLevel)	// only show path if we're debug
+		reportCaller = (loglevel == charmlog.DebugLevel) // only show path if we're debug
 
 		allOpt = charmlog.Options{
 			Level:           loglevel,
@@ -48,12 +48,14 @@ func InitLogging(workingdir string, timestamp time.Time, level string) error {
 	)
 
 	// global styles for console
-	charmlog.TimestampStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#1a75ff")).Italic(true)
-	charmlog.CallerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#808080"))
-	charmlog.KeyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#66ffff")).Italic(true)
-	charmlog.ValueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#66ff66")).Italic(true)
+	var style = charmlog.DefaultStyles()
+	style.Timestamp = lipgloss.NewStyle().Foreground(lipgloss.Color("#1a75ff")).Italic(true)
+	style.Caller = lipgloss.NewStyle().Foreground(lipgloss.Color("#808080"))
+	style.Key = lipgloss.NewStyle().Foreground(lipgloss.Color("#66ffff")).Italic(true)
+	style.Value = lipgloss.NewStyle().Foreground(lipgloss.Color("#66ff66")).Italic(true)
 
 	log.SetConsoleWithOptions(os.Stderr, allOpt)
+	log.SetConsoleStyles(style)
 
 	logdir = filepath.Join(workingdir, ".logs")
 	// make sure dir exists
@@ -102,7 +104,7 @@ func InitLogging(workingdir string, timestamp time.Time, level string) error {
 	if err := podutils.CreateSymlink(allLevelsFile, allSymlink); err != nil {
 		log.Warnf("failed to create symlink file (all levels): %v", err)
 
-	} else if err2 := podutils.CreateSymlink(errorLevelsFile, errSymlink); err != nil {
+	} else if err2 := podutils.CreateSymlink(errorLevelsFile, errSymlink); err2 != nil {
 		log.Warnf("failed to create symlink file (error levels): %v", err2)
 	}
 

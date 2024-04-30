@@ -30,6 +30,7 @@ type multilog struct {
 var def = multilog{console: charmlog.Default(), logList: make([]*charmlog.Logger, 0)}
 
 func SetConsoleWithOptions(w io.Writer, opt charmlog.Options) { def.SetConsoleWithOptions(w, opt) }
+func SetConsoleStyles(s *charmlog.Styles) { def.SetConsoleStyles(s) }
 func AddWithOptions(w io.Writer, opt charmlog.Options)        { def.AddWithOptions(w, opt) }
 func Debug(msg any, keyvals ...any) {
 	if def.console.GetLevel() <= charmlog.DebugLevel {
@@ -147,6 +148,9 @@ func With(keyvals ...any) Logger { return def.With(keyvals...) }
 
 func (m *multilog) SetConsoleWithOptions(w io.Writer, opt charmlog.Options) {
 	m.console = charmlog.NewWithOptions(w, opt)
+}
+func (m *multilog) SetConsoleStyles(style *charmlog.Styles) {
+	m.console.SetStyles(style)
 }
 func (m *multilog) AddWithOptions(w io.Writer, opt charmlog.Options) {
 	m.logList = append(m.logList, charmlog.NewWithOptions(w, opt))
