@@ -158,8 +158,8 @@ func loadFromDBEntry(parentCfg podconfig.FeedToml, entry *ItemDBEntry) (*Item, e
 		return nil, errors.New("failed loading item; hash is empty")
 	} else if item.Filename == "" {
 		return nil, errors.New("failed loading item; filename is empty (db corrupt?)")
-	} else if item.Guid == "" {
-		return nil, errors.New("failed loading item; guid is empty")
+	// } else if item.Guid == "" {
+	// 	return nil, errors.New("failed loading item; guid is empty")
 	}
 
 	//log.Debugf("Item Loaded: %v", item)
