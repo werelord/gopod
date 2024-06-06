@@ -365,6 +365,14 @@ func (pdb PodDB) deleteFeed(feed *FeedDBEntry) error {
 		return fmt.Errorf("error deleting items: %w", err)
 	}
 
+	// get all images for deletion
+	var imglist = make([]*ImageDBEntry, 0)
+	if res := db.Where(&ImageDBEntry{FeedId: feed.ID}).Order("ID").Find(&imglist); res.Error != nil {
+		return fmt.Errorf("error finding images: %w", res.Error)
+	} else if err := pdb.deleteImages(imglist); err != nil {
+		return fmt.Errorf("error deleting images: %w", err)
+	}
+
 	// delete feed xml
 	if feed.XmlId == 0 {
 		log.Warn("feed xml is zero; xml entry might not exist")
@@ -461,6 +469,31 @@ func (pdb PodDB) deleteItems(list []*ItemDBEntry) error {
 	// for now, we're not going to use that outside of this function (tests will reflect that)
 	// but if that changes, will need to grab the DeletedAt value from the value passed in to Delete
 	// and propegate that to all items listed above
+
+	return nil
+}
+
+func (pdb PodDB) deleteImages(list []*ImageDBEntry) error {
+
+	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
+	if err != nil {
+		return fmt.Errorf("error opening db: %w", err)
+	}
+
+	// running delete in chuncks
+	for _, imageChunk := range podutils.Chunk(list, 100) {
+		if res := db.Delete(&imageChunk); res.Error != nil {
+			we := fmt.Errorf("failed deleting images: %w", res.Error)
+			log.Error(we)
+			return we
+		} else if res.RowsAffected != int64(len(imageChunk)) {
+			log.Warnf("xml delete; expected %v rows, got %v", len(imageChunk), res.RowsAffected)
+
+		} else {
+			log.Debug("image delete successful", "rows", res.RowsAffected)
+		}
+
+	}
 
 	return nil
 }
