@@ -33,10 +33,11 @@ const ( // commands
 	Delete
 	Export
 	Preview
+	Archive
 )
 
 func (c CommandType) String() string {
-	return [...]string{"unknown", "update", "checkDownloaded", "delete", "export", "preview"}[c]
+	return [...]string{"unknown", "update", "checkDownloaded", "delete", "export", "preview", "archive"}[c]
 }
 
 // for testing purposes
@@ -232,8 +233,8 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 	exportCommand := opt.NewCommand("export", "export feed from database (either all or specific feed)")
 	exportCommand.BoolVar(&c.IncludeDeleted, "include-deleted", false,
 		opt.Description("include deleted feeds in archive"))
-	exportCommand.StringVar(&c.formatStr, "format", "json",
-		opt.Description("format for export - json (default) or db"))
+	exportCommand.StringVar(&c.formatStr, "format", "db",
+		opt.Description("format for export - json or db (default) "))
 	exportCommand.StringVar(&c.ExportPath, "export-path", "",
 		opt.Description("path for export (default to '#configDir#\\#shortname#\\')"))
 	exportCommand.SetCommandFn(c.OnExportFunc)
@@ -246,6 +247,11 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 		opt.Description("Use the most recent feed xml file fetched rather than checking for new"))
 	// if recent doesn't exist, will still download.  Note: if there are no errors on previous run, will likely do nothing unless --force is specified"))
 	previewCommand.SetCommandFn(c.generateCmdFunc(Preview))
+
+	archiveCommand := opt.NewCommand("archive", "archive podcasts not in current year")
+	archiveCommand.BoolVar(&c.Simulate, "simulate", false, opt.Alias("sim"),
+		opt.Description("Simulate; will not move items or save database"))
+	archiveCommand.SetCommandFn(c.generateCmdFunc(Archive))
 
 	opt.HelpCommand("help", opt.Alias("h", "?"))
 	return opt

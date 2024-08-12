@@ -33,9 +33,10 @@ type Feed struct {
 type feedInternal struct {
 	// local items, not exported to database
 
-	xmlfile string
-	mp3Path string
-	imgPath string
+	xmlfile     string
+	mp3Path     string
+	imgPath     string
+	archivePath string
 
 	lastModCache map[string]LastMod
 	log          log.Logger
@@ -141,6 +142,9 @@ func (f *Feed) initFeed() error {
 		f.log.Errorf("error making image directory: %v", err)
 		return err
 	}
+
+	f.archivePath = filepath.Join(config.WorkspaceDir, f.Shortname, ".arc")
+	// don't create the path; assume it will be created when archive is run
 
 	// make sure last modifed cache is created
 	f.lastModCache = make(map[string]LastMod, 0)
