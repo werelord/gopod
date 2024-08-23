@@ -17,7 +17,7 @@
                 // "--help",
                 "--config", "e:\\gopod\\config.toml",
                 // "--config", "e:\\gopod-sim\\config.toml",
-                // "--feed=russo",
+                // "--feed=exponent",
                 // "--proxy", "http://localhost:8888",
                 "--backup-db",
                 "--log=debug",
@@ -49,6 +49,10 @@
                 // preview command
                 // "preview",
                 // "--use-recent",
+
+                // archive cmd
+                // "archive",
+                // "--simulate",
 
                 "--debug=true"
             ]

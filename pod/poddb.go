@@ -31,7 +31,7 @@ const ( // because constants should be capitalized, but I don't want to export t
 	AllItems = -1
 
 	// current model for database
-	currentModel = 2
+	currentModel = 3
 )
 
 type PodDB struct {
@@ -333,6 +333,24 @@ func (pdb PodDB) saveItems(itemlist ...*ItemDBEntry) error {
 
 	// save items
 	var res = db.Session(&gorm.Session{FullSaveAssociations: true}).Save(itemlist)
+	log.Debugf("rows affected: %v", res.RowsAffected)
+	return res.Error
+}
+
+// --------------------------------------------------------------------------
+func (pdb PodDB) saveImages(imglist ...*ImageDBEntry) error {
+	if pdb.path == "" {
+		return errors.New("poddb is not initialized; call NewDB() first")
+	} else if len(imglist) == 0 {
+		return errors.New("item entry list is empty")
+	}
+
+	db, err := gImpl.Open(sqlite.Open(pdb.path), &pdb.config)
+	if err != nil {
+		return fmt.Errorf("error opening db: %w", err)
+	}
+
+	var res = db.Save(imglist)
 	log.Debugf("rows affected: %v", res.RowsAffected)
 	return res.Error
 }

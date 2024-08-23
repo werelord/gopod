@@ -74,6 +74,7 @@ type ImageDBEntry struct {
 	Filename     string
 	LastModified LastMod `gorm:"embedded;embeddedPrefix:LastModified_"`
 	Url          string
+	Archived     bool
 	// Hash         string
 }
 
@@ -446,7 +447,33 @@ func (f *Feed) addImage(imgData *ImageDBEntry) error {
 	}
 
 	return nil
+}
 
+// save images, not using any map data
+func (f *Feed) saveDBFeedImages(imgData map[string]*ImageDBEntry) error {
+	if f.ID == 0 {
+		return errors.New("unable to save to db; feed id is zero")
+	} else if len(imgData) == 0 {
+		f.log.Warn("not saving images; length is zero")
+		return nil
+	}
+	f.log.Infof("Saving db images, itemCount:%v", len(imgData))
+
+	if config.Simulate {
+		f.log.Info("skipping saving database due to sim flag")
+		return nil
+	}
+
+	var imglist = make([]*ImageDBEntry, 0, len(imgData))
+
+	for _, img := range imgData {
+		imglist = append(imglist, img)
+	}
+
+	if err := db.saveImages(imglist...); err != nil {
+		return err
+	}
+	return nil
 }
 
 // --------------------------------------------------------------------------
