@@ -308,7 +308,7 @@ func TestItem_replaceTitleRegex(t *testing.T) {
 		{"regex compile err", args{str: filenameParse, regex: "[].*", title: title1},
 			exp{errStr: "error parsing regexp"}},
 		{"matches don't fit", args{str: filenameParse, regex: regex, title: titlebroken2},
-			exp{want: "tgg.epfoo.mp3"}},
+			exp{want: "tgg.epfoo.Deep_Deep_Dimp_(Crimson_Tide_-_Bonus_Episode).mp3"}},
 
 		{"replace success one", args{str: filenameParse, regex: regex, title: title1},
 			exp{want: parse1}},
@@ -320,7 +320,7 @@ func TestItem_replaceTitleRegex(t *testing.T) {
 		{"wierd 1", args{str: filenameParse, regex: regex, title: titlebroken1},
 			exp{want: parsebroken1}},
 		{"wierd 2", args{str: filenameParse, regex: regex, title: titlebroken2},
-			exp{want: "tgg.epfoo.mp3"}},
+			exp{want: "tgg.epfoo.Deep_Deep_Dimp_(Crimson_Tide_-_Bonus_Episode).mp3"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
