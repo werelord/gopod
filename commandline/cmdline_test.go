@@ -46,9 +46,9 @@ func TestInitCommandLine(t *testing.T) {
 		updateTrue = UpdateOpt{Simulate: true, ForceUpdate: true, UseMostRecentXml: true,
 			MarkDownloaded: true, DownloadAfter: "2023-04-01"}
 		checkdlTrue   = CheckDownloadOpt{DoArchive: true, DoRename: true, SaveCollision: true, DoCollision: true}
-		exportDefTrue = ExportOpt{IncludeDeleted: true, ExportFormat: ExportJson, ExportPath: "foo"}
-		exportJson    = exportDefTrue
-		exportDB      = ExportOpt{IncludeDeleted: true, ExportFormat: ExportDB, ExportPath: "foo"}
+		exportDefTrue = ExportOpt{IncludeDeleted: true, ExportFormat: ExportDB, ExportPath: "foo"}
+		exportJson    = ExportOpt{IncludeDeleted: true, ExportFormat: ExportJson, ExportPath: "foo"}
+		exportDB      = exportDefTrue
 	)
 
 	ex, _ := os.Executable()

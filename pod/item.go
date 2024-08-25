@@ -158,8 +158,8 @@ func loadFromDBEntry(parentCfg podconfig.FeedToml, entry *ItemDBEntry) (*Item, e
 		return nil, errors.New("failed loading item; hash is empty")
 	} else if item.Filename == "" {
 		return nil, errors.New("failed loading item; filename is empty (db corrupt?)")
-	} else if item.Guid == "" {
-		return nil, errors.New("failed loading item; guid is empty")
+	// } else if item.Guid == "" {
+	// 	return nil, errors.New("failed loading item; guid is empty")
 	}
 
 	//log.Debugf("Item Loaded: %v", item)
@@ -174,11 +174,15 @@ func (i Item) isSameXmlEntry(new *podutils.XItemData, cfg podconfig.FeedToml) (b
 		return false, errors.New("cannot compare to current; xml is not loaded from db")
 	}
 
-	var oldbase, newbase string
+	var (
+		oldUrl, newUrl *url.URL
+		oldbase, newbase string
+		err error
+	)
 
-	if oldUrl, err := url.Parse(i.XmlData.Enclosure.Url); err != nil {
+	if oldUrl, err = url.Parse(i.XmlData.Enclosure.Url); err != nil {
 		return false, err
-	} else if newUrl, err := url.Parse(new.Enclosure.Url); err != nil {
+	} else if newUrl, err = url.Parse(new.Enclosure.Url); err != nil {
 		return false, err
 	} else {
 		oldbase = path.Base(oldUrl.Path)
@@ -199,8 +203,8 @@ func (i Item) isSameXmlEntry(new *podutils.XItemData, cfg podconfig.FeedToml) (b
 	// in dupFilenameBypass ignore the base filename and go only on enclosure length
 	if i.XmlData.Enclosure.Length == new.Enclosure.Length {
 		var logtemp = i.log.With(
-			"old url", i.XmlData.Enclosure.Url,
-			"new url", new.Enclosure.Url,
+			"old url", oldUrl.String(),
+			"new url", newUrl.String(),
 			"dupFilenameBypass", cfg.DupFilenameBypass,
 		)
 

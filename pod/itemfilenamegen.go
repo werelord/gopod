@@ -183,21 +183,27 @@ func (i Item) replaceTitleRegex(dststr, regex string) (string, error) {
 		log.With(
 			"xmlTitle", i.XmlData.Title,
 			"regex", regex,
-		).Warn("regex doesn't match; replacing with blank strings")
+		).Warn("regex doesn't match; replacing with full title")
 		// return "", errors.New("return slice of regex doesn't match slices needed")
 	}
 
 	// parse the dst for the format "#titleregex:X#", figure out which submatches are needed
 	// skipping index 0, as that is the original string
-	for i := 1; i <= r.NumSubexp(); i++ {
-		str := fmt.Sprintf("#titleregex:%v#", i)
+	for idx := 1; idx <= r.NumSubexp(); idx++ {
+		str := fmt.Sprintf("#titleregex:%v#", idx)
 
 		if strings.Contains(dststr, str) {
 			var replaceStr string
-			if i > len(matchSlice) {
-				replaceStr = ""
+			if idx > len(matchSlice) {
+				if idx == 1 {
+					// first iteration, and no matches found.. replace with full title
+					replaceStr = i.XmlData.Title
+				} else {
+					// otherwise, empty string
+					replaceStr = ""
+				}
 			} else {
-				replaceStr = strings.TrimSpace(matchSlice[i])
+				replaceStr = strings.TrimSpace(matchSlice[idx])
 			}
 			dststr = strings.Replace(dststr, str, replaceStr, 1)
 			//log.Debug(i, ": ", dststr)

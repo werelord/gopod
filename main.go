@@ -26,7 +26,7 @@ var (
 )
 
 const (
-	Version = "v0.1.7-beta"
+	Version = "v0.1.8-beta"
 )
 
 // --------------------------------------------------------------------------
@@ -182,6 +182,8 @@ func parseCommand(cmd commandline.CommandType) commandFunc {
 		return runPreview
 	case commandline.Export:
 		return runExport
+	case commandline.Archive:
+		return runArchive
 	default:
 		return nil
 	}
@@ -325,5 +327,18 @@ func runExport(shortname string, tomlList []podconfig.FeedToml) {
 		log.Error("no feeds found to check downloads (check config or passed-in shortname)")
 	} else if err := pod.Export(feedList); err != nil {
 		log.Errorf("Error in exporting feeds: %v", err)
+	}
+}
+
+
+// --------------------------------------------------------------------------
+func runArchive(shortname string, tomlist []podconfig.FeedToml) {
+	if feedlist, err := genFeedList(shortname, tomlist); err != nil {
+		log.Error(err)
+		return
+	} else if len(feedlist) == 0 {
+			log.Error("no feeds found to asrchive (check config or passed-in shortname)")
+	} else if err := pod.Archive(feedlist...); err != nil {
+		log.Errorf("Error in archiving feeds: %v", err)
 	}
 }
