@@ -83,8 +83,6 @@ func TestItem_generateFilename(t *testing.T) {
 			exp{filename: "foo_" + defstr + "_bar"}},
 		{"pubdate, replacement", cfgarg{parse: "foo_#date#_bar"}, itemarg{defaultTime: testTimeRep},
 			exp{filename: "foo_" + testTimeRep.Format(podutils.TimeFormatStr) + "_bar"}},
-		{"extension", cfgarg{parse: "foo_bar#extension#"}, itemarg{url: "http://foo.bar/meh.baz"},
-			exp{filename: "foo_bar.baz"}},
 
 		{"title", cfgarg{parse: "foo_#title#_bar"}, itemarg{title: "armleg"},
 			exp{filename: "foo_armleg_bar"}},
@@ -333,6 +331,35 @@ func TestItem_replaceTitleRegex(t *testing.T) {
 			testutils.AssertEquals(t, tt.e.want, got)
 		})
 	}
+}
+
+func TestItem_replaceExtension(t *testing.T) {
+	type args struct {
+		filename string
+		url      string
+	}
+	tests := []struct {
+		name string
+		p    args
+		want string
+	}{
+		{"no replacement", args{filename: "meh.mp3", url: "http://foo.com/bar.baz"}, "meh.mp3"},
+		{"replace ext", args{filename: "meh#ext#", url: "http://foo.com/bar.baz"}, "meh.baz"},
+		{"replace extension", args{filename: "meh#extension#", url: "http://foo.com/bar.baz"}, "meh.baz"},
+		{"ignore querystring", args{filename: "meh#ext#", url: "http://foo.com/bar.baz?q=foo&bah=humbug"}, "meh.baz"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			var item = Item{}
+			item.Url = tt.p.url
+
+			got := item.replaceExtension(tt.p.filename)
+			testutils.AssertEquals(t, tt.want, got)
+
+		})
+	}
+
 }
 
 func TestItem_checkFilenameCollisions(t *testing.T) {

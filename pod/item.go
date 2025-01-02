@@ -105,7 +105,7 @@ func createNewItemEntry(
 	}
 
 	// parse url
-	if cUrl, err := parseUrl(item.XmlData.Enclosure.Url, feedcfg.UrlParse); err != nil {
+	if cUrl, err := parseUrl(item.XmlData.Enclosure.Url, feedcfg.UrlParse, feedcfg.RetainQueryStr); err != nil {
 		log.Errorf("failed parsing url: %v", err)
 		return nil, err
 	} else {
@@ -158,8 +158,8 @@ func loadFromDBEntry(parentCfg podconfig.FeedToml, entry *ItemDBEntry) (*Item, e
 		return nil, errors.New("failed loading item; hash is empty")
 	} else if item.Filename == "" {
 		return nil, errors.New("failed loading item; filename is empty (db corrupt?)")
-	// } else if item.Guid == "" {
-	// 	return nil, errors.New("failed loading item; guid is empty")
+		// } else if item.Guid == "" {
+		// 	return nil, errors.New("failed loading item; guid is empty")
 	}
 
 	//log.Debugf("Item Loaded: %v", item)
@@ -175,9 +175,9 @@ func (i Item) isSameXmlEntry(new *podutils.XItemData, cfg podconfig.FeedToml) (b
 	}
 
 	var (
-		oldUrl, newUrl *url.URL
+		oldUrl, newUrl   *url.URL
 		oldbase, newbase string
-		err error
+		err              error
 	)
 
 	if oldUrl, err = url.Parse(i.XmlData.Enclosure.Url); err != nil {
@@ -189,19 +189,24 @@ func (i Item) isSameXmlEntry(new *podutils.XItemData, cfg podconfig.FeedToml) (b
 		newbase = path.Base(newUrl.Path)
 	}
 
-	// i.log.WithFields(log.Fields{
-	// 	"old length": i.XmlData.Enclosure.Length,
-	// 	"new length": new.Enclosure.Length,
-	// 	"old url":    i.XmlData.Enclosure.Url,
-	// 	"new url":    new.Enclosure.Url,
-	// 	"old base":   oldbase,
-	// 	"new base":   newbase,
-	// }).Debug("item diffs")
+	i.log.With(
+		"old length", i.XmlData.Enclosure.Length,
+		"new length", new.Enclosure.Length,
+		"old url", i.XmlData.Enclosure.Url,
+		"new url", new.Enclosure.Url,
+		"old base", oldbase,
+		"new base", newbase,
+	).Debug("item diffs")
 
 	// simple comparison here.. just check case insensitive filename and length
 	// not so fucking simple.. simplecast fucks with filenames all the time; if url contains the string
 	// in dupFilenameBypass ignore the base filename and go only on enclosure length
-	if i.XmlData.Enclosure.Length == new.Enclosure.Length {
+
+	// HACK: getting sick of this shit
+	if (i.XmlData.Enclosure.Length == 0) || (new.Enclosure.Length == 0) {
+		log.Warn("zero enclosure length found; just assuming its the same entry")
+		return true, nil
+	} else if i.XmlData.Enclosure.Length == new.Enclosure.Length {
 		var logtemp = i.log.With(
 			"old url", oldUrl.String(),
 			"new url", newUrl.String(),
@@ -273,7 +278,7 @@ func (i *Item) updateFromEntry(
 	}
 
 	// parse url
-	if cUrl, err := parseUrl(xml.Enclosure.Url, feedcfg.UrlParse); err != nil {
+	if cUrl, err := parseUrl(xml.Enclosure.Url, feedcfg.UrlParse, feedcfg.RetainQueryStr); err != nil {
 		log.Errorf("failed parsing url: %v", err)
 		return err
 	} else {
@@ -333,7 +338,7 @@ func (i *Item) loadItemXml(db *PodDB) error {
 }
 
 // --------------------------------------------------------------------------
-func parseUrl(urlstr, urlparse string) (string, error) {
+func parseUrl(urlstr, urlparse string, disableStrip bool) (string, error) {
 
 	u, err := url.ParseRequestURI(urlstr)
 	if err != nil {
@@ -341,8 +346,10 @@ func parseUrl(urlstr, urlparse string) (string, error) {
 	}
 
 	// remove querystring/fragment
-	u.RawQuery = ""
-	u.Fragment = ""
+	if disableStrip == false {
+		u.RawQuery = ""
+		u.Fragment = ""
+	}
 
 	// handle url parsing, if needed
 	if urlparse != "" {
@@ -387,8 +394,8 @@ func parseUrl(urlstr, urlparse string) (string, error) {
 
 // --------------------------------------------------------------------------
 func calcHash(guid, url, urlparse string) (string, error) {
-
-	parsedUrl, err := parseUrl(url, urlparse)
+	// hash only on non-query parameters
+	parsedUrl, err := parseUrl(url, urlparse, false)
 	if err != nil {
 		newerr := fmt.Errorf("failed to calc hash: %w", err)
 		log.Errorf("%v", newerr)
@@ -432,12 +439,13 @@ func (i *Item) updateXmlData(hash string, data *podutils.XItemData) error {
 
 // --------------------------------------------------------------------------
 func (i Item) createProgressBar() *progressbar.ProgressBar {
-	bar := progressbar.NewOptions64(0, //
+	bar := progressbar.NewOptions64(int64(i.XmlData.Enclosure.Length), // set the default length to amount in enclosure
 		progressbar.OptionSetDescription(i.Filename),
 		progressbar.OptionFullWidth(),
 		progressbar.OptionShowBytes(true),
 		progressbar.OptionShowCount(),
 		progressbar.OptionOnCompletion(func() { fmt.Fprint(os.Stderr, "\n") }),
+
 		progressbar.OptionSetTheme(progressbar.Theme{Saucer: "=", SaucerHead: ">", SaucerPadding: " ", BarStart: "[", BarEnd: "]"}))
 
 	return bar
@@ -468,7 +476,9 @@ func (i *Item) Download(mp3path string) (int64, error) {
 	// get content disposition, set the length of progress bar
 	var onResp = func(resp *http.Response) {
 		cd = resp.Header.Get("Content-Disposition")
-		pbar.ChangeMax64(resp.ContentLength)
+		if resp.ContentLength > 0 {
+			pbar.ChangeMax64(resp.ContentLength)
+		}
 	}
 
 	if bw, err := podutils.DownloadBuffered(i.Url, multiWriter, onResp); err != nil {

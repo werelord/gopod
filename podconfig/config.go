@@ -38,6 +38,8 @@ type FeedToml struct {
 	DupFilenameBypass string  `toml:"dupFilenameBypass,omitempty"`
 	StdChrono         bool    `toml:"stdChrono"`
 	ImageCompare      string  `toml:"imageCompare"`
+	AlwaysForce       bool    `toml:"alwaysForce"`
+	RetainQueryStr    bool    `toml:"retainQuerystring"`
 }
 
 // --------------------------------------------------------------------------

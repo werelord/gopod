@@ -29,3 +29,4 @@ dbexport/
 *.7z
 out.txt
 pod/test.go
+*__debug_bin*

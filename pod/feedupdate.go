@@ -308,7 +308,7 @@ func (fup *feedUpdate) checkExistingHash(hash string, xmldata *podutils.XItemDat
 	if itemEntry, exists := fup.hashCollList[hash]; exists {
 		handled = true
 
-		if config.ForceUpdate == false {
+		if config.ForceUpdate == false && fup.feed.AlwaysForce == false {
 			// this should only happen when force == true; log warning if this is not the case
 			log.Warn("hash for new item already exists and --force is not set; something is seriously wrong")
 		}
@@ -471,7 +471,7 @@ func (fup feedUpdate) saveAndRotateXml(body []byte, shouldRotate bool) {
 // --------------------------------------------------------------------------
 func (fup *feedUpdate) SkipParsingItem(hash string) (skip bool, cancelRemaining bool) {
 
-	if config.ForceUpdate {
+	if config.ForceUpdate || fup.feed.AlwaysForce {
 		return false, false
 	}
 

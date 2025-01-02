@@ -89,8 +89,9 @@ func Test_loadFromDBEntry(t *testing.T) {
 
 func Test_parseUrl(t *testing.T) {
 	type args struct {
-		encUrl   string
-		urlparse string
+		encUrl       string
+		urlparse     string
+		incluceQuery bool
 	}
 	type exp struct {
 		errStr string
@@ -104,10 +105,13 @@ func Test_parseUrl(t *testing.T) {
 		{"empty url", args{}, exp{errStr: "empty url"}},
 		{"url incomplete", args{encUrl: "foo/bar/meh.mp3"}, exp{errStr: "failed url parsing"}},
 		{"basic url", args{encUrl: "http://foo.bar/meh.mp3"}, exp{resUrl: "http://foo.bar/meh.mp3"}},
-		{"url with query", args{encUrl: "http://foo.bar/meh.mp3?foo=bar"}, exp{resUrl: "http://foo.bar/meh.mp3"}},
-		{"url with query and parse",
+		{"url strip query", args{encUrl: "http://foo.bar/meh.mp3?foo=bar"}, exp{resUrl: "http://foo.bar/meh.mp3"}},
+		{"url strip query and parse",
 			args{encUrl: "http://track.me/foo/foo.bar.com/meh.mp3?foo=bar", urlparse: "foo.bar.com"},
 			exp{resUrl: "http://foo.bar.com/meh.mp3"}},
+		{"url include query",
+			args{encUrl: "http://foo.bar/meh.mp3?foo=bar", incluceQuery: true},
+			exp{resUrl: "http://foo.bar/meh.mp3?foo=bar"}},
 		{"url with non-existant parse",
 			args{encUrl: "http://track.me/foo/foo.bar.com/meh.mp3?foo=bar", urlparse: "meh.bar.com"},
 			exp{resUrl: "http://track.me/foo/foo.bar.com/meh.mp3"}},
@@ -127,7 +131,7 @@ func Test_parseUrl(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			url, err := parseUrl(tt.p.encUrl, tt.p.urlparse)
+			url, err := parseUrl(tt.p.encUrl, tt.p.urlparse, tt.p.incluceQuery)
 
 			testutils.AssertErrContains(t, tt.e.errStr, err)
 			testutils.AssertEquals(t, tt.e.resUrl, url)

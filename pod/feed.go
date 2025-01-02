@@ -490,8 +490,10 @@ func (f *Feed) getImage(urlStr string, imgFilename string) (*ImageDBEntry, error
 	if u, err := url.ParseRequestURI(urlStr); err != nil {
 		return nil, err
 	} else {
-		u.RawQuery = ""
-		u.Fragment = ""
+		if f.RetainQueryStr == false {
+			u.RawQuery = ""
+			u.Fragment = ""
+		}
 		imgUrl = u.String()
 	}
 
@@ -581,7 +583,7 @@ func (f *Feed) downloadImage(imgUrl string, imgFilename string) (*ImageDBEntry, 
 			Url:          imgUrl,
 			LastModified: LastMod{time.Time{}, ""},
 		}
-		ext        = path.Ext(imgUrl)
+		ext, _, _        = strings.Cut(path.Ext(imgUrl), "?")
 		tempImg    = fmt.Sprintf("imgTemp*%v", ext)
 		lastmodstr = ""
 		etag       = ""
