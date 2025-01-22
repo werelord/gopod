@@ -31,6 +31,7 @@ func Archive(feeds ...*Feed) error {
 			feed.log.Error("error archiving feed", "err", e)
 			errors.Join(err, e)
 		}
+		feed.log.Info("archive complete")
 	}
 
 	return err
@@ -87,7 +88,7 @@ func archive(f *Feed) error {
 				archiveMap[itemYear] = arc
 			}
 			arc.items = append(arc.items, item)
-			if item.ImageKey != "" && item.ImageKey != f.ImageKey {	// don't back up feed's image
+			if item.ImageKey != "" && item.ImageKey != f.ImageKey { // don't back up feed's image
 				if img, exists := f.imageMap[item.ImageKey]; exists == false {
 					arc.log.Error("image with key doesn't exist in db", "key", item.ImageKey)
 					// skip any image processing

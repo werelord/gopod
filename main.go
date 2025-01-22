@@ -184,6 +184,8 @@ func parseCommand(cmd commandline.CommandType) commandFunc {
 		return runExport
 	case commandline.Archive:
 		return runArchive
+	case commandline.Hack:
+		return runHack
 	default:
 		return nil
 	}
@@ -340,5 +342,22 @@ func runArchive(shortname string, tomlist []podconfig.FeedToml) {
 			log.Error("no feeds found to asrchive (check config or passed-in shortname)")
 	} else if err := pod.Archive(feedlist...); err != nil {
 		log.Errorf("Error in archiving feeds: %v", err)
+	}
+}
+
+// --------------------------------------------------------------------------
+func runHack(shortname string, tomlList []podconfig.FeedToml) {
+	if shortname == "" {
+		log.Error("only hack one feed at a time")
+		return
+	} else if f, err := genFeed(shortname, tomlList); err != nil {
+		log.Error(err)
+		return
+	} else {
+		log.With("feed", f.Shortname).Info("hacking db")
+		if err := f.HackDB(); err != nil {
+			log.With("feed", f.Shortname, "error", err).Error("failed hacking db")
+		}
+		// todo: run hack
 	}
 }

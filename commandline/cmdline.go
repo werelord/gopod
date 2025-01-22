@@ -34,10 +34,11 @@ const ( // commands
 	Export
 	Preview
 	Archive
+	Hack
 )
 
 func (c CommandType) String() string {
-	return [...]string{"unknown", "update", "checkDownloaded", "delete", "export", "preview", "archive"}[c]
+	return [...]string{"unknown", "update", "checkDownloaded", "delete", "export", "preview", "archive", "hack"}[c]
 }
 
 // for testing purposes
@@ -61,6 +62,7 @@ type CommandLineOptions struct {
 	UpdateOpt
 	CheckDownloadOpt
 	ExportOpt
+	HackOpt
 }
 
 // global options
@@ -93,6 +95,10 @@ type ExportOpt struct {
 	ExportFormat   ExportType
 	formatStr      string
 	ExportPath     string
+}
+
+type HackOpt struct {
+	GuidHackXml string
 }
 
 func (c CommandLine) String() string {
@@ -252,6 +258,12 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 	archiveCommand.BoolVar(&c.Simulate, "simulate", false, opt.Alias("sim"),
 		opt.Description("Simulate; will not move items or save database"))
 	archiveCommand.SetCommandFn(c.generateCmdFunc(Archive))
+
+	hackCommand := opt.NewCommand("hack", "don't do this")
+	hackCommand.StringVar(&c.GuidHackXml, "guidhack", ""/*, opt.Required("xml file required for hack")*/)
+	hackCommand.BoolVar(&c.Simulate, "simulate", false, opt.Alias("sim"),
+	/*opt.Description("Simulate; will not download items or save database")*/)
+	hackCommand.SetCommandFn(c.generateCmdFunc(Hack))
 
 	opt.HelpCommand("help", opt.Alias("h", "?"))
 	return opt

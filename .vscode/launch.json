@@ -17,7 +17,7 @@
                 // "--help",
                 "--config", "e:\\gopod\\config.toml",
                 // "--config", "e:\\gopod-sim\\config.toml",
-                // "--feed=exponent",
+                // "--feed=masterplan",
                 // "--proxy", "http://localhost:8888",
                 "--backup-db",
                 "--log=debug",
@@ -52,6 +52,11 @@
 
                 // archive cmd
                 // "archive",
+                // "--simulate",
+
+                // hack command
+                // "hack",
+                // "--guidhack", "e:\\gopod\\poweruser\\.xml\\poweruser.20250109_174211.xml",
                 // "--simulate",
 
                 "--debug=true"
