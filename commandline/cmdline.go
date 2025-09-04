@@ -78,6 +78,7 @@ type UpdateOpt struct {
 	ForceUpdate      bool
 	UseMostRecentXml bool
 	MarkDownloaded   bool
+	IgnoreLen	bool
 	DownloadAfter    string
 }
 
@@ -222,6 +223,8 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 	// if recent doesn't exist, will still download.  Note: if there are no errors on previous run, will likely do nothing unless --force is specified"))
 	updateCommand.BoolVar(&c.MarkDownloaded, "set-downloaded", false,
 		opt.Description("set already downloaded files as downloaded in db"))
+	updateCommand.BoolVar(&c.IgnoreLen, "ignore-length", false,
+		opt.Description("Ignore length on file collisions"))
 	updateCommand.StringVar(&c.DownloadAfter, "download-after", "")
 	updateCommand.SetCommandFn(c.generateCmdFunc(Update))
 

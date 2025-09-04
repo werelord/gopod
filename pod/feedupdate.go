@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"time"
 
@@ -607,6 +608,8 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 		success       = true
 		downloadAfter time.Time
 		completed     = make([]*Item, 0, len(fup.newItems))
+
+		exclrx *regexp.Regexp
 	)
 
 	if config.DownloadAfter != "" {
@@ -623,6 +626,15 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 		}
 	}
 
+	// compile the regex only once
+	if fup.feed.ExcludeRegex != "" {
+		if rx, err := regexp.Compile(fup.feed.ExcludeRegex); err != nil {
+			log.Errorf("error compilihng regex", "err", err)
+		} else {
+			exclrx = rx
+		}
+	}
+
 	for _, item := range fup.newItems {
 		log.Debugf("processing new item: {%v : %v : %v}", item.Filename, item.Hash, path.Base(item.Url))
 
@@ -632,11 +644,24 @@ func (fup *feedUpdate) downloadNewItems(results *DownloadResults) bool {
 		// check download after flag; if set, only download items after given date..
 		// anything before given date just mark as downloaded and archived
 		if (downloadAfter.IsZero() == false) && (item.PubTimeStamp.Before(downloadAfter)) {
-			log.Debugf("pubtimestamp before downloadAfter; skipping and marking as downloaded")
+			log.Debug("pubtimestamp before downloadAfter; skipping and marking as downloaded")
 			item.Downloaded = true
 			item.Archived = true
 			completed = append(completed, item)
 			continue
+		}
+
+		// check title excludes
+		if exclrx != nil {
+			if exclrx.MatchString(item.XmlData.Title) {
+				log.Debug("Title excluded by regex, skipping download", "title", item.XmlData.Title)
+				item.Downloaded = true
+				item.Archived = true
+				completed = append(completed, item)
+				continue
+			// } else {
+			// 	log.Debug("Title not excluded", "title", item.XmlData.Title)
+			}
 		}
 
 		fileExists, err := podutils.FileExists(podfile)

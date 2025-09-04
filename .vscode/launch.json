@@ -17,7 +17,7 @@
                 // "--help",
                 "--config", "e:\\gopod\\config.toml",
                 // "--config", "e:\\gopod-sim\\config.toml",
-                // "--feed=masterplan",
+                "--feed=marek",
                 // "--proxy", "http://localhost:8888",
                 "--backup-db",
                 "--log=debug",
@@ -28,7 +28,8 @@
                 // "--force",
                 // "--use-recent",
                 // "--set-downloaded",
-                // "--download-after=2023-10-17",
+                // "--download-after=2025-07-01",
+                // "--ignore-length",
 
                 // check commands
                 // "checkdownloads",
@@ -56,7 +57,7 @@
 
                 // hack command
                 // "hack",
-                // "--guidhack", "e:\\gopod\\poweruser\\.xml\\poweruser.20250109_174211.xml",
+                // "--guidhack", "e:\\gopod\\lonelyhearts\\.xml\\lonelyhearts.20250825_112035.xml",
                 // "--simulate",
 
                 "--debug=true"

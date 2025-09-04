@@ -168,7 +168,7 @@ func loadFromDBEntry(parentCfg podconfig.FeedToml, entry *ItemDBEntry) (*Item, e
 }
 
 // --------------------------------------------------------------------------
-func (i Item) isSameXmlEntry(new *podutils.XItemData, cfg podconfig.FeedToml) (bool, error) {
+func (i Item) isSameXmlEntry(new *podutils.XItemData, feedCfg podconfig.FeedToml, config podconfig.Config) (bool, error) {
 
 	if (i.XmlData == nil) || (i.XmlData.ID <= 0) {
 		return false, errors.New("cannot compare to current; xml is not loaded from db")
@@ -206,14 +206,14 @@ func (i Item) isSameXmlEntry(new *podutils.XItemData, cfg podconfig.FeedToml) (b
 	if (i.XmlData.Enclosure.Length == 0) || (new.Enclosure.Length == 0) {
 		log.Warn("zero enclosure length found; just assuming its the same entry")
 		return true, nil
-	} else if i.XmlData.Enclosure.Length == new.Enclosure.Length {
+	} else if (i.XmlData.Enclosure.Length == new.Enclosure.Length) || (config.IgnoreLen) {
 		var logtemp = i.log.With(
 			"old url", oldUrl.String(),
 			"new url", newUrl.String(),
-			"dupFilenameBypass", cfg.DupFilenameBypass,
+			"dupFilenameBypass", feedCfg.DupFilenameBypass,
 		)
 
-		if (cfg.DupFilenameBypass != "") && strings.Contains(new.Enclosure.Url, cfg.DupFilenameBypass) {
+		if (feedCfg.DupFilenameBypass != "") && strings.Contains(new.Enclosure.Url, feedCfg.DupFilenameBypass) {
 			logtemp.Debug("same lengths and dupFilenameBypass found; marking as identical")
 			return true, nil
 
@@ -255,7 +255,7 @@ func (i *Item) updateFromEntry(
 	}
 
 	// before changing the xml data, see if this actuaelly changed
-	sameEntry, err := i.isSameXmlEntry(xml, feedcfg)
+	sameEntry, err := i.isSameXmlEntry(xml, feedcfg, *config)
 	if err != nil {
 		return err
 	}
@@ -523,3 +523,4 @@ func (i Item) genImageFilename() string {
 	var base = strings.TrimSuffix(i.Filename, filepath.Ext(i.Filename))
 	return fmt.Sprintf("%v__%v%v", base, lastModStr, extStr)
 }
+

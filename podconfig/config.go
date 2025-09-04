@@ -40,6 +40,7 @@ type FeedToml struct {
 	ImageCompare      string  `toml:"imageCompare"`
 	AlwaysForce       bool    `toml:"alwaysForce"`
 	RetainQueryStr    bool    `toml:"retainQuerystring"`
+	ExcludeRegex      string  `toml:"excludeRegex"`
 }
 
 // --------------------------------------------------------------------------

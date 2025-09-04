@@ -86,15 +86,17 @@ func (f Feed) exportData(path string) error {
 		return err
 	}
 
-	if config.ExportFormat == commandline.ExportJson {
+	switch config.ExportFormat {
+	case commandline.ExportJson:
 		var filename = filepath.Join(path, fmt.Sprintf("%v.json", f.Shortname))
 		return exportToJson(&f.FeedDBEntry, filename)
-	} else if config.ExportFormat == commandline.ExportDB {
+	case commandline.ExportDB:
 		var filename = filepath.Join(path, fmt.Sprintf("%v.db", f.Shortname))
 		return exportToDb(&f.FeedDBEntry, filename)
+	default:
+		return fmt.Errorf("export format not handled: %v", config.ExportFormat)
 	}
 
-	return fmt.Errorf("export format not handled: %v", config.ExportFormat)
 }
 
 func exportToJson(feed *FeedDBEntry, file string) error {
