@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"gopod/podutils"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -24,6 +25,11 @@ type archType struct {
 func Archive(feeds ...*Feed) error {
 
 	var err error
+
+	// short circuit here
+	if config.MoveZip {
+		return moveZip(feeds...)
+	}
 
 	for _, feed := range feeds {
 		feed.log.Info("running archive")
@@ -274,6 +280,44 @@ func (arc archType) createArchiveDb() error {
 			log.Errorf("error saving feed db: %v", err)
 			return err
 		}
+	}
+
+	return nil
+}
+
+func moveZip(feeds ...*Feed) error {
+
+	var topLeveldir string = filepath.Join(config.WorkspaceDir, ".arc")
+
+	log.Debugf("archive target: %v", topLeveldir)
+
+	if config.Simulate == false {
+		if err := podutils.MkdirAll(topLeveldir); err != nil {
+			log.Error("error creating archive path", err)
+			return err
+		}
+	}
+
+	for _, f := range feeds {
+		// f.log.Debugf("move zip, %v", f.archivePath)
+
+		if matches, err := filepath.Glob(filepath.Join(f.archivePath, "*", "*.7z")); err != nil {
+			f.log.Error("error in glob", "error", err)
+		} else {
+			for _, match := range matches {
+				f.log.Debug("moving file", "path", match)
+
+				if config.Simulate == false {
+					var dst = filepath.Join(topLeveldir, filepath.Base(match))
+					if err := os.Rename(match, dst); err != nil {
+						f.log.Error("error in move", "error", err)
+					} else {
+						f.log.Debugf("moved file to %v", dst)
+					}
+				}
+			}
+		}
+
 	}
 
 	return nil

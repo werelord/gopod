@@ -54,6 +54,7 @@
                 // archive cmd
                 // "archive",
                 // "--simulate",
+                // "--mz",
 
                 // hack command
                 // "hack",

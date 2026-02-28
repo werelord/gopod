@@ -30,7 +30,8 @@ const (
 	// Vivaldi	6.5.3206.48 (Stable channel) (64-bit)
 	// userAgentCurrent = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36`
 	// Vivaldi 6.5.3206.63 (Stable channel) (64-bit)
-	userAgentCurrent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	// userAgentCurrent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	userAgentCurrent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
 )
 
 func GetLastModified(url string) (lastmodified time.Time, etag string, err error) {

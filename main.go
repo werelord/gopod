@@ -332,14 +332,13 @@ func runExport(shortname string, tomlList []podconfig.FeedToml) {
 	}
 }
 
-
 // --------------------------------------------------------------------------
 func runArchive(shortname string, tomlist []podconfig.FeedToml) {
 	if feedlist, err := genFeedList(shortname, tomlist); err != nil {
 		log.Error(err)
 		return
 	} else if len(feedlist) == 0 {
-			log.Error("no feeds found to asrchive (check config or passed-in shortname)")
+		log.Error("no feeds found to archive (check config or passed-in shortname)")
 	} else if err := pod.Archive(feedlist...); err != nil {
 		log.Errorf("Error in archiving feeds: %v", err)
 	}

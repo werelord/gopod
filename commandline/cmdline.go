@@ -63,6 +63,7 @@ type CommandLineOptions struct {
 	CheckDownloadOpt
 	ExportOpt
 	HackOpt
+	ArchiveOpt
 }
 
 // global options
@@ -100,6 +101,10 @@ type ExportOpt struct {
 
 type HackOpt struct {
 	GuidHackXml string
+}
+
+type ArchiveOpt struct{
+	MoveZip bool
 }
 
 func (c CommandLine) String() string {
@@ -260,6 +265,7 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 	archiveCommand := opt.NewCommand("archive", "archive podcasts not in current year")
 	archiveCommand.BoolVar(&c.Simulate, "simulate", false, opt.Alias("sim"),
 		opt.Description("Simulate; will not move items or save database"))
+	archiveCommand.BoolVar(&c.MoveZip, "mz", false)
 	archiveCommand.SetCommandFn(c.generateCmdFunc(Archive))
 
 	hackCommand := opt.NewCommand("hack", "don't do this")
