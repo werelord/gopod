@@ -17,18 +17,18 @@
                 // "--help",
                 "--config", "e:\\gopod\\config.toml",
                 // "--config", "e:\\gopod-sim\\config.toml",
-                "--feed=marek",
+                // "--feed=jjgo",
                 // "--proxy", "http://localhost:8888",
                 "--backup-db",
                 "--log=debug",
 
                 // update commands
                 "update",
-                // "--simulate",
+                "--simulate",
                 // "--force",
                 // "--use-recent",
                 // "--set-downloaded",
-                // "--download-after=2025-07-01",
+                // "--download-after=2026-01-01",
                 // "--ignore-length",
 
                 // check commands
