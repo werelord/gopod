@@ -17,7 +17,7 @@
                 // "--help",
                 "--config", "e:\\gopod\\config.toml",
                 // "--config", "e:\\gopod-sim\\config.toml",
-                // "--feed=jjgo",
+                // "--feed=scsuhockey",
                 // "--proxy", "http://localhost:8888",
                 "--backup-db",
                 "--log=debug",
@@ -58,7 +58,8 @@
 
                 // hack command
                 // "hack",
-                // "--guidhack", "e:\\gopod\\lonelyhearts\\.xml\\lonelyhearts.20250825_112035.xml",
+                // // "--guidhack", "e:\\gopod\\lawchaos\\.xml\\lawchaos.20260630_191458.xml",
+                // "--rename=brettlarson",
                 // "--simulate",
 
                 "--debug=true"
