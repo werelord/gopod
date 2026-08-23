@@ -504,7 +504,11 @@ func (i *Item) Download(mp3path string) (int64, error) {
 
 	// move tempfile to finished file
 	if err = podutils.Rename(file.Name(), destfile); err != nil {
-		i.log.Debug("error moving temp file: ", err)
+		i.log.Error("error moving temp file: ", err)
+		return bytesWrote, err
+	// reset the permissions on downloaded file
+	} else if err = podutils.Chmod(destfile, 0644); err != nil {
+		log.Errorf("error changing permissions: %s", err)
 		return bytesWrote, err
 	}
 

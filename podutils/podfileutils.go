@@ -233,6 +233,9 @@ func Rename(oldpath, newpath string) error {
 func Chtimes(path string, access time.Time, modification time.Time) error {
 	return osimpl.Chtimes(path, access, modification)
 }
+func Chmod(path string, mode os.FileMode ) error {
+	return os.Chmod(path, mode)
+}
 
 func CopyFile(src, dst string) (int64, error) {
 	// todo: unit test
