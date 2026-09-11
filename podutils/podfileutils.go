@@ -111,7 +111,7 @@ func RotateFiles(path, pattern string, numToKeep uint) error {
 	// as that one likely has the most recent symlink attached
 
 	if uint(len(filelist)) < numToKeep {
-		log.Debugf("file count (%v) < numToKeep (%v), nothing to remove", len(filelist), numToKeep)
+		log.Debugf("rotate: file count (%v) < numToKeep (%v), nothing to remove", len(filelist), numToKeep)
 		return nil
 	}
 
@@ -178,6 +178,34 @@ func FindMostRecent(path, pattern string) (string, error) {
 		return "", fmt.Errorf("unable to find file: %w", fs.ErrNotExist)
 	}
 	return filepath.Join(path, latestFile.filename), nil
+}
+
+// --------------------------------------------------------------------------
+func FindAll(path, pattern string) ([]string, error) {
+
+	var retval = make([]string, 0)
+
+	if filelist, err := osimpl.ReadDir(path); err != nil {
+		log.Error("error reading directory", "err", err)
+		return retval, err
+	} else {
+		for _, file := range filelist {
+			if file.IsDir() == false {
+				if fi, err := file.Info(); err != nil {
+					log.Error("info returned error", "err", err)
+					return retval, err
+				} else if match, err := filepath.Match(pattern, fi.Name()); err != nil {
+					log.Error("match returned error", "err", err, "filename", fi.Name())
+					return retval, err
+				} else if match {
+					// add to collection
+					retval = append(retval, fi.Name())
+				}
+			}
+		}
+	}
+
+	return retval, nil
 }
 
 // --------------------------------------------------------------------------

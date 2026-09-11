@@ -100,7 +100,8 @@ type ExportOpt struct {
 }
 
 type HackOpt struct {
-	GuidHackXml string
+	HackGuidXml string
+	HackShortnameRename string
 }
 
 type ArchiveOpt struct{
@@ -269,7 +270,8 @@ func (c *CommandLine) buildOptions() *getoptions.GetOpt {
 	archiveCommand.SetCommandFn(c.generateCmdFunc(Archive))
 
 	hackCommand := opt.NewCommand("hack", "don't do this")
-	hackCommand.StringVar(&c.GuidHackXml, "guidhack", ""/*, opt.Required("xml file required for hack")*/)
+	hackCommand.StringVar(&c.HackGuidXml, "guidhack", ""/*, opt.Required("xml file required for hack")*/)
+	hackCommand.StringVar(&c.HackShortnameRename, "snrename", ""/*, opt.Required("xml file required for hack")*/)
 	hackCommand.BoolVar(&c.Simulate, "simulate", false, opt.Alias("sim"),
 	/*opt.Description("Simulate; will not download items or save database")*/)
 	hackCommand.SetCommandFn(c.generateCmdFunc(Hack))

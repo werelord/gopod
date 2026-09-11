@@ -4,9 +4,21 @@ import (
 	"errors"
 	"fmt"
 	"gopod/podutils"
+	"path/filepath"
 	"strings"
 	"time"
 )
+
+func (f *Feed) HackDB() error {
+
+	if config.HackGuidXml != "" {
+		return hackGuidXml(f)
+	} else if config.HackShortnameRename != "" {
+		return hackShortnameRename(f)
+	} else {
+		return errors.New("valid hack command not found")
+	}
+}
 
 // Because providers can't be trusted with their shit, moving to a new provider
 // will reset the GUIDs and other things.. Thus everything comes up as new again
@@ -23,8 +35,7 @@ func (hfp hackFeedProcess) CalcItemHash(guid string, url string) (string, error)
 	return guid, nil
 }
 
-func (f *Feed) HackDB() error {
-
+func hackGuidXml(f *Feed) error {
 	var (
 		log      = f.log
 		hfp      = hackFeedProcess{}
@@ -33,9 +44,9 @@ func (f *Feed) HackDB() error {
 	)
 
 	// make sure xml is specified
-	if config.GuidHackXml == "" {
+	if config.HackGuidXml == "" {
 		return errors.New("guid xml must be specified for guid hack")
-	} else if exists, err := podutils.FileExists(config.GuidHackXml); err != nil {
+	} else if exists, err := podutils.FileExists(config.HackGuidXml); err != nil {
 		return fmt.Errorf("error finding guid hack xml: %w", err)
 	} else if exists == false {
 		return errors.New("guid xml file not found")
@@ -58,7 +69,7 @@ func (f *Feed) HackDB() error {
 	}
 
 	// load hack xml
-	if body, err := podutils.LoadFile(config.GuidHackXml); err != nil {
+	if body, err := podutils.LoadFile(config.HackGuidXml); err != nil {
 		return fmt.Errorf("error loading xml file: %w", err)
 	} else if _, itemPairs, err := podutils.ParseXml(body, hfp); err != nil {
 		return fmt.Errorf("error parsing xml: %w", err)
@@ -88,4 +99,171 @@ func (f *Feed) HackDB() error {
 	}
 
 	return nil
+}
+
+// --------------------------------------------------------------------------
+func hackShortnameRename(nfeed *Feed) error {
+
+	if config.HackShortnameRename == "" {
+		return errors.New("old shortname must be specified for hack")
+	}
+
+	// load the shortname in a new feed
+	var (
+		log         = nfeed.log
+		oldfeedToml = nfeed.FeedToml
+		workingfeed *Feed
+		itemlist    = make([]*Item, 0)
+
+		oldShortname = config.HackShortnameRename
+		newShortname = nfeed.Shortname
+
+		retErr error
+	)
+	// for loading purposes, make the feed have the old shortname
+	oldfeedToml.Shortname = oldShortname
+
+	// load everything into working feed
+	if of, err := NewFeed(oldfeedToml); err != nil {
+		log.Error("error init old feed", "err", err)
+		return err
+	} else if err := of.LoadDBFeed(loadOptions{includeXml: true}); err != nil {
+		log.Error("error loading feed from db", "err", err)
+		return err
+	} else if il, err := of.loadDBFeedItems(AllItems,
+		loadOptions{dontCreate: true, includeXml: true, direction: cASC}); err != nil {
+		log.Error("error lopading items from db", "err", err)
+		return err
+	} else {
+		workingfeed = of
+		itemlist = il
+	}
+
+	log.Debug("hashes", "old", workingfeed.Hash)
+
+	// everything should be collected.. lets start renaming things
+	workingfeed.Shortname = newShortname
+	workingfeed.Hash = ""
+	workingfeed.generateHash()
+
+	log.Debug("hashes", "new", workingfeed.Hash)
+
+	// loop thru all old xml files, moving them to new shortname
+	var (
+		oldXmlFilePath = filepath.Join(config.WorkspaceDir, oldShortname, ".xml")
+		newXmlFilePath = filepath.Join(config.WorkspaceDir, newShortname, ".xml")
+	)
+
+	if xmllist, err := podutils.FindAll(oldXmlFilePath, fmt.Sprintf("%v.*", oldShortname)); err != nil {
+		log.Error("error finding xml files", "err", err)
+		return err
+	} else {
+		for _, xmlfile := range xmllist {
+			// just use cut
+			if _, after, found := strings.Cut(xmlfile, fmt.Sprintf("%v.", oldShortname)); found == false {
+				log.Error("bad formatting xml file", "xmlfile", xmlfile)
+			} else {
+				var newfile = fmt.Sprintf("%v.%v", newShortname, after)
+				if config.Simulate {
+					log.Info("skipping file move due to sim flag", "old", xmlfile, "new", newfile)
+				} else if err := podutils.Rename(filepath.Join(oldXmlFilePath, xmlfile),
+					filepath.Join(newXmlFilePath, newfile)); err != nil {
+
+					log.Error("error moving file", "err", err)
+					retErr = errors.Join(retErr, err)
+				} else {
+					log.Info("moved file", "old", xmlfile, "new", newfile)
+				}
+			}
+		}
+	}
+
+	// do the same with image files, but will need to change filenames in db
+	// index key is url, so shouldn't need to be changed
+	var (
+		oldImgFilePath = workingfeed.imgPath
+		newImgFilePath = nfeed.imgPath
+		modImages      = make([]*ImageDBEntry, 0)
+	)
+
+	for _, img := range workingfeed.ImageList {
+		if exists, err := podutils.FileExists(filepath.Join(oldImgFilePath, img.Filename)); err != nil {
+			log.Error("error finding file", "err", err)
+			retErr = errors.Join(retErr, err)
+
+		} else if exists {
+			// move the file, change the filename in db
+			// if it doesn't exists, ignore, probably been archived
+
+			var newfile = strings.ReplaceAll(img.Filename, oldShortname, newShortname)
+			if config.Simulate {
+				log.Info("skipping file move due to sim flag", "old", img.Filename, "new", newfile)
+			} else if err := podutils.Rename(filepath.Join(oldImgFilePath, img.Filename),
+				filepath.Join(newImgFilePath, newfile)); err != nil {
+
+				log.Error("error moving file", "err", err)
+				retErr = errors.Join(retErr, err)
+
+			} else {
+				log.Info("moved file", "old", img.Filename, "new", newfile)
+				img.Filename = newfile
+				modImages = append(modImages, img)
+			}
+		}
+	}
+	// todo: move any extra files??
+
+	var (
+		oldItemPath = workingfeed.mp3Path
+		newItemPath = nfeed.mp3Path
+		modItems    = make([]*Item, 0)
+
+		collfunc = func(string) bool { return false }
+	)
+
+	// finally, move items
+	for _, item := range itemlist {
+		if exists, err := podutils.FileExists(filepath.Join(oldItemPath, item.Filename)); err != nil {
+			log.Error("error finding file", "err", err)
+			retErr = errors.Join(retErr, err)
+		} else if exists {
+			// move the file, change the filename in db
+			// if it doesn't exists, ignore, probably been archived
+
+			if newFilename, xtra, err := item.generateFilename(nfeed.FeedToml, collfunc); err != nil {
+				log.Error("error generating new file file", "err", err)
+				retErr = errors.Join(retErr, err)
+			} else if config.Simulate {
+				log.Info("skipping file move due to sim flag", "old", item.Filename, "new", newFilename)
+			} else if err := podutils.Rename(filepath.Join(oldItemPath, item.Filename),
+				filepath.Join(newItemPath, newFilename)); err != nil {
+				log.Error("error moving file", "err", err)
+				retErr = errors.Join(retErr, err)
+			} else {
+				log.Info("moved file", "old", item.Filename, "new", newFilename)
+				item.Filename = newFilename
+				item.FilenameXta = xtra
+				modItems = append(modItems, item)
+			}
+		}
+	}
+
+	if len(modImages) > 0 {
+		if err := workingfeed.saveDBFeedImageList(modImages); err != nil {
+			log.Error("error saving images", "err", err)
+			retErr = errors.Join(retErr, err)
+		}
+	}
+	if len(modItems) > 0 {
+		if err := workingfeed.saveDBFeedItems(modItems...); err != nil {
+			log.Error("error saving items", "err", err)
+			retErr = errors.Join(retErr, err)
+		}
+	}
+	if err := workingfeed.saveDBFeed(nil, nil); err != nil {
+		log.Error("error saving feed", "err", err)
+		retErr = errors.Join(retErr, err)
+	}
+
+	return retErr
 }

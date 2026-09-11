@@ -3,11 +3,13 @@ package pod
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -103,6 +105,7 @@ func Init(cfg *podconfig.Config, pdb *PodDB) {
 func NewFeed(feedToml podconfig.FeedToml) (*Feed, error) {
 	var feed = Feed{FeedToml: feedToml}
 
+	// todo: separate directory construction from creating this object
 	if err := feed.initFeed(); err != nil {
 		return nil, fmt.Errorf("failed to init feed '%v': %w", feed.Name, err)
 	}
@@ -450,6 +453,7 @@ func (f *Feed) addImage(imgData *ImageDBEntry) error {
 }
 
 // save images, not using any map data
+// --------------------------------------------------------------------------
 func (f *Feed) saveDBFeedImages(imgData map[string]*ImageDBEntry) error {
 	if f.ID == 0 {
 		return errors.New("unable to save to db; feed id is zero")
@@ -457,20 +461,40 @@ func (f *Feed) saveDBFeedImages(imgData map[string]*ImageDBEntry) error {
 		f.log.Warn("not saving images; length is zero")
 		return nil
 	}
-	f.log.Infof("Saving db images, itemCount:%v", len(imgData))
+	// f.log.Infof("Saving db images, itemCount:%v", len(imgData))
+
+	// if config.Simulate {
+	// 	f.log.Info("skipping saving database due to sim flag")
+	// 	return nil
+	// }
+
+	// var imglist = make([]*ImageDBEntry, 0, len(imgData))
+	// for _, img := range imgData {
+	// 	imglist = append(imglist, img)
+	// }
+
+	return f.saveDBFeedImageList(slices.Collect(maps.Values(imgData)))
+
+}
+
+// --------------------------------------------------------------------------
+func (f *Feed) saveDBFeedImageList(imgList []*ImageDBEntry) error {
+	// recheck
+	if f.ID == 0 {
+		return errors.New("unable to save to db; feed id is zero")
+	} else if len(imgList) == 0 {
+		f.log.Warn("not saving images; length is zero")
+		return nil
+	}
+	f.log.Infof("Saving db images, itemCount:%v", len(imgList))
 
 	if config.Simulate {
 		f.log.Info("skipping saving database due to sim flag")
 		return nil
 	}
 
-	var imglist = make([]*ImageDBEntry, 0, len(imgData))
-
-	for _, img := range imgData {
-		imglist = append(imglist, img)
-	}
-
-	if err := db.saveImages(imglist...); err != nil {
+	if err := db.saveImages(imgList...); err != nil {
+		log.Error("error saving images", "err", err)
 		return err
 	}
 	return nil
@@ -583,7 +607,7 @@ func (f *Feed) downloadImage(imgUrl string, imgFilename string) (*ImageDBEntry, 
 			Url:          imgUrl,
 			LastModified: LastMod{time.Time{}, ""},
 		}
-		ext, _, _        = strings.Cut(path.Ext(imgUrl), "?")
+		ext, _, _  = strings.Cut(path.Ext(imgUrl), "?")
 		tempImg    = fmt.Sprintf("imgTemp*%v", ext)
 		lastmodstr = ""
 		etag       = ""
@@ -619,7 +643,7 @@ func (f *Feed) downloadImage(imgUrl string, imgFilename string) (*ImageDBEntry, 
 	// parse last modified / etag
 	if lastmodstr != "" {
 		if lm, err := dateparse.ParseAny(lastmodstr); err != nil {
-			log.Errorf("parsing last modified timstamp err: %v", err, "timestamp", lastmodstr)
+			log.Error("parsing last modified timstamp err", "err", err, "timestamp", lastmodstr)
 		} else {
 			newImg.LastModified.Timestamp = lm
 		}
